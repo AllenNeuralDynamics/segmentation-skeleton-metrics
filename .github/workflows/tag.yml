@@ -1,0 +1,40 @@
+name: Bump version
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ env.DEFAULT_BRANCH }}
+        fetch-depth: 0
+        token: ${{ secrets.SERVICE_TOKEN }}
+
+    - name: Bump version and push tag
+      id: tag_version
+      uses: mathieudutour/github-tag-action@v6.1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        release_branches: main
+        default_bump: patch
+
+    - name: Get version file name set variables
+      run: |
+        pkg_name=$(grep -P 'version = \{attr = .*\}' pyproject.toml | grep -oP '\w+.__version__')
+        init_file="./src/${pkg_name//.__version__}/__init__.py"
+        echo "VERSION_FILE=$init_file" >> "$GITHUB_ENV"
+        echo "VERSION=${{ steps.tag_version.outputs.new_version }}" >> "$GITHUB_ENV"
+    - name: Update version file with new version
+      run: |
+        grep "__version__" "$VERSION_FILE"
+        sed -i --debug --expression="s|__version__.*|__version__ = \"${{ env.VERSION }}\"|" "$VERSION_FILE"
+    - name: Commit and Push version bump
+      uses: EndBug/add-and-commit@v9
+      with:
+        default_author: github_actions
+        message: "ci: version bump [skip actions]"
+        add: ${{ env.VERSION_FILE }}
