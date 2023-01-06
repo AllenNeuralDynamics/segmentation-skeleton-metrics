@@ -9,9 +9,9 @@ Created on Wed Dec 21 19:00:00 2022
 
 import os
 import networkx as nx
-from eval.graph_routines import *
-from eval.seg_metrics import *
-from eval.utils import *
+from eval_seg.graph_routines import *
+from eval_seg.seg_metrics import *
+from eval_seg.utils import *
 
 
 class SplitMetric(SegmentationMetrics):

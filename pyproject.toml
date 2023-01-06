@@ -3,13 +3,10 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hello_world"
-description = "Prints messages to stdout. Simple boilerplate for libraries."
+name = "eval_seg"
+description = "Evaluates segmentation."
 license = {text = "MIT"}
 requires-python = ">=3.7"
-authors = [
-    {name = "Allen Institute for Neural Dynamics"}
-]
 classifiers = [
     "Programming Language :: Python :: 3"
 ]
@@ -17,7 +14,11 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
-    'pandas'
+    'networkx',
+    'numpy',
+    'scikit-image',
+    'tensorstore',
+    'tifffile'
 ]
 
 [project.optional-dependencies]
@@ -36,7 +37,8 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "hello_world.__version__"}
+version = {attr = "eval_seg.__version__"}
+readme = {file = ["README.md"]}
 
 [tool.black]
 line-length = 79
@@ -61,7 +63,7 @@ exclude = '''
 
 [tool.coverage.run]
 omit = ["*__init__*"]
-source = ["hello_world", "tests"]
+source = ["eval_seg", "tests"]
 
 [tool.coverage.report]
 exclude_lines = ["if __name__ == .__main__.:"]

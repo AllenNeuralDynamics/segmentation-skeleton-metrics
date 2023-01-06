@@ -10,7 +10,7 @@ Created on Wed Dec 10 19:00:00 2022
 import os
 import networkx as nx
 import numpy as np
-from eval.utils import get_idx, get_xyz
+from eval_seg.utils import get_idx, get_xyz
 from random import sample
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
