@@ -5,8 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aind_segmentation_evaluation"
 description="Python package for evaluating neuron segmentations in terms of the number of splits and merges"
-author="Anna Grim"
-author_email="anna.grim@alleninstitute.org"
+authors = [{name="Anna Grim", email="anna.grim@alleninstitute.org"}]
 license = {text = "MIT"}
 requires-python = ">=3.7"
 classifiers = [
