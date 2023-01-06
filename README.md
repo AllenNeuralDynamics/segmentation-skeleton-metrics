@@ -1,4 +1,4 @@
-# library-repo-template
+# aind-segmentation-evaluation
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 ![Code Style](https://img.shields.io/badge/code%20style-black-black)
@@ -8,14 +8,7 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-[//]: # "These badges work in public repos"
-
-[//]: # "![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/AllenNeuralDynamics/library-repo-template?include_prereleases&sort=semver)"
-
-[//]: # "![GitHub release (latest by date)](https://img.shields.io/github/v/release/AllenNeuralDynamics/library-repo-template?display_name=release)"
-
-
-Template for a minimal, basic repository for an AIND library.
+Python package for evaluating neuron segmentations in terms of the number of splits and merges.
 
 ## Installation
 To use the software, in the root directory, run

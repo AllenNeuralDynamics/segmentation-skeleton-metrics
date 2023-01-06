@@ -8,6 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
+
 import numpy as np
 import tensorstore as ts
 
@@ -35,6 +36,7 @@ def get_value(volume, graph, i):
     idx = get_idx(graph, i)
     return volume[idx] if idx in volume.keys() else 0
 
+
 def mkdir(path_to_dir):
     """
     Makes a directory if it does not already exist.
@@ -51,6 +53,7 @@ def mkdir(path_to_dir):
     """
     if not os.path.exists(path_to_dir):
         os.mkdir(path_to_dir)
+
 
 def remove_edge(set_of_edges, edge):
     """
@@ -93,17 +96,23 @@ def upload_google_pred(path_to_data):
         Sparse image volume.
 
     """
-    dataset_ts = ts.open({'driver': 'neuroglancer_precomputed',
-                          'kvstore': {'driver': 'file',
-                          'path': path_to_data,},}).result()
+    dataset_ts = ts.open(
+        {
+            "driver": "neuroglancer_precomputed",
+            "kvstore": {
+                "driver": "file",
+                "path": path_to_data,
+            },
+        }
+    ).result()
     dataset_ts = dataset_ts[ts.d[:].transpose[::-1]]
-    volume_ts = dataset_ts[ts.d['channel'][0]]
+    volume_ts = dataset_ts[ts.d["channel"][0]]
     sparse_volume = dict()
     for x in range(volume_ts.shape[0]):
-        plane_x = np.array(volume_ts[x,:,:].read().result())
+        plane_x = np.array(volume_ts[x, :, :].read().result())
         y, z = np.nonzero(plane_x)
         for i in range(len(y)):
-            sparse_volume[(x,y[i],z[i])] = plane_x[y[i],z[i]]
+            sparse_volume[(x, y[i], z[i])] = plane_x[y[i], z[i]]
     return sparse_volume
 
 
@@ -127,6 +136,7 @@ def get_nbs(graph, i):
     """
     return list(graph.neighbors(i))
 
+
 def get_edge_values(volume, graph, edge):
     """
     Gets voxel value of both nodes contained in "edge".
@@ -148,6 +158,7 @@ def get_edge_values(volume, graph, edge):
     """
     return get_value(volume, graph, edge[0]), get_value(volume, graph, edge[1])
 
+
 def get_idx(graph, i):
     """
     Gets voxel index of node "i".
@@ -165,7 +176,8 @@ def get_idx(graph, i):
         voxel index of node "i".
 
     """
-    return tuple(graph.nodes[i]['idx'])
+    return tuple(graph.nodes[i]["idx"])
+
 
 def get_xyz(graph, i):
     """
@@ -184,7 +196,8 @@ def get_xyz(graph, i):
         The (x,y,z) coordinates of node "i".
 
     """
-    return graph.nodes[i]['xyz']
+    return graph.nodes[i]["xyz"]
+
 
 def get_edge_xyz(graph, edge):
     """
@@ -205,6 +218,7 @@ def get_edge_xyz(graph, edge):
     """
     return get_xyz(graph, edge[0]), get_xyz(graph, edge[1])
 
+
 def get_edge_idx(graph, edge):
     """
     Gets indices of both nodes contained in "edge".
@@ -223,6 +237,7 @@ def get_edge_idx(graph, edge):
 
     """
     return get_idx(graph, edge[0]), get_idx(graph, edge[1])
+
 
 def get_num_edges(list_of_graphs):
     """
