@@ -8,6 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
+
 import networkx as nx
 from eval_seg.graph_routines import *
 from eval_seg.seg_metrics import *
@@ -15,16 +16,18 @@ from eval_seg.utils import *
 
 
 class SplitMetric(SegmentationMetrics):
-
-    def __init__(self, shape,
-                 target_graphs=None,
-                 target_graphs_dir=None,
-                 path_to_target_volume=None,
-                 pred_volume=None,
-                 path_to_pred_volume=None,
-                 pred_graphs_dir=None,
-                 output=None,
-                 output_dir=None):
+    def __init__(
+        self,
+        shape,
+        target_graphs=None,
+        target_graphs_dir=None,
+        path_to_target_volume=None,
+        pred_volume=None,
+        path_to_pred_volume=None,
+        pred_graphs_dir=None,
+        output=None,
+        output_dir=None,
+    ):
         """
         Constructs object that evaluates predicted segmentation in terms of the
         number of splits
@@ -58,14 +61,18 @@ class SplitMetric(SegmentationMetrics):
         # Upload data
         self.shape = shape
         if target_graphs == None:
-            target_graphs = super().init_graphs(target_graphs_dir, path_to_target_volume)
+            target_graphs = super().init_graphs(
+                target_graphs_dir, path_to_target_volume
+            )
 
         if pred_volume == None:
-            pred_volume = super().init_volume(path_to_pred_volume, pred_graphs_dir)
+            pred_volume = super().init_volume(
+                path_to_pred_volume, pred_graphs_dir
+            )
 
         # Initialize output_dir (if applicable)
-        if output in ['swc']:
-            output_dir = os.path.join(output_dir, 'splits')
+        if output in ["swc"]:
+            output_dir = os.path.join(output_dir, "splits")
             mkdir(output_dir)
 
         # Initialize counters
@@ -104,20 +111,22 @@ class SplitMetric(SegmentationMetrics):
                 if super().check_simple_mistake(val_i, val_j):
                     self.split_cnt += 1
                     self.split_edge_cnt += 1
-                    fn = 'split_site-' + str(self.split_cnt) + '.swc'
+                    fn = "split_site-" + str(self.split_cnt) + ".swc"
                     super().log_simple_mistake(i, fn)
                 elif super().check_complex_mistake(val_i, val_j):
-                    dfs_edges = self.process_complex_mistake(graph, dfs_edges, (i, j))
+                    dfs_edges = self.process_complex_mistake(
+                        graph, dfs_edges, (i, j)
+                    )
 
             # Check whether whole neuron is missing
             if miss_flag:
-                fn = 'split_edges-' + str(self.split_cnt) + '.swc'
+                fn = "split_edges-" + str(self.split_cnt) + ".swc"
                 list_of_edges = list(nx.dfs_edges(graph, source=1))
                 super().log_complex_mistake(graph, list_of_edges, j, fn)
                 self.split_edge_cnt += len(list_of_edges)
 
         # Save results
-        super().write_results('split_')
+        super().write_results("split_")
 
     def process_complex_mistake(self, graph, dfs_edges, root_edge):
         """
@@ -157,8 +166,8 @@ class SplitMetric(SegmentationMetrics):
             add_nbs = False
             if super().check_simple_mistake(root_val, val):
                 self.split_cnt += 1
-                fn_a = 'split_site-' + str(self.split_cnt + 1) + 'a.swc'
-                fn_b = 'split_site-' + str(self.split_cnt + 1) + 'b.swc'
+                fn_a = "split_site-" + str(self.split_cnt + 1) + "a.swc"
+                fn_b = "split_site-" + str(self.split_cnt + 1) + "b.swc"
                 super().log_simple_mistake(graph, root, fn_a)
                 super().log_simple_mistake(graph, j, fn_b)
                 log_flag = True
@@ -180,7 +189,7 @@ class SplitMetric(SegmentationMetrics):
 
         # Finalizations
         if log_flag:
-            fn = 'split_edges-' + str(self.split_cnt) + '.swc'
+            fn = "split_edges-" + str(self.split_cnt) + ".swc"
             super().log_complex_mistake(graph, visited_edges, root, fn)
             self.split_edge_cnt += len(visited_edges)
         return dfs_edges

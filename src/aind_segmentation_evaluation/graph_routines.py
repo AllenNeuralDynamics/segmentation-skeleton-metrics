@@ -8,12 +8,14 @@ Created on Wed Dec 10 19:00:00 2022
 """
 
 import os
+from random import sample
+
 import networkx as nx
 import numpy as np
-from eval_seg.utils import get_idx, get_xyz
-from random import sample
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
+
+from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
 
 # Conversion Routines
@@ -37,8 +39,9 @@ def graph_to_volume(list_of_graphs, shape):
     num_dilations = 2
     volume = graph_to_skeleton(list_of_graphs, shape)
     for _ in range(num_dilations):
-        volume = grey_dilation(volume, mode='constant', size=(3,3,3))
+        volume = grey_dilation(volume, mode="constant", size=(3, 3, 3))
     return volume_to_dict(volume)
+
 
 def graph_to_skeleton(list_of_graphs, shape):
     """
@@ -60,8 +63,9 @@ def graph_to_skeleton(list_of_graphs, shape):
     """
     volume = np.zeros(shape, dtype=np.uint32)
     for i, graph in enumerate(list_of_graphs):
-        volume = embed_graph(graph, volume, i+1)
+        volume = embed_graph(graph, volume, i + 1)
     return volume
+
 
 def graph_to_swc(graph, path):
     """
@@ -84,7 +88,7 @@ def graph_to_swc(graph, path):
     queue = [(-1, root)]
     visited = set()
     reindex = dict()
-    while len(queue)>0:
+    while len(queue) > 0:
         parent, child = queue.pop(0)
         swc.append(get_swc_entry(get_xyz(graph, child), 2, parent))
         visited.add(child)
@@ -93,6 +97,7 @@ def graph_to_swc(graph, path):
             if nb not in visited:
                 queue.append((reindex[child], nb))
     write_swc(path, swc)
+
 
 def skeleton_to_graph(skel):
     """
@@ -114,7 +119,7 @@ def skeleton_to_graph(skel):
     queue = [(-1, search_space.pop())]
     visited = []
     graph = nx.Graph()
-    while len(queue)>0:
+    while len(queue) > 0:
         # Visit node
         parent_id, child_idx = queue.pop(0)
         child_id = graph.number_of_nodes() + 1
@@ -130,6 +135,7 @@ def skeleton_to_graph(skel):
                 search_space.remove(nb_idx)
                 queue.append((child_id, nb_idx))
     return graph
+
 
 def swc_to_graph(swc_dir, shape):
     """
@@ -149,9 +155,11 @@ def swc_to_graph(swc_dir, shape):
 
     """
     list_of_graphs = []
-    for graph_id, f in enumerate([f for f in os.listdir(swc_dir) if 'swc' in f]):
+    for graph_id, f in enumerate(
+        [f for f in os.listdir(swc_dir) if "swc" in f]
+    ):
         graph = nx.Graph(file_name=f, graph_id=graph_id)
-        with open(os.path.join(swc_dir, f), 'r') as f:
+        with open(os.path.join(swc_dir, f), "r") as f:
             for line in f.readlines():
                 if line.startswith("#"):
                     continue
@@ -165,6 +173,7 @@ def swc_to_graph(swc_dir, shape):
                     graph.add_edge(parent, child)
         list_of_graphs.append(graph)
     return list_of_graphs
+
 
 def volume_to_dict(volume):
     """
@@ -188,10 +197,11 @@ def volume_to_dict(volume):
         d[idx] = volume[idx]
     return d
 
+
 def volume_to_graph(volume):
     """
-    Converts image to a list of graphs, where each label in the image corresponds
-    to a distinct graph.
+    Converts image to a list of graphs, where each label in the image
+    corresponds to a distinct graph.
 
     Parameters
     ----------
@@ -205,12 +215,13 @@ def volume_to_graph(volume):
 
     """
     list_of_graphs = []
-    for i in [i for i in np.unique(volume) if i!=0]:
-        mask_i = (volume==i).astype(int)
+    for i in [i for i in np.unique(volume) if i != 0]:
+        mask_i = (volume == i).astype(int)
         skel_i = skeletonize_3d(mask_i)
         if np.sum(skel_i) > 0:
             list_of_graphs.append(skeleton_to_graph(skel_i))
     return list_of_graphs
+
 
 def embed_graph(graph, volume, val, root=1):
     """
@@ -235,9 +246,10 @@ def embed_graph(graph, volume, val, root=1):
 
     """
     volume[get_idx(graph, root)] = val
-    for (i,j) in nx.bfs_edges(graph, root):
+    for (i, j) in nx.bfs_edges(graph, root):
         volume[get_idx(graph, j)] = val
     return volume
+
 
 def get_bfs_nbs(nbhd=26):
     """
@@ -255,18 +267,19 @@ def get_bfs_nbs(nbhd=26):
         list of translation vectors of neighbors of the origin.
 
     """
-    nbs = [(1,0,0), (0,1,0), (0,0,1), (-1,0,0), (0,-1,0), (0,0,-1)]
+    nbs = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), (0, 0, -1)]
     if nbhd >= 18:
-        l1 = [(1,1,0), (-1,1,0), (1,-1,0), (-1,-1,0)]
-        l2 = [(1,0,1), (-1,0,1), (1,0,-1), (-1,0,-1)]
-        l3 = [(0,1,1), (0,-1,1), (0,1,-1), (0,-1,-1)]
+        l1 = [(1, 1, 0), (-1, 1, 0), (1, -1, 0), (-1, -1, 0)]
+        l2 = [(1, 0, 1), (-1, 0, 1), (1, 0, -1), (-1, 0, -1)]
+        l3 = [(0, 1, 1), (0, -1, 1), (0, 1, -1), (0, -1, -1)]
         nbs = nbs + l1 + l2 + l3
     if nbhd == 26:
-        l1 = [(-1,1,1), (1,-1,1), (1,1,-1)]
-        l2 = [(-1,-1,1), (-1,1,-1), (1,-1,-1)]
-        l3 =  [(1,1,1), (-1,-1,-1)]
+        l1 = [(-1, 1, 1), (1, -1, 1), (1, 1, -1)]
+        l2 = [(-1, -1, 1), (-1, 1, -1), (1, -1, -1)]
+        l3 = [(1, 1, 1), (-1, -1, -1)]
         nbs = nbs + l1 + l2 + l3
     return nbs
+
 
 def get_nb(xyz, vec):
     """
@@ -307,17 +320,18 @@ def write_swc(path_to_swc, list_of_entries, color=None):
     None.
 
     """
-    with open(path_to_swc, 'w') as f:
-        if color!=None:
-            f.write('# COLOR' + color)
+    with open(path_to_swc, "w") as f:
+        if color is not None:
+            f.write("# COLOR" + color)
         else:
-            f.write('# id, type, z, y, x, r, pid')
-        f.write('\n')
+            f.write("# id, type, z, y, x, r, pid")
+        f.write("\n")
         for i, entry in enumerate(list_of_entries):
-            f.write(str(i+1) + ' ' + str(0) + ' ')
+            f.write(str(i + 1) + " " + str(0) + " ")
             for x in entry:
-                f.write(str(x) + ' ')
-            f.write('\n')
+                f.write(str(x) + " ")
+            f.write("\n")
+
 
 def get_swc_entry(xyz, radius, parent):
     """
@@ -343,9 +357,10 @@ def get_swc_entry(xyz, radius, parent):
     entry.extend([radius, int(parent)])
     return entry
 
+
 def read_xyz(zyx):
     """
-    Reads the (z,y,x) coordinates from an swc file, then reverses and scales 
+    Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
 
     Parameters
@@ -362,6 +377,7 @@ def read_xyz(zyx):
     zyx_scaled = [float(val) / get_scaling_factor() for val in zyx]
     zyx_scaled.reverse()
     return zyx_scaled
+
 
 def read_idx(xyz, shape):
     """
@@ -380,11 +396,12 @@ def read_idx(xyz, shape):
         Indices computed from "xyz".
 
     """
-    return [intergize(val, shape[i]-1) for i, val in enumerate(xyz)]
+    return [intergize(val, shape[i] - 1) for i, val in enumerate(xyz)]
+
 
 def intergize(val, dim):
     """
-    Converts "val" to an integer and ensures that it is contained within 
+    Converts "val" to an integer and ensures that it is contained within
     dimension (i.e. "dim") of image volume.
 
     Parameters
@@ -402,6 +419,7 @@ def intergize(val, dim):
     """
     idx = min(max(np.round(val), 0), dim)
     return int(idx)
+
 
 def get_scaling_factor():
     """

@@ -8,8 +8,9 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-import numpy as np
 from abc import ABC, abstractmethod
+
+import numpy as np
 from eval_seg.graph_routines import *
 from eval_seg.utils import *
 from skimage.io import imread
@@ -17,8 +18,8 @@ from tifffile import imwrite
 
 # define class variables: simple_width, complex_width, simple_color, complex_color
 
-class SegmentationMetrics(ABC):
 
+class SegmentationMetrics(ABC):
     def __init__(self, graphs, volume, shape, output, output_dir):
         """
         Constructs object which evaluates a segmentation mask in terms of the
@@ -42,14 +43,14 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        assert output in [None, 'tif', 'swc']
+        assert output in [None, "tif", "swc"]
         self.output = output
         self.output_dir = output_dir
 
         self.graphs = graphs
         self.volume = volume
         self.shape = shape
-        if self.output in ['tif']:
+        if self.output in ["tif"]:
             self.site_mask = np.zeros(self.shape, dtype=np.uint8)
             self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
 
@@ -96,11 +97,11 @@ class SegmentationMetrics(ABC):
         """
         assert any([path_to_volume, graphs_dir])
         if path_to_volume != None:
-            if 'tif' in path_to_volume:
+            if "tif" in path_to_volume:
                 volume = imread(path_to_volume)
                 sparse_volume = volume_to_dict(volume)
                 return sparse_volume
-            elif 'goodgle' in path_to_volume:
+            elif "goodgle" in path_to_volume:
                 return upload_google_pred(path_to_volume)
         else:
             list_of_graphs = swc_to_graph(graphs_dir, self.shape)
@@ -164,12 +165,12 @@ class SegmentationMetrics(ABC):
         None
 
         """
-        if self.output == 'swc':
-            red = ' 1.0 0.0 0.0'
+        if self.output == "swc":
+            red = " 1.0 0.0 0.0"
             xyz = get_xyz(graph, i)
             path_to_swc = os.path.join(self.output_dir, fn)
             write_swc(path_to_swc, [get_swc_entry(xyz, 7, -1)], color=red)
-        elif self.output in ['tif']:
+        elif self.output in ["tif"]:
             idx = get_idx(graph, i)
             self.site_mask[idx] = 1
 
@@ -192,24 +193,24 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        if self.output == 'swc':
-            red = ' 1.0 0.0 0.0'
+        if self.output == "swc":
+            red = " 1.0 0.0 0.0"
             reindex = {root: 1}
             swc = [get_swc_entry(get_xyz(graph, root), 7, -1)]
-            for (i,j) in list_of_edges:
+            for (i, j) in list_of_edges:
                 xyz = get_xyz(graph, j)
                 swc.append(get_swc_entry(xyz, 7, reindex[i]))
                 reindex[j] = len(reindex) + 1
             path = os.path.join(self.output_dir, fn)
             write_swc(path, swc, color=red)
-        elif self.output == 'tif':
-            for (i,j) in list_of_edges:
+        elif self.output == "tif":
+            for (i, j) in list_of_edges:
                 idx = get_idx(graph, j)
                 self.edge_mask[idx] = 1
-    
+
     def write_results(self, fn):
         """
-        Writes "site_mask" and "edge" mask to 
+        Writes "site_mask" and "edge" mask to
 
         Parameters
         ----------
@@ -221,9 +222,9 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        if self.output in ['tif']:
-            path_to_site_mask = os.path.join(self.output_dir, fn + 'sites.tif')
-            path_to_edge_mask = os.path.join(self.output_dir, fn + 'edges.tif')
+        if self.output in ["tif"]:
+            path_to_site_mask = os.path.join(self.output_dir, fn + "sites.tif")
+            path_to_edge_mask = os.path.join(self.output_dir, fn + "edges.tif")
             imwrite(path_to_site_mask, self.site_mask)
             imwrite(path_to_edge_mask, self.edge_mask)
 
