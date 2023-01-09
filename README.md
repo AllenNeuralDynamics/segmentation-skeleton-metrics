@@ -21,6 +21,11 @@ To develop the code, run
 pip install -e .[dev]
 ```
 
+To install this package from PyPI, run
+```bash
+pip install aind-segmentation-evaluation
+```
+
 ## Contributing
 
 ### Linters and testing
