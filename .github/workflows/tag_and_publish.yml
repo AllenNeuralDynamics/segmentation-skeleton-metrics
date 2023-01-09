@@ -38,3 +38,22 @@ jobs:
         default_author: github_actions
         message: "ci: version bump [skip actions]"
         add: ${{ env.VERSION_FILE }}
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Pull latest changes
+        run: git pull origin main
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          pip install --upgrade setuptools wheel twine build
+          python -m build
+          twine check dist/*
+      - name: Publish on PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1.5
+        with:
+          password: ${{ secrets.AIND_PYPI_TOKEN }}
