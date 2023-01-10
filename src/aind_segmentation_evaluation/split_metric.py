@@ -10,12 +10,12 @@ Created on Wed Dec 21 19:00:00 2022
 import os
 
 import networkx as nx
-from eval_seg.graph_routines import *
-from eval_seg.seg_metrics import *
-from eval_seg.utils import *
+
+import aind_segmentation_evaluation.seg_metrics as sm
+import aind_segmentation_evaluation.utils as utils
 
 
-class SplitMetric(SegmentationMetrics):
+class SplitMetric(sm.SegmentationMetrics):
     def __init__(
         self,
         shape,
@@ -29,29 +29,35 @@ class SplitMetric(SegmentationMetrics):
         output_dir=None,
     ):
         """
-        Constructs object that evaluates predicted segmentation in terms of the
-        number of splits
+        Constructs object that evaluates predicted segmentation
+        in terms of the number of splits
 
         Parameters
         ----------
         shape : tuple
             Dimensions of image volume.
         target_graphs : list[nx.Graph()], optional
-            List of graphs such that each graph corresponds to a single neuron.
+            List of graphs.
         target_graph_dir : str, optional
-            Path to directory containing target swc files. The default is None.
+            Path to directory containing target swc files.
+            The default is None.
         path_to_target_volume : str, optional
-            Path to target volume (i.e. tif file). The default is None.
+            Path to target volume (i.e. tif file).
+            The default is None.
         pred_volume : np.array(), optional
             Predicted segmentation.
         pred_graph_dir : str, optional
-            Path to directory containing predicted swc files. The default is None.
+            Path to directory containing predicted swc files.
+            The default is None.
         path_to_pred_volume : str, optional
-            Path to predicted volume (i.e. tif file). The default is None.
+            Path to predicted volume (i.e. tif file).
+            The default is None.
         output : str, optional
-            Type of output, options include text, tif, swc. The default is None.
+            Type of output, options include text, tif, swc.
+            The default is None.
         output_dir : str, optional
-            Path to directory where outputs are written. The default is None.
+            Path to directory where outputs are written.
+            The default is None.
 
         Returns
         -------
@@ -60,12 +66,12 @@ class SplitMetric(SegmentationMetrics):
         """
         # Upload data
         self.shape = shape
-        if target_graphs == None:
+        if target_graphs is None:
             target_graphs = super().init_graphs(
                 target_graphs_dir, path_to_target_volume
             )
 
-        if pred_volume == None:
+        if pred_volume is None:
             pred_volume = super().init_volume(
                 path_to_pred_volume, pred_graphs_dir
             )
@@ -73,7 +79,7 @@ class SplitMetric(SegmentationMetrics):
         # Initialize output_dir (if applicable)
         if output in ["swc"]:
             output_dir = os.path.join(output_dir, "splits")
-            mkdir(output_dir)
+            utils.mkdir(output_dir)
 
         # Initialize counters
         self.split_cnt = 0
@@ -101,7 +107,9 @@ class SplitMetric(SegmentationMetrics):
             while len(dfs_edges) > 0:
                 # Extract edge info
                 (i, j) = dfs_edges.pop(0)
-                val_i, val_j = get_edge_values(self.volume, graph, (i, j))
+                val_i, val_j = utils.get_edge_values(
+                    self.volume, graph, (i, j)
+                )
 
                 # Check missing neuron flag
                 if val_i > 0:
@@ -112,7 +120,7 @@ class SplitMetric(SegmentationMetrics):
                     self.split_cnt += 1
                     self.split_edge_cnt += 1
                     fn = "split_site-" + str(self.split_cnt) + ".swc"
-                    super().log_simple_mistake(i, fn)
+                    super().log_simple_mistake(graph, i, fn)
                 elif super().check_complex_mistake(val_i, val_j):
                     dfs_edges = self.process_complex_mistake(
                         graph, dfs_edges, (i, j)
@@ -148,11 +156,11 @@ class SplitMetric(SegmentationMetrics):
 
         """
         # Initializations
-        if get_value(self.volume, graph, root_edge[1]) > 0:
+        if utils.get_value(self.volume, graph, root_edge[1]) > 0:
             root_edge = (root_edge[1], root_edge[0])
 
         root = root_edge[0]
-        root_val = get_value(self.volume, graph, root)
+        root_val = utils.get_value(self.volume, graph, root)
 
         # Main
         log_flag = False
@@ -162,7 +170,7 @@ class SplitMetric(SegmentationMetrics):
         while len(queue) > 0:
             # Visit
             (i, j) = queue.pop(0)
-            val = get_value(self.volume, graph, j)
+            val = utils.get_value(self.volume, graph, j)
             add_nbs = False
             if super().check_simple_mistake(root_val, val):
                 self.split_cnt += 1
@@ -179,12 +187,12 @@ class SplitMetric(SegmentationMetrics):
             # Finish visit
             visited_nodes.add(j)
             visited_edges.append((i, j))
-            dfs_edges = remove_edge(dfs_edges, (i, j))
+            dfs_edges = utils.remove_edge(dfs_edges, (i, j))
 
             # Check nbs
             if add_nbs:
-                for k in get_nbs(graph, j):
-                    if not k in visited_nodes:
+                for k in utils.get_nbs(graph, j):
+                    if k not in visited_nodes:
                         queue.append((j, k))
 
         # Finalizations

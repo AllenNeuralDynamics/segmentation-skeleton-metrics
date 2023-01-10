@@ -11,19 +11,18 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from eval_seg.graph_routines import *
-from eval_seg.utils import *
 from skimage.io import imread
 from tifffile import imwrite
 
-# define class variables: simple_width, complex_width, simple_color, complex_color
+import aind_segmentation_evaluation.graph_routines as gr
+import aind_segmentation_evaluation.utils as utils
 
 
 class SegmentationMetrics(ABC):
     def __init__(self, graphs, volume, shape, output, output_dir):
         """
-        Constructs object which evaluates a segmentation mask in terms of the
-        number of splits and merges.
+        Constructs object which evaluates a segmentation mask in
+        terms of the number of splits and merges.
 
         Parameters
         ----------
@@ -56,7 +55,8 @@ class SegmentationMetrics(ABC):
 
     def init_graphs(self, graphs_dir, path_to_volume):
         """
-        Initializes a graph by either uploading swc files or dilating the graph.
+        Initializes a graph by either uploading swc files
+        or dilating the graph.
 
         Parameters
         ----------
@@ -72,15 +72,16 @@ class SegmentationMetrics(ABC):
 
         """
         assert any([graphs_dir, path_to_volume])
-        if graphs_dir != None:
-            return swc_to_graph(graphs_dir, self.shape)
+        if graphs_dir is not None:
+            return gr.swc_to_graph(graphs_dir, self.shape)
         else:
             volume = imread(path_to_volume)
-            return volume_to_graph(volume)
+            return gr.volume_to_graph(volume)
 
     def init_volume(self, path_to_volume, graphs_dir):
         """
-        Initializes a volume by either uploading a tif file or dilating its graph.
+        Initializes a volume by either uploading a tif file
+        or dilating its graph.
 
         Parameters
         ----------
@@ -96,16 +97,16 @@ class SegmentationMetrics(ABC):
 
         """
         assert any([path_to_volume, graphs_dir])
-        if path_to_volume != None:
+        if path_to_volume is not None:
             if "tif" in path_to_volume:
                 volume = imread(path_to_volume)
-                sparse_volume = volume_to_dict(volume)
+                sparse_volume = gr.volume_to_dict(volume)
                 return sparse_volume
             elif "goodgle" in path_to_volume:
-                return upload_google_pred(path_to_volume)
+                return gr.upload_google_pred(path_to_volume)
         else:
-            list_of_graphs = swc_to_graph(graphs_dir, self.shape)
-            sparse_volume = graph_to_volume(list_of_graphs, self.shape)
+            list_of_graphs = gr.swc_to_graph(graphs_dir, self.shape)
+            sparse_volume = gr.graph_to_volume(list_of_graphs, self.shape)
             return sparse_volume
 
     def check_simple_mistake(self, a, b):
@@ -150,7 +151,8 @@ class SegmentationMetrics(ABC):
 
     def log_simple_mistake(self, graph, i, fn):
         """
-        Logs xyz coordinate of mistake in a numpy.array() or writes an swc file.
+        Logs xyz coordinate of mistake in a numpy.array()
+        or writes an swc file.
 
         Parameters
         ----------
@@ -167,17 +169,18 @@ class SegmentationMetrics(ABC):
         """
         if self.output == "swc":
             red = " 1.0 0.0 0.0"
-            xyz = get_xyz(graph, i)
+            xyz = utils.get_xyz(graph, i)
+            list_of_entries = [gr.get_swc_entry(xyz, 7, -1)]
             path_to_swc = os.path.join(self.output_dir, fn)
-            write_swc(path_to_swc, [get_swc_entry(xyz, 7, -1)], color=red)
+            gr.write_swc(path_to_swc, list_of_entries, color=red)
         elif self.output in ["tif"]:
-            idx = get_idx(graph, i)
+            idx = utils.get_idx(graph, i)
             self.site_mask[idx] = 1
 
     def log_complex_mistake(self, graph, list_of_edges, root, fn):
         """
-        Logs list of xyz coordinates of mistake in an numpyp.array() or writes
-        an swc file.
+        Logs list of xyz coordinates of mistake in an
+        numpyp.array() or writes an swc file.
 
         Parameters
         ----------
@@ -196,16 +199,17 @@ class SegmentationMetrics(ABC):
         if self.output == "swc":
             red = " 1.0 0.0 0.0"
             reindex = {root: 1}
-            swc = [get_swc_entry(get_xyz(graph, root), 7, -1)]
+            xyz = utils.get_xyz(graph, root)
+            swc = [gr.get_swc_entry(xyz, 7, -1)]
             for (i, j) in list_of_edges:
-                xyz = get_xyz(graph, j)
-                swc.append(get_swc_entry(xyz, 7, reindex[i]))
+                xyz = utils.get_xyz(graph, j)
+                swc.append(gr.get_swc_entry(xyz, 7, reindex[i]))
                 reindex[j] = len(reindex) + 1
             path = os.path.join(self.output_dir, fn)
-            write_swc(path, swc, color=red)
+            gr.write_swc(path, swc, color=red)
         elif self.output == "tif":
             for (i, j) in list_of_edges:
-                idx = get_idx(graph, j)
+                idx = utils.get_idx(graph, j)
                 self.edge_mask[idx] = 1
 
     def write_results(self, fn):
