@@ -16,6 +16,10 @@ import aind_segmentation_evaluation.utils as utils
 
 
 class MergeMetric(sm.SegmentationMetrics):
+    """
+    Class that evaluates the quality of a segmentation in terms of the
+    number of splits.
+    """
     def __init__(
         self,
         shape,
@@ -229,5 +233,23 @@ class MergeMetric(sm.SegmentationMetrics):
 
         return dfs_edges
 
-    def compute_erl(self):
-        pass
+    def compute_mistake_rate(self):
+        """
+        Computes expected number of splits wrt length of neuron.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tuple[int]
+            Expected number of splits and split edges.
+
+        """
+        if self.edge_cnt == 0:
+            self.edge_cnt = super().count_edges()
+
+        merge_rate = self.edge_cnt / self.merge_cnt
+        merge_edge_rate = self.edge_cnt / self.merge_edge_cnt
+        return merge_rate, merge_edge_rate

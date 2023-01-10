@@ -19,10 +19,13 @@ import aind_segmentation_evaluation.utils as utils
 
 
 class SegmentationMetrics(ABC):
+    """
+    Class that evaluates the quality of a segmentation in
+    terms of the number of splits and merges.
+    """
     def __init__(self, graphs, volume, shape, output, output_dir):
         """
-        Constructs object which evaluates a segmentation mask in
-        terms of the number of splits and merges.
+        Constructs object that evaluates a segmentation mask.
 
         Parameters
         ----------
@@ -49,6 +52,7 @@ class SegmentationMetrics(ABC):
         self.graphs = graphs
         self.volume = volume
         self.shape = shape
+        self.edge_cnt = 0
         if self.output in ["tif"]:
             self.site_mask = np.zeros(self.shape, dtype=np.uint8)
             self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
@@ -108,6 +112,22 @@ class SegmentationMetrics(ABC):
             list_of_graphs = gr.swc_to_graph(graphs_dir, self.shape)
             sparse_volume = gr.graph_to_volume(list_of_graphs, self.shape)
             return sparse_volume
+
+    def count_edges(self):
+        """
+        Counts number of edges in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for graph in self.graphs:
+            self.edge_cnt += graph.number_of_edges()
 
     def check_simple_mistake(self, a, b):
         """
@@ -234,12 +254,49 @@ class SegmentationMetrics(ABC):
 
     @abstractmethod
     def detect_mistakes(self):
-        pass
+        """
+        Detects differences between labels between graph and volume.
 
-    @abstractmethod
-    def compute_erl(self):
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         pass
 
     @abstractmethod
     def process_complex_mistake(self):
+        """
+        Determines whether complex mistake is a misalignment between volume and
+        graph or a true mistake.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        pass
+
+    @abstractmethod
+    def compute_mistake_rate(self):
+        """
+        Computes expected number of mistakes wrt length of neuron.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         pass

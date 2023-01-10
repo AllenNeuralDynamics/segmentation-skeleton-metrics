@@ -16,6 +16,10 @@ import aind_segmentation_evaluation.utils as utils
 
 
 class SplitMetric(sm.SegmentationMetrics):
+    """
+    Class that evaluates the quality of a segmentation in terms of the
+    number of splits.
+    """
     def __init__(
         self,
         shape,
@@ -202,5 +206,23 @@ class SplitMetric(sm.SegmentationMetrics):
             self.split_edge_cnt += len(visited_edges)
         return dfs_edges
 
-    def compute_erl(self):
-        pass
+    def compute_mistake_rate(self):
+        """
+        Computes expected number of splits wrt length of neuron.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tuple[int]
+            Expected number of splits and split edges.
+
+        """
+        if self.edge_cnt == 0:
+            self.edge_cnt = super().count_edges()
+
+        split_rate = self.edge_cnt / self.split_cnt
+        split_edge_rate = self.edge_cnt / self.split_edge_cnt
+        return split_rate, split_edge_rate
