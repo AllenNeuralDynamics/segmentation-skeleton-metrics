@@ -6,6 +6,8 @@ Created on Tue Jan 3 15:00:00 2023
 
 """
 
+import os
+
 from aind_segmentation_evaluation.merge_metric import MergeMetric
 from aind_segmentation_evaluation.split_metric import SplitMetric
 
@@ -13,9 +15,9 @@ if __name__ == "__main__":
 
     # Initializations
     shape = (148, 226, 282)
-    output_dir = "path to directory where outputs are written to"
-    path_to_pred_volume = "path to predicted volumetric segmentation"
-    target_graphs_dir = "path to directory target swc files"
+    output_dir = "./resources"
+    path_to_pred_volume = os.path.join(output_dir, 'pred_volume.tif')
+    target_graphs_dir = os.path.join(output_dir, 'target_graphs')
 
     # Run evaluation ~ exact
     split_evaluator = SplitMetric(
