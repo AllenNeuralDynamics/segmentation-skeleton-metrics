@@ -45,4 +45,3 @@ if __name__ == "__main__":
     print("Voxel-based evaluation...")
     for key in voxel_stats.keys():
         print("   " + key + ":", voxel_stats[key])
-    print("")
