@@ -59,16 +59,6 @@ black .
 isort .
 ```
 
-- Use **actionlint** to check that the GitHub Actions workflows are valid:
-```bash
-actionlint
-```
-
-- Use **commitlint** to check that commit messages are valid:
-```bash
-commitlint --from=HEAD~1
-```
-
 ### Pull requests
 
 For internal members, please create a branch. For external members, please fork the repository and open a pull request from the fork. We'll primarily use [Angular](https://github.com/angular/angular/blob/main/CONTRIBUTING.md#commit) style for commit messages. Roughly, they should follow the pattern:
