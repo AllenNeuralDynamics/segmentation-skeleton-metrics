@@ -25,9 +25,9 @@ def graph_to_volume(list_of_graphs, shape):
 
     Parameters
     ----------
-    list_of_graphs : list[networkx.Graph()]
+    list_of_graphs : list[networkx.Graph]
         List of graphs where each graph represents a neuron.
-    shape : TYPE
+    shape : tuple
         Dimensions of "volume" in the order of (x,y,z).
 
     Returns
@@ -36,7 +36,7 @@ def graph_to_volume(list_of_graphs, shape):
         Sparse image volume.
 
     """
-    num_dilations = 2
+    num_dilations = 3
     volume = graph_to_skeleton(list_of_graphs, shape)
     for _ in range(num_dilations):
         volume = grey_dilation(volume, mode="constant", size=(3, 3, 3))
@@ -50,14 +50,14 @@ def graph_to_skeleton(list_of_graphs, shape):
 
     Parameters
     ----------
-    list_of_graphs : list[networkx.Graph()]
+    list_of_graphs : list[networkx.Graph]
         List of graphs where each graph represents a neuron.
     shape : tuple
         Dimensions of "volume" in the order of (x,y,z).
 
     Returns
     -------
-    volume : numpy.array()
+    volume : numpy.array
         Image volume.
 
     """
@@ -73,7 +73,7 @@ def graph_to_swc(graph, path):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph which represents a neuron.
     path : str
         Path that swc file will be written to.
@@ -110,7 +110,7 @@ def skeleton_to_graph(skel):
 
     Returns
     -------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graphical representation of "skel".
 
     """
@@ -150,7 +150,7 @@ def swc_to_graph(swc_dir, shape):
 
     Returns
     -------
-    list_of_graphs : list[networkx.Graph()]
+    list_of_graphs : list[networkx.Graph]
         List of graphs where each graph represents a neuron.
 
     """
@@ -177,11 +177,11 @@ def swc_to_graph(swc_dir, shape):
 
 def volume_to_dict(volume):
     """
-    Converts an image volume to a dictionry (i.e. sparsifies).
+    Converts an image volume to a dictionary (i.e. sparsifies).
 
     Parameters
     ----------
-    volume : numpy.array()
+    volume : numpy.array
         Image volume.
 
     Returns
@@ -205,21 +205,22 @@ def volume_to_graph(volume):
 
     Parameters
     ----------
-    volume : numpy.array()
+    volume : numpy.array
         Image volume.
 
     Returns
     -------
-    list_of_graphs : list[networkx.Graph()]
+    list_of_graphs : list[networkx.Graph]
         List of graphs where each graph corresponds to a neuron.
 
     """
     list_of_graphs = []
-    for i in [i for i in np.unique(volume) if i != 0]:
-        mask_i = (volume == i).astype(int)
-        skel_i = skeletonize_3d(mask_i)
-        if np.sum(skel_i) > 0:
-            list_of_graphs.append(skeleton_to_graph(skel_i))
+    binary_skeleton = skeletonize_3d(volume > 0).astype(int)
+    skeleton = volume * binary_skeleton
+    for i in [i for i in np.unique(skeleton) if i != 0]:
+        mask_i = (skeleton == i).astype(int)
+        graph_i = skeleton_to_graph(mask_i)
+        list_of_graphs.append(graph_i)
     return list_of_graphs
 
 
@@ -230,18 +231,19 @@ def embed_graph(graph, volume, val, root=1):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
-    volume : numpy.array()
+    volume : numpy.array
         Image volume.
-    key : int
+    val : int
         Value that each populated entry is set to.
     root : int, optional
-        Root node of "graph". The default is 1.
+        Root node of "graph".
+        The default is 1.
 
     Returns
     -------
-    volume : numpy.array()
+    volume : numpy.array
         Image volume.
 
     """
@@ -259,7 +261,8 @@ def get_bfs_nbs(nbhd=26):
     Parameters
     ----------
     nbhd : int, optional
-        Connectivity of 3D neighborhood (e.g. 6, 18, 26). The default is 26.
+        Connectivity of 3D neighborhood (e.g. 6, 18, 26).
+        The default is 26.
 
     Returns
     -------

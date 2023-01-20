@@ -22,8 +22,8 @@ def get_value(volume, graph, i):
     ----------
     volume : dict
         Sparse image volume.
-    graph : networkx.Graph()
-        Graph that represents a neuron.
+    graph : networkx.Graph
+        Graph which represents a neuron.
     i : int
         Node of "graph".
 
@@ -55,9 +55,34 @@ def mkdir(path_to_dir):
         os.mkdir(path_to_dir)
 
 
+def check_edge(set_of_edges, edge):
+    """
+    Checks whether "edge" is in "set_of_edges".
+
+    Parameters
+    ----------
+    set_of_edges : set
+        Set of edges.
+    edge : tuple
+        Edge.
+
+    Returns
+    -------
+    bool : bool
+        Indication of whether "edge" is contained in "set_of_edges".
+
+    """
+    edge_rev = list(edge)
+    edge_rev.reverse()
+    if edge in set_of_edges or edge_rev in set_of_edges:
+        return True
+    else:
+        return False
+
+
 def remove_edge(set_of_edges, edge):
     """
-    Checks whether "edge" is in "my_list" and removes it.
+    Checks whether "edge" is in "set_of_edges" and removes it.
 
     Parameters
     ----------
@@ -69,7 +94,8 @@ def remove_edge(set_of_edges, edge):
     Returns
     -------
     set_of_edges : set
-        Updated set of edges if "edge" was contained in "set_of_edges".
+        Updated set of edges such that "edge" is removed if it was
+        contained in "set_of_edges".
 
     """
     edge_reverse = list(edge)
@@ -145,7 +171,7 @@ def get_edge_values(volume, graph, edge):
     ----------
     volume : dict
         Sparse image volume.
-    graph : netowrkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
     edge : tuple
         Edge in "graph".
@@ -165,7 +191,7 @@ def get_idx(graph, i):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
     i : int
         Node of "graph".
@@ -185,7 +211,7 @@ def get_xyz(graph, i):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
     i : int
         Node of "graph".
@@ -205,7 +231,7 @@ def get_edge_xyz(graph, edge):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
     edge : tuple
         Edge contained in "graph".
@@ -225,7 +251,7 @@ def get_edge_idx(graph, edge):
 
     Parameters
     ----------
-    graph : networkx.Graph()
+    graph : networkx.Graph
         Graph that represents a neuron.
     edge : tuple
         Edge contained in "graph".
@@ -245,7 +271,7 @@ def get_num_edges(list_of_graphs):
 
     Parameters
     ----------
-    list_of_graphs : list[networkx.Graph()]
+    list_of_graphs : list[networkx.Graph]
         DESCRIPTION.
 
     Returns

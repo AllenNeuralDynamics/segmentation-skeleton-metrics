@@ -20,25 +20,26 @@ import aind_segmentation_evaluation.utils as utils
 
 class SegmentationMetrics(ABC):
     """
-    Class that evaluates the quality of a segmentation in
-    terms of the number of splits and merges.
+    Class that evaluates a segmentation in terms of the number
+    of splits and merges.
     """
+
     def __init__(self, graphs, volume, shape, output, output_dir):
         """
         Constructs object that evaluates a segmentation mask.
 
         Parameters
         ----------
-        graph : list[networkx.Graph()]
+        graph : list[networkx.Graph]
             List of graphs where each graph represents a neuron.
         volume : dict
             Sparse image volume of segmentation mask.
         shape : tuple
             Dimensions of "volume" in the order of (x,y,z).
         output : str
-            Type of output.
+            Type of output. Supported options include 'swc' and 'tif'.
         output_dir : str
-            Directory where output is written to.
+            Directory where "output" is written to.
 
         Returns
         -------
@@ -52,37 +53,40 @@ class SegmentationMetrics(ABC):
         self.graphs = graphs
         self.volume = volume
         self.shape = shape
-        self.edge_cnt = 0
         if self.output in ["tif"]:
             self.site_mask = np.zeros(self.shape, dtype=np.uint8)
             self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
 
-    def init_graphs(self, graphs_dir, path_to_volume):
+    def init_graphs(self, graphs_dir, volume, path_to_volume):
         """
-        Initializes a graph by either uploading swc files
-        or dilating the graph.
+        Initializes a graph by either uploading swc files or dilating
+        the graph.
 
         Parameters
         ----------
         graphs_dir : str
             Path to directory containing swc files.
+        volume : np.array
+            Image volume.
         path_to_volume : str
             Path to image volume (i.e. tif file).
 
         Returns
         -------
-        list[networkx.Graph()].
+        list[networkx.Graph].
             List of graphs where each graph represents a neuron.
 
         """
-        assert any([graphs_dir, path_to_volume])
+        assert any([graphs_dir, volume, path_to_volume])
         if graphs_dir is not None:
             return gr.swc_to_graph(graphs_dir, self.shape)
-        else:
+        elif path_to_volume is not None:
             volume = imread(path_to_volume)
-            return gr.volume_to_graph(volume)
 
-    def init_volume(self, path_to_volume, graphs_dir):
+        list_of_graphs = gr.volume_to_graph(volume)
+        return list_of_graphs
+
+    def init_volume(self, path_to_volume, graphs, graphs_dir):
         """
         Initializes a volume by either uploading a tif file
         or dilating its graph.
@@ -91,6 +95,8 @@ class SegmentationMetrics(ABC):
         ----------
         path_to_volume : str
             Path to image volume (i.e. tif file).
+        graphs : list[networkx.Graph]
+            List of graphs where each corresponds to a neuron.
         graphs_dir : str
             Path to directory containing swc files.
 
@@ -100,34 +106,16 @@ class SegmentationMetrics(ABC):
             Sparse image volume of segmentation mask.
 
         """
-        assert any([path_to_volume, graphs_dir])
+        assert any([path_to_volume, graphs, graphs_dir])
         if path_to_volume is not None:
-            if "tif" in path_to_volume:
-                volume = imread(path_to_volume)
-                sparse_volume = gr.volume_to_dict(volume)
-                return sparse_volume
-            elif "goodgle" in path_to_volume:
-                return gr.upload_google_pred(path_to_volume)
-        else:
-            list_of_graphs = gr.swc_to_graph(graphs_dir, self.shape)
-            sparse_volume = gr.graph_to_volume(list_of_graphs, self.shape)
+            volume = imread(path_to_volume)
+            sparse_volume = gr.volume_to_dict(volume)
             return sparse_volume
+        else:
+            graphs = gr.swc_to_graph(graphs_dir, self.shape)
 
-    def count_edges(self):
-        """
-        Counts number of edges in "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        for graph in self.graphs:
-            self.edge_cnt += graph.number_of_edges()
+        sparse_volume = gr.graph_to_volume(graphs, self.shape)
+        return sparse_volume
 
     def check_simple_mistake(self, a, b):
         """
@@ -171,14 +159,15 @@ class SegmentationMetrics(ABC):
 
     def log_simple_mistake(self, graph, i, fn):
         """
-        Logs xyz coordinate of mistake in a numpy.array()
+        Logs xyz coordinate of mistake in a numpy.array
         or writes an swc file.
 
         Parameters
         ----------
+        graph : networkx.Graph
+            Graph that represents a neuron.
         i : int
             Node of "graph".
-
         fn : str
             Filename of swc that will be written.
 
@@ -199,11 +188,13 @@ class SegmentationMetrics(ABC):
 
     def log_complex_mistake(self, graph, list_of_edges, root, fn):
         """
-        Logs list of xyz coordinates of mistake in an
-        numpyp.array() or writes an swc file.
+        Logs list of xyz coordinates of mistake in a
+        numpy.array or writes an swc file.
 
         Parameters
         ----------
+        graph : networkx.Graph
+            Graph that represents a neuron.
         list_of_edges : list[tuple]
             List of edges that form a path.
         root_edge : int
@@ -234,12 +225,12 @@ class SegmentationMetrics(ABC):
 
     def write_results(self, fn):
         """
-        Writes "site_mask" and "edge" mask to
+        Writes "site_mask" and "edge" mask to.
 
         Parameters
         ----------
-        fn : TYPE
-            DESCRIPTION.
+        fn : str
+            Filename.
 
         Returns
         -------
@@ -255,7 +246,7 @@ class SegmentationMetrics(ABC):
     @abstractmethod
     def detect_mistakes(self):
         """
-        Detects differences between labels between graph and volume.
+        Detects differences between corresponding labels of graph and volume.
 
         Parameters
         ----------
@@ -271,24 +262,8 @@ class SegmentationMetrics(ABC):
     @abstractmethod
     def process_complex_mistake(self):
         """
-        Determines whether complex mistake is a misalignment between volume and
-        graph or a true mistake.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        pass
-
-    @abstractmethod
-    def compute_mistake_rate(self):
-        """
-        Computes expected number of mistakes wrt length of neuron.
+        Determines whether a complex mistake is a misalignment between the
+        volume and graph or a true mistake.
 
         Parameters
         ----------

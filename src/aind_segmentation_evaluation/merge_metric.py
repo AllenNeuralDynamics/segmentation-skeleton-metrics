@@ -13,53 +13,76 @@ import networkx as nx
 
 import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
+from aind_segmentation_evaluation.graph_routines import volume_to_dict
 
 
 class MergeMetric(sm.SegmentationMetrics):
     """
     Class that evaluates the quality of a segmentation in terms of the
-    number of splits.
+    number of merges.
     """
+
     def __init__(
         self,
         shape,
         target_volume=None,
         path_to_target_volume=None,
+        target_graphs=None,
         target_graphs_dir=None,
         pred_graphs=None,
         pred_graphs_dir=None,
+        pred_volume=None,
         path_to_pred_volume=None,
         output=None,
         output_dir=None,
     ):
         """
-        Constructs object that evaluates predicted segmentation in terms of the
-        number of merges.
+        Constructs an object that evaluates a predicted segmentation mask in
+        terms of the number of merges. Here are some additional details about
+        the inputs:
+
+        (1) At least one of {target_graphs, target_graphs_dir, target_volume,
+        path_to_target_volume} must be provided, the recommended input is
+        either "target_graphs_dir" or "target_graphs".
+
+        (2) At least one of {pred_volume, path_to_pred_volume, pred_graphs,
+        pred_graphs_dir} must be provided. The recommended input is either
+        "pred_graphs" or "pred_graphs_dir".
 
         Parameters
         ----------
         shape : tuple
             Dimensions of image volume.
-        target_volume : np.array(), optional
-            Target segmentation
+        target_volume : np.array, optional
+            Target segmentation mask.
+            The default is None.
         path_to_target_volume : str, optional
-            Path to target volume (i.e. tif file).
+            Path to target segmentation mask (i.e. tif file).
+            The default is None.
+        target_graphs : list[networkx.Graph], optional
+            List of graphs corresponding to target segmentation.
             The default is None.
         target_graph_dir : str, optional
-            Path to directory containing target swc files.
+            Path to directory containing swc files of target segmentation.
             The default is None.
-        pred_graphs : list[nx.Graph()], optional
-            List of predicted graphs.
+        pred_graphs : list[nx.Graph], optional
+            List of graphs corresponding to the predicted segmentation mask.
+            The default is None.
         pred_graph_dir : str, optional
-            Path to directory with pred swc files.
+            Path to directory with swc files of predicted segmentation mask.
+            The default is None.
+        pred_volume : np.array, optional
+            Predicted segmentation mask.
             The default is None.
         path_to_pred_volume : str, optional
-            Path to predicted volume (i.e. tif file).
+            Path to predicted segmentation mask (i.e. tif file).
             The default is None.
         output : str, optional
-            Type of output. The default is None.
+            Type of output, supported options include 'swc' and 'tif'.
+            The default is None.
         output_dir : str, optional
-            Path to directory that outputs are written. The default is None.
+            Path to directory that outputs are written to.
+            The default is None.
 
         Returns
         -------
@@ -70,12 +93,14 @@ class MergeMetric(sm.SegmentationMetrics):
         self.shape = shape
         if target_volume is None:
             target_volume = super().init_volume(
-                path_to_target_volume, target_graphs_dir
+                path_to_target_volume, target_graphs, target_graphs_dir
             )
+        else:
+            target_volume = volume_to_dict(target_volume)
 
         if pred_graphs is None:
             pred_graphs = super().init_graphs(
-                pred_graphs_dir, path_to_pred_volume
+                pred_graphs_dir, pred_volume, path_to_pred_volume
             )
 
         # Initialize output_dir (if applicable)
@@ -83,9 +108,10 @@ class MergeMetric(sm.SegmentationMetrics):
             output_dir = os.path.join(output_dir, "merges")
             utils.mkdir(output_dir)
 
-        # Initialize counters
-        self.merge_cnt = 0
-        self.merge_edge_cnt = 0
+        # Initialize mistake counters
+        self.site_cnt = 0
+        self.edge_cnt = 0
+        self.edge_list = {}
 
         super().__init__(pred_graphs, target_volume, shape, output, output_dir)
 
@@ -113,16 +139,16 @@ class MergeMetric(sm.SegmentationMetrics):
 
                 # Check for mistake
                 if super().check_simple_mistake(val_i, val_j):
-                    self.merge_cnt += 1
-                    fn = "merge_site-" + str(self.merge_cnt) + ".swc"
+                    self.site_cnt += 1
+                    fn = "merge_site-" + str(self.site_cnt) + ".swc"
                     super().log_simple_mistake(graph, i, fn)
-                    dsf_edges, cnt1 = self.explore_merge(
+                    dfs_edges, cnt1 = self.explore_merge(
                         graph, dfs_edges, i, val_i
                     )
-                    dsf_edges, cnt2 = self.explore_merge(
+                    dfs_edges, cnt2 = self.explore_merge(
                         graph, dfs_edges, j, val_j
                     )
-                    self.merge_edge_cnt += min(cnt1, cnt2)
+                    self.edge_cnt += min(cnt1, cnt2)
                 elif super().check_complex_mistake(val_i, val_j):
                     dfs_edges = self.process_complex_mistake(
                         graph, dfs_edges, (i, j)
@@ -133,14 +159,15 @@ class MergeMetric(sm.SegmentationMetrics):
 
     def explore_merge(self, graph, dfs_edges, root, val):
         """
-        Traverses "graph" from "root" to determine how many edges are merged.
+        Traverses "graph" from "root" to determine how many and which
+        edges are merged.
 
         Parameters
         ----------
-        graph : networkx.Graph()
-            Graph that represents a neuron..
+        graph : networkx.Graph
+            Graph that represents a neuron.
         dfs_edges : list[tuple]
-            List of edges in graph ordered wrt dfs.
+            List of edges in graph ordered wrt a depth first search.
         root : int
             Root node of list of edges in "dfs_edges".
         val : int
@@ -154,22 +181,27 @@ class MergeMetric(sm.SegmentationMetrics):
         """
         merged_edges = list()
         visited = set()
-        queue = [root]
+        queue = [(-1, root)]  # parent, child
         while len(queue) > 0:
-            i = queue.pop(0)
-            for j in [j for j in utils.get_nbs(graph, i) if j not in visited]:
-                # Visit
-                if val == utils.get_value(self.volume, graph, j):
-                    merged_edges.append((i, j))
-                    queue.append(j)
-
-                # Finish visit
-                visited.add(j)
+            # Visit
+            i, j = queue.pop(0)
+            val_i = utils.get_value(self.volume, graph, j)
+            if val_i == val and i != -1:
                 dfs_edges = utils.remove_edge(dfs_edges, (i, j))
+                self.edge_list.update({(i, j), (j, i)})
+                merged_edges.append((i, j))
+            visited.add(j)
+
+            # Populate queue
+            for k in utils.get_nbs(graph, j):
+                condition1 = k not in visited
+                condition2 = (j, k) not in self.edge_list
+                if condition1 and condition2:
+                    queue.append((j, k))
 
         # Finalizations
         if len(merged_edges) > 0:
-            fn = "merged_edges-" + str(self.merge_cnt) + ".swc"
+            fn = "merged_edges-" + str(self.site_cnt) + ".swc"
             super().log_complex_mistake(graph, merged_edges, root, fn)
 
         return dfs_edges, len(merged_edges)
@@ -180,7 +212,7 @@ class MergeMetric(sm.SegmentationMetrics):
 
         Parameters
         ----------
-        graph : networkx.Graph()
+        graph : networkx.Graph
             Graph that represents a neuron.
         dfs_edges : list[tuple]
             List of edges in graph ordered wrt dfs.
@@ -200,6 +232,7 @@ class MergeMetric(sm.SegmentationMetrics):
             root_edge = (edge[1], edge[0])
         root = root_edge[0]
         val = utils.get_value(self.volume, graph, root)
+        assert val > 0
 
         # Main routine
         queue = [root_edge]
@@ -209,16 +242,17 @@ class MergeMetric(sm.SegmentationMetrics):
             (i, j) = queue.pop(0)
             val_j = utils.get_value(self.volume, graph, j)
             if super().check_simple_mistake(val, val_j):
-                dsf_edges, cnt1 = self.explore_merge(
+                print("complex mistake")
+                dfs_edges, cnt1 = self.explore_merge(
                     graph, dfs_edges, root, val
                 )
-                dsf_edges, cnt2 = self.explore_merge(
+                dfs_edges, cnt2 = self.explore_merge(
                     graph, dfs_edges, j, val_j
                 )
-                self.merge_edge_cnt += min(cnt1, cnt2)
-                self.merge_cnt += 1
+                self.edge_cnt += cnt1 + cnt2  # min(cnt1, cnt2)
+                self.site_cnt += 1
 
-                fn = "merge_site-" + str(self.merge_cnt) + ".swc"
+                fn = "merge_site-" + str(self.site_cnt) + ".swc"
                 super().log_simple_mistake(graph, root, fn)
 
             # Add nbs to queue
@@ -232,24 +266,3 @@ class MergeMetric(sm.SegmentationMetrics):
             visited.append(j)
 
         return dfs_edges
-
-    def compute_mistake_rate(self):
-        """
-        Computes expected number of splits wrt length of neuron.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        tuple[int]
-            Expected number of splits and split edges.
-
-        """
-        if self.edge_cnt == 0:
-            self.edge_cnt = super().count_edges()
-
-        merge_rate = self.edge_cnt / self.merge_cnt
-        merge_edge_rate = self.edge_cnt / self.merge_edge_cnt
-        return merge_rate, merge_edge_rate
