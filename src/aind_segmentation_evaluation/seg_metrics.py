@@ -53,6 +53,7 @@ class SegmentationMetrics(ABC):
         self.graphs = graphs
         self.volume = volume
         self.shape = shape
+        self.edge_cnt = 0
         if self.output in ["tif"]:
             self.site_mask = np.zeros(self.shape, dtype=np.uint8)
             self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
@@ -116,6 +117,22 @@ class SegmentationMetrics(ABC):
 
         sparse_volume = gr.graph_to_volume(graphs, self.shape)
         return sparse_volume
+
+    def count_edges(self):
+        """
+        Counts number of edges in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for graph in self.graphs:
+            self.edge_cnt += graph.number_of_edges()
 
     def check_simple_mistake(self, a, b):
         """

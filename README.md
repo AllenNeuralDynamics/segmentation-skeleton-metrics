@@ -21,6 +21,11 @@ To develop the code, run
 pip install -e .[dev]
 ```
 
+To install this package from PyPI, run
+```bash
+pip install aind-segmentation-evaluation
+```
+
 ## Contributing
 
 ### Linters and testing
@@ -52,16 +57,6 @@ black .
 - Use **isort** to automatically sort import statements:
 ```bash
 isort .
-```
-
-- Use **actionlint** to check that the GitHub Actions workflows are valid:
-```bash
-actionlint
-```
-
-- Use **commitlint** to check that commit messages are valid:
-```bash
-commitlint --from=HEAD~1
 ```
 
 ### Pull requests

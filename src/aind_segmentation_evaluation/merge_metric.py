@@ -232,7 +232,6 @@ class MergeMetric(sm.SegmentationMetrics):
             root_edge = (edge[1], edge[0])
         root = root_edge[0]
         val = utils.get_value(self.volume, graph, root)
-        assert val > 0
 
         # Main routine
         queue = [root_edge]
