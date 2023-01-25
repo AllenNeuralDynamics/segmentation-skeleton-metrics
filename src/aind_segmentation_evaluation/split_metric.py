@@ -13,54 +13,76 @@ import networkx as nx
 
 import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
+from aind_segmentation_evaluation.graph_routines import volume_to_dict
 
 
 class SplitMetric(sm.SegmentationMetrics):
     """
-    Class that evaluates the quality of a segmentation in terms of the
+    Class that evaluates a predicted segmentation mask in terms of the
     number of splits.
+
     """
+
     def __init__(
         self,
         shape,
         target_graphs=None,
         target_graphs_dir=None,
+        target_volume=None,
         path_to_target_volume=None,
         pred_volume=None,
         path_to_pred_volume=None,
+        pred_graphs=None,
         pred_graphs_dir=None,
         output=None,
         output_dir=None,
     ):
         """
-        Constructs object that evaluates predicted segmentation
-        in terms of the number of splits
+        Constructs an object that evaluates a predicted segmentation mask in
+        terms of the number of splits. Here are some additional details about
+        the inputs:
+
+        (1) At least one of {target_graphs, target_graphs_dir, target_volume,
+        path_to_target_volume} must be provided, the recommended input is
+        either "target_graphs" or "target_graphs_dir".
+
+        (2) At least one of {pred_volume, path_to_pred_volume, pred_graphs,
+        pred_graphs_dir} must be provided. The recommended input is either
+        "pred_volume" or "path_to_pred_volume".
 
         Parameters
         ----------
         shape : tuple
             Dimensions of image volume.
-        target_graphs : list[nx.Graph()], optional
-            List of graphs.
+        target_graphs : list[networkx.Graph], optional
+            List of graphs corresponding to target segmentation.
+            The default is None.
         target_graph_dir : str, optional
-            Path to directory containing target swc files.
+            Path to directory containing the swc files of target segmentation.
+            The default is None.
+        target_volume : np.array, optional
+            Target segmentation mask.
             The default is None.
         path_to_target_volume : str, optional
-            Path to target volume (i.e. tif file).
+            Path to target segmentation mask (i.e. tif file).
             The default is None.
-        pred_volume : np.array(), optional
-            Predicted segmentation.
-        pred_graph_dir : str, optional
-            Path to directory containing predicted swc files.
+        pred_volume : np.array, optional
+            Predicted segmentation mask.
             The default is None.
         path_to_pred_volume : str, optional
-            Path to predicted volume (i.e. tif file).
+            Path to predicted segmentation mask (i.e. tif file).
+            The default is None.
+        pred_graphs : list[nx.Graph], optional
+            List of graphs corresponding to the predicted segmentation mask.
+            The default is None.
+        pred_graph_dir : str, optional
+            Path to directory with swc files of predicted segmentation mask.
             The default is None.
         output : str, optional
-            Type of output, options include text, tif, swc.
+            Type of output, supported options include 'swc' and 'tif'.
             The default is None.
         output_dir : str, optional
-            Path to directory where outputs are written.
+            Path to directory that outputs are written to.
             The default is None.
 
         Returns
@@ -72,13 +94,15 @@ class SplitMetric(sm.SegmentationMetrics):
         self.shape = shape
         if target_graphs is None:
             target_graphs = super().init_graphs(
-                target_graphs_dir, path_to_target_volume
+                target_graphs_dir, target_volume, path_to_target_volume
             )
 
         if pred_volume is None:
             pred_volume = super().init_volume(
-                path_to_pred_volume, pred_graphs_dir
+                path_to_pred_volume, pred_graphs, pred_graphs_dir
             )
+        else:
+            pred_volume = volume_to_dict(pred_volume)
 
         # Initialize output_dir (if applicable)
         if output in ["swc"]:
@@ -86,14 +110,14 @@ class SplitMetric(sm.SegmentationMetrics):
             utils.mkdir(output_dir)
 
         # Initialize counters
-        self.split_cnt = 0
-        self.split_edge_cnt = 0
+        self.edge_cnt = 0
+        self.site_cnt = 0
 
         super().__init__(target_graphs, pred_volume, shape, output, output_dir)
 
     def detect_mistakes(self):
         """
-        Detects splits in the predicted segmentation.
+        Detects splits in the predicted segmentation mask.
 
         Parameters
         -------
@@ -121,9 +145,9 @@ class SplitMetric(sm.SegmentationMetrics):
 
                 # Check for mistake
                 if super().check_simple_mistake(val_i, val_j):
-                    self.split_cnt += 1
-                    self.split_edge_cnt += 1
-                    fn = "split_site-" + str(self.split_cnt) + ".swc"
+                    self.site_cnt += 1
+                    self.edge_cnt += 1
+                    fn = "split_site-" + str(self.site_cnt) + ".swc"
                     super().log_simple_mistake(graph, i, fn)
                 elif super().check_complex_mistake(val_i, val_j):
                     dfs_edges = self.process_complex_mistake(
@@ -132,10 +156,10 @@ class SplitMetric(sm.SegmentationMetrics):
 
             # Check whether whole neuron is missing
             if miss_flag:
-                fn = "split_edges-" + str(self.split_cnt) + ".swc"
+                fn = "split_edges-" + str(self.site_cnt) + ".swc"
                 list_of_edges = list(nx.dfs_edges(graph, source=1))
                 super().log_complex_mistake(graph, list_of_edges, j, fn)
-                self.split_edge_cnt += len(list_of_edges)
+                self.edge_cnt += len(list_of_edges)
 
         # Save results
         super().write_results("split_")
@@ -147,7 +171,7 @@ class SplitMetric(sm.SegmentationMetrics):
         Parameters
         ----------
         dfs_edges : list[tuple]
-            List of edges in order wrt dfs.
+            List of edges in order wrt a depth first search.
         root_edge : tuple
             Edge where possible split starts.
         fn : str
@@ -177,9 +201,9 @@ class SplitMetric(sm.SegmentationMetrics):
             val = utils.get_value(self.volume, graph, j)
             add_nbs = False
             if super().check_simple_mistake(root_val, val):
-                self.split_cnt += 1
-                fn_a = "split_site-" + str(self.split_cnt + 1) + "a.swc"
-                fn_b = "split_site-" + str(self.split_cnt + 1) + "b.swc"
+                self.site_cnt += 1
+                fn_a = "split_site-" + str(self.site_cnt + 1) + "a.swc"
+                fn_b = "split_site-" + str(self.site_cnt + 1) + "b.swc"
                 super().log_simple_mistake(graph, root, fn_a)
                 super().log_simple_mistake(graph, j, fn_b)
                 log_flag = True
@@ -201,28 +225,7 @@ class SplitMetric(sm.SegmentationMetrics):
 
         # Finalizations
         if log_flag:
-            fn = "split_edges-" + str(self.split_cnt) + ".swc"
+            fn = "split_edges-" + str(self.site_cnt) + ".swc"
             super().log_complex_mistake(graph, visited_edges, root, fn)
-            self.split_edge_cnt += len(visited_edges)
+            self.edge_cnt += len(visited_edges)
         return dfs_edges
-
-    def compute_mistake_rate(self):
-        """
-        Computes expected number of splits wrt length of neuron.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        tuple[int]
-            Expected number of splits and split edges.
-
-        """
-        if self.edge_cnt == 0:
-            self.edge_cnt = super().count_edges()
-
-        split_rate = self.edge_cnt / self.split_cnt
-        split_edge_rate = self.edge_cnt / self.split_edge_cnt
-        return split_rate, split_edge_rate
