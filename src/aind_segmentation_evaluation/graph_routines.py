@@ -224,7 +224,7 @@ def volume_to_graph(volume):
     return list_of_graphs
 
 
-def embed_graph(graph, volume, val, root=1):
+def embed_graph(graph, volume, val, root=None):
     """
     Populates an array at the index of each node. Each entry is
     set to the value "val".
@@ -247,6 +247,8 @@ def embed_graph(graph, volume, val, root=1):
         Image volume.
 
     """
+    if root is None:
+        root = sample(graph.nodes(), 1)[0]
     volume[get_idx(graph, root)] = val
     for (i, j) in nx.bfs_edges(graph, root):
         volume[get_idx(graph, j)] = val

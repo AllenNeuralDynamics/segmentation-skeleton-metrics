@@ -148,8 +148,9 @@ class MergeMetric(sm.SegmentationMetrics):
                     dfs_edges, cnt2 = self.explore_merge(
                         graph, dfs_edges, j, val_j
                     )
-                    self.edge_cnt += min(cnt1, cnt2)
+                    self.edge_cnt += min(cnt1, cnt2) + 1
                 elif super().check_complex_mistake(val_i, val_j):
+                    print('complex')
                     dfs_edges = self.process_complex_mistake(
                         graph, dfs_edges, (i, j)
                     )
@@ -241,24 +242,21 @@ class MergeMetric(sm.SegmentationMetrics):
             (i, j) = queue.pop(0)
             val_j = utils.get_value(self.volume, graph, j)
             if super().check_simple_mistake(val, val_j):
-                print("complex mistake")
                 dfs_edges, cnt1 = self.explore_merge(
                     graph, dfs_edges, root, val
                 )
                 dfs_edges, cnt2 = self.explore_merge(
                     graph, dfs_edges, j, val_j
                 )
-                self.edge_cnt += cnt1 + cnt2  # min(cnt1, cnt2)
+                self.edge_cnt += min(cnt1, cnt2) + 1
                 self.site_cnt += 1
 
                 fn = "merge_site-" + str(self.site_cnt) + ".swc"
                 super().log_simple_mistake(graph, root, fn)
-
-            # Add nbs to queue
-            for k in utils.get_nbs(graph, j):
-                val_k = utils.get_value(self.volume, graph, k)
-                if k not in visited and val_k == 0:
-                    queue.append((j, k))
+            elif val_j == 0:
+                for k in utils.get_nbs(graph, j):
+                    if k not in visited:
+                        queue.append((j, k))
 
             # Finish visit
             dfs_edges = utils.remove_edge(dfs_edges, (i, j))

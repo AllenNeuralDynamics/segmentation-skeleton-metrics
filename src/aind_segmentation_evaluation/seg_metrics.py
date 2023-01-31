@@ -78,7 +78,7 @@ class SegmentationMetrics(ABC):
             List of graphs where each graph represents a neuron.
 
         """
-        assert any([graphs_dir, volume, path_to_volume])
+        assert any([graphs_dir, volume is not None, path_to_volume])
         if graphs_dir is not None:
             return gr.swc_to_graph(graphs_dir, self.shape)
         elif path_to_volume is not None:
