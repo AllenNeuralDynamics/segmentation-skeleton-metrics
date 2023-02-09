@@ -26,39 +26,6 @@ To install this package from PyPI, run
 pip install aind-segmentation-evaluation
 ```
 
-## Contributing
-
-### Linters and testing
-
-There are several libraries used to run linters, check documentation, and run tests.
-
-- Please test your changes using the **coverage** library, which will run the tests and log a coverage report:
-
-```bash
-coverage run -m unittest discover && coverage report
-```
-
-- Use **interrogate** to check that modules, methods, etc. have been documented thoroughly:
-
-```bash
-interrogate .
-```
-
-- Use **flake8** to check that code is up to standards (no unused imports, etc.):
-```bash
-flake8 .
-```
-
-- Use **black** to automatically format the code into PEP standards:
-```bash
-black .
-```
-
-- Use **isort** to automatically sort import statements:
-```bash
-isort .
-```
-
 ### Pull requests
 
 For internal members, please create a branch. For external members, please fork the repository and open a pull request from the fork. We'll primarily use [Angular](https://github.com/angular/angular/blob/main/CONTRIBUTING.md#commit) style for commit messages. Roughly, they should follow the pattern:
@@ -76,14 +43,3 @@ where scope (optional) describes the packages affected by the code changes and t
 - **perf**: A code change that improves performance
 - **refactor**: A code change that neither fixes a bug nor adds a feature
 - **test**: Adding missing tests or correcting existing tests
-
-### Documentation
-To generate the rst files source files for documentation, run
-```bash
-sphinx-apidoc -o doc_template/source/ src 
-```
-Then to create the documentation HTML files, run
-```bash
-sphinx-build -b html doc_template/source/ doc_template/build/html
-```
-More info on sphinx installation can be found [here](https://www.sphinx-doc.org/en/master/usage/installation.html).
