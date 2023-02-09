@@ -8,7 +8,7 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for performing a skeleton-based evaluation of a predicted segmentation of neuron axons. Given a predicted segmentation (i.e. pred_volume) and ground truth skeleton (i.e. target_graph), the evaluation is performed by detecting splits and merges in the prediction, then several statistics are computed from these quantities. 
+Python package for performing a skeleton-based evaluation of a predicted segmentation of neuron axons. Given a predicted segmentation and ground truth skeleton, the evaluation is performed by detecting splits and merges in the prediction, then several statistics are computed from these quantities. 
 
 ## Installation
 To use the software, in the root directory, run
