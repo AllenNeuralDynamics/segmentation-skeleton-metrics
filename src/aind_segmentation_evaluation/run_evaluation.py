@@ -90,7 +90,6 @@ def graph_based_eval(
     """
     # Initializations
     stats = dict()
-    target_graphs = None
     split_evaluator = None
     merge_evaluator = None
 
