@@ -8,8 +8,35 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in the predicted segmentation by comparing it to the ground truth skeleton. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed. 
+Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in the predicted segmentation by comparing it to the ground truth skeleton. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed and returned in a dictionary. There is also an optional to write either tiff or swc files that highlight the topological mistakes.
 
+
+## Usage
+
+```python
+from aind_segmentation_evaluation.run_evaluation import graph_based_eval
+
+# Initializations
+shape = (148, 226, 282)
+data_dir = "./resources"
+path_to_pred_volume = os.path.join(data_dir, "pred_volume.tif")
+path_to_target_volume = os.path.join(data_dir, "target_volume.tif")
+target_graphs_dir = os.path.join(data_dir, "target_graphs")
+
+# Evaluation
+stats = graph_based_eval(
+           shape,
+           target_graphs_dir=target_graphs_dir,
+           path_to_pred_volume=path_to_pred_volume,
+           output="tif",
+           output_dir=data_dir,
+        )
+
+# Report results
+print("Graph-based evaluation...")
+for key in graph_stats.keys():
+   print("   " + key + ":", graph_stats[key])
+```
 
 ## Installation
 To use the software, in the root directory, run
