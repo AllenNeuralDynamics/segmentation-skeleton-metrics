@@ -13,6 +13,8 @@ Python package for performing a skeleton-based evaluation of a predicted segment
 
 ## Usage
 
+Here is a simple example of evaluating a predicted segmentation. Note that this package supports a number of different input types, see documentation for details. 
+
 ```python
 from aind_segmentation_evaluation.run_evaluation import graph_based_eval
 
@@ -33,7 +35,7 @@ stats = graph_based_eval(
         )
 
 # Report results
-print("Graph-based evaluation...")
+print("Skeleton-based evaluation...")
 for key in graph_stats.keys():
    print("   " + key + ":", graph_stats[key])
 ```
