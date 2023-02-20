@@ -3,9 +3,6 @@
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 ![Code Style](https://img.shields.io/badge/code%20style-black-black)
 
-[![CI](https://github.com/AllenNeuralDynamics/library-repo-template/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenNeuralDynamics/library-repo-template/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/AllenNeuralDynamics/library-repo-template/branch/main/graph/badge.svg?token=ZVZ98GLA9V)](https://codecov.io/gh/AllenNeuralDynamics/library-repo-template)
-
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
 Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in the predicted segmentation by comparing it to the ground truth skeleton. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed and returned in a dictionary. There is also an optional to write either tiff or swc files that highlight each topological mistake.
