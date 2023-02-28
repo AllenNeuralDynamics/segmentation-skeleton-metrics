@@ -31,17 +31,9 @@ if __name__ == "__main__":
         output_dir=data_dir,
     )
 
-    voxel_stats = voxel_based_eval(
-        path_to_target_volume=path_to_target_volume,
-        path_to_pred_volume=path_to_pred_volume,
-    )
-
     # Write out results
     print("Graph-based evaluation...")
     for key in graph_stats.keys():
         print("   " + key + ":", graph_stats[key])
     print("")
 
-    print("Voxel-based evaluation...")
-    for key in voxel_stats.keys():
-        print("   " + key + ":", voxel_stats[key])
