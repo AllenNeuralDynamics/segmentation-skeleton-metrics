@@ -8,10 +8,8 @@ Created on Tue Jan 3 15:00:00 2023
 
 import os
 
-from aind_segmentation_evaluation.run_evaluation import (
-    graph_based_eval,
-    voxel_based_eval,
-)
+from aind_segmentation_evaluation.evaluate import run_evaluation
+
 
 if __name__ == "__main__":
 
@@ -23,7 +21,7 @@ if __name__ == "__main__":
     target_graphs_dir = os.path.join(data_dir, "target_graphs")
 
     # Evaluation
-    graph_stats = graph_based_eval(
+    stats = run_evaluation(
         shape,
         target_graphs_dir=target_graphs_dir,
         path_to_pred_volume=path_to_pred_volume,
@@ -33,7 +31,5 @@ if __name__ == "__main__":
 
     # Write out results
     print("Graph-based evaluation...")
-    for key in graph_stats.keys():
-        print("   " + key + ":", graph_stats[key])
-    print("")
-
+    for key in stats.keys():
+        print("   " + key + ":", stats[key])
