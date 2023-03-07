@@ -36,6 +36,7 @@ class SplitMetric(sm.SegmentationMetrics):
         pred_graphs_dir=None,
         output=None,
         output_dir=None,
+        tensorstore=False,
     ):
         """
         Constructs an object that evaluates a predicted segmentation mask in
@@ -84,6 +85,9 @@ class SplitMetric(sm.SegmentationMetrics):
         output_dir : str, optional
             Path to directory that outputs are written to.
             The default is None.
+        tensorstore : bool, optional
+            Indication of whether "path_to_pred_volume" is a tensorstore array
+            The default is False.
 
         Returns
         -------
@@ -99,7 +103,10 @@ class SplitMetric(sm.SegmentationMetrics):
 
         if pred_volume is None:
             pred_volume = super().init_volume(
-                path_to_pred_volume, pred_graphs, pred_graphs_dir
+                path_to_pred_volume,
+                pred_graphs,
+                pred_graphs_dir,
+                tensorstore=tensorstore,
             )
         else:
             pred_volume = volume_to_dict(pred_volume)

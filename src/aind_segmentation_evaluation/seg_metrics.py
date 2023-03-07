@@ -87,7 +87,9 @@ class SegmentationMetrics(ABC):
         list_of_graphs = gr.volume_to_graph(volume)
         return list_of_graphs
 
-    def init_volume(self, path_to_volume, graphs, graphs_dir):
+    def init_volume(
+        self, path_to_volume, graphs, graphs_dir, tensorstore=False
+    ):
         """
         Initializes a volume by either uploading a tif file
         or dilating its graph.
@@ -100,6 +102,9 @@ class SegmentationMetrics(ABC):
             List of graphs where each corresponds to a neuron.
         graphs_dir : str
             Path to directory containing swc files.
+        tensorstore : str
+            Indication of whether volume is stored as a tensorstore array.
+            The default is False.
 
         Returns
         -------
@@ -108,7 +113,10 @@ class SegmentationMetrics(ABC):
 
         """
         assert any([path_to_volume, graphs, graphs_dir])
-        if path_to_volume is not None:
+        if tensorstore:
+            sparse_volume = utils.upload_tensorstore_mask(path_to_volume)
+            return sparse_volume
+        elif path_to_volume is not None:
             volume = imread(path_to_volume)
             sparse_volume = gr.volume_to_dict(volume)
             return sparse_volume

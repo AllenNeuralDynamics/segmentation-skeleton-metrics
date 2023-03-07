@@ -107,13 +107,13 @@ def remove_edge(set_of_edges, edge):
     return set_of_edges
 
 
-def upload_google_pred(path_to_data):
+def upload_tensorstore_mask(data_dir):
     """
     Uploads segmentation mask stored as a directory of shard files.
 
     Parameters
     ----------
-    path_to_data : str
+    data_dir : str
         Path to directory containing shard files.
 
     Returns
@@ -127,7 +127,7 @@ def upload_google_pred(path_to_data):
             "driver": "neuroglancer_precomputed",
             "kvstore": {
                 "driver": "file",
-                "path": path_to_data,
+                "path": data_dir,
             },
         }
     ).result()
