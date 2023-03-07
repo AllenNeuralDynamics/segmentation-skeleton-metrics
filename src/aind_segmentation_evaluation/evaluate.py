@@ -122,7 +122,9 @@ def run_evaluation(
     stats["wgt_mistakes"] = (
         split_evaluator.site_cnt + 3 * merge_evaluator.site_cnt
     )
-    stats["erl"], stats["normalized_erl"] = compute_erl(split_evaluator, merge_evaluator)
+    stats["erl"], stats["normalized_erl"] = compute_erl(
+        split_evaluator, merge_evaluator
+    )
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator,
         merge_evaluator,
