@@ -119,6 +119,7 @@ class SplitMetric(sm.SegmentationMetrics):
         # Initialize counters
         self.edge_cnt = 0
         self.site_cnt = 0
+        self.interior_site_cnt = 0
 
         super().__init__(target_graphs, pred_volume, shape, output, output_dir)
 
@@ -155,7 +156,7 @@ class SplitMetric(sm.SegmentationMetrics):
                     self.site_cnt += 1
                     self.edge_cnt += 1
                     fn = "split_site-" + str(self.site_cnt) + ".swc"
-                    super().log_simple_mistake(graph, i, fn)
+                    super().log_simple_mistake(graph, (i, j), fn)
                 elif super().check_complex_mistake(val_i, val_j):
                     dfs_edges = self.process_complex_mistake(
                         graph, dfs_edges, (i, j)
@@ -211,8 +212,8 @@ class SplitMetric(sm.SegmentationMetrics):
                 self.site_cnt += 1
                 fn_a = "split_site-" + str(self.site_cnt + 1) + "a.swc"
                 fn_b = "split_site-" + str(self.site_cnt + 1) + "b.swc"
-                super().log_simple_mistake(graph, root, fn_a)
-                super().log_simple_mistake(graph, j, fn_b)
+                super().log_simple_mistake(graph, (root, j), fn_a)
+                super().log_simple_mistake(graph, (root, j), fn_b)
                 log_flag = True
             elif val == 0:
                 add_nbs = True
