@@ -8,12 +8,11 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-
 import networkx as nx
 import numpy as np
 import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
-from aind_segmentation_evaluation.graph_routines import volume_to_dict
+from aind_segmentation_evaluation.graph_routines import volume_to_dict, prune
 
 
 class MergeMetric(sm.SegmentationMetrics):
@@ -35,7 +34,6 @@ class MergeMetric(sm.SegmentationMetrics):
         path_to_pred_volume=None,
         output=None,
         output_dir=None,
-        tensorstore=False,
     ):
         """
         Constructs an object that evaluates a predicted segmentation mask in
@@ -84,9 +82,6 @@ class MergeMetric(sm.SegmentationMetrics):
         output_dir : str, optional
             Path to directory that outputs are written to.
             The default is None.
-        tensorstore : bool, optional
-            Indication of whether volume is stored as a tensorstore array.
-            The default is False.
 
         Returns
         -------
@@ -97,10 +92,7 @@ class MergeMetric(sm.SegmentationMetrics):
         self.shape = shape
         if target_volume is None:
             target_volume = super().init_volume(
-                path_to_target_volume,
-                target_graphs,
-                target_graphs_dir,
-                tensorstore=tensorstore,
+                path_to_target_volume, target_graphs, target_graphs_dir
             )
         else:
             target_volume = volume_to_dict(target_volume)
@@ -109,6 +101,12 @@ class MergeMetric(sm.SegmentationMetrics):
             pred_graphs = super().init_graphs(
                 pred_graphs_dir, pred_volume, path_to_pred_volume
             )
+            upd_pred_graphs = []
+            for graph in pred_graphs:
+                graph = prune(graph)
+                if graph.number_of_nodes() > 1:
+                    upd_pred_graphs.append(graph)
+            pred_graphs = upd_pred_graphs
 
         # Initialize output_dir (if applicable)
         if output in ["swc"]:
@@ -118,12 +116,13 @@ class MergeMetric(sm.SegmentationMetrics):
         # Initialize mistake counters
         self.site_cnt = 0
         self.edge_cnt = 0
-        self.merged_edges = {}
+        self.interior_site_cnt = 0
+        self.merged_edges = set()
 
         # Initialize for ERL
         self.run_lengths = dict()
         target_labels = np.unique(list(target_volume.values()))
-        for i in [i for i in target_labels if i != 0]:
+        for i in [i for i in target_labels]:
             self.run_lengths[i] = []
 
         super().__init__(pred_graphs, target_volume, shape, output, output_dir)
@@ -142,7 +141,7 @@ class MergeMetric(sm.SegmentationMetrics):
 
         """
         for graph in self.graphs:
-            dfs_edges = list(nx.dfs_edges(graph, 1))
+            dfs_edges = list(nx.dfs_edges(graph))
             merge_flag = False
             nonzero_flag = False
             run_length = 0
@@ -159,7 +158,7 @@ class MergeMetric(sm.SegmentationMetrics):
                     merge_flag = True
                     self.site_cnt += 1
                     fn = "merge_site-" + str(self.site_cnt) + ".swc"
-                    super().log_simple_mistake(graph, i, fn)
+                    super().log_simple_mistake(graph, (i, j), fn)
                     dfs_edges = self.explore_merge(graph, dfs_edges, i, val_i)
                     dfs_edges = self.explore_merge(graph, dfs_edges, j, val_j)
                 elif super().check_complex_mistake(val_i, val_j):
@@ -171,9 +170,9 @@ class MergeMetric(sm.SegmentationMetrics):
                     run_length += 1
 
                 # Check nonzero flag
-                if val_i != 0 and not nonzero_flag:
+                if (val_i != 0 or val_j != 0) and not nonzero_flag:
                     nonzero_flag = True
-                    target_label = val_i
+                    target_label = val_i if val_i != 0 else val_j
 
             # Store data for ERL
             if merge_flag:
@@ -276,7 +275,7 @@ class MergeMetric(sm.SegmentationMetrics):
                 dfs_edges = self.explore_merge(graph, dfs_edges, root, val)
                 dfs_edges = self.explore_merge(graph, dfs_edges, j, val_j)
                 fn = "merge_site-" + str(self.site_cnt) + ".swc"
-                super().log_simple_mistake(graph, root, fn)
+                super().log_simple_mistake(graph, (root, j), fn)
             elif val_j == 0:
                 for k in utils.get_nbs(graph, j):
                     if k not in visited:

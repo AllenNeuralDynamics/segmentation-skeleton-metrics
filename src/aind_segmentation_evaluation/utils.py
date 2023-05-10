@@ -107,13 +107,34 @@ def remove_edge(set_of_edges, edge):
     return set_of_edges
 
 
-def upload_tensorstore_mask(data_dir):
+def clip(arr, clip):
+    """
+    Clips an array.
+
+    Parameters
+    ----------
+    arr : numpy.array
+        Array to be clipped.
+    clip : int
+        Number of rows/columns to be removed from each dimensions.
+
+    Returns
+    -------
+    clipped_arr : numpy.array
+        Clipped array.
+
+    """
+    clipped_arr = arr[clip:-clip, clip:-clip, clip:-clip]
+    return clipped_arr
+
+
+def upload_google_pred(path_to_data):
     """
     Uploads segmentation mask stored as a directory of shard files.
 
     Parameters
     ----------
-    data_dir : str
+    path_to_data : str
         Path to directory containing shard files.
 
     Returns
@@ -127,7 +148,7 @@ def upload_tensorstore_mask(data_dir):
             "driver": "neuroglancer_precomputed",
             "kvstore": {
                 "driver": "file",
-                "path": data_dir,
+                "path": path_to_data,
             },
         }
     ).result()

@@ -54,8 +54,8 @@ class SegmentationMetrics(ABC):
         self.volume = volume
         self.shape = shape
         self.edge_cnt = 0
+        self.site_mask = np.zeros(self.shape, dtype=np.uint8)
         if self.output in ["tif"]:
-            self.site_mask = np.zeros(self.shape, dtype=np.uint8)
             self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
 
     def init_graphs(self, graphs_dir, volume, path_to_volume):
@@ -78,7 +78,7 @@ class SegmentationMetrics(ABC):
             List of graphs where each graph represents a neuron.
 
         """
-        assert any([graphs_dir, volume, path_to_volume])
+        assert any([graphs_dir, volume is not None, path_to_volume])
         if graphs_dir is not None:
             return gr.swc_to_graph(graphs_dir, self.shape)
         elif path_to_volume is not None:
@@ -182,7 +182,7 @@ class SegmentationMetrics(ABC):
         condition_2 = (b > 0) and (a == 0)
         return condition_1 or condition_2
 
-    def log_simple_mistake(self, graph, i, fn):
+    def log_simple_mistake(self, graph, node_tuple, fn):
         """
         Logs xyz coordinate of mistake in a numpy.array
         or writes an swc file.
@@ -191,7 +191,7 @@ class SegmentationMetrics(ABC):
         ----------
         graph : networkx.Graph
             Graph that represents a neuron.
-        i : int
+        node_tuple : tuple
             Node of "graph".
         fn : str
             Filename of swc that will be written.
@@ -201,15 +201,16 @@ class SegmentationMetrics(ABC):
         None
 
         """
+        i = utils.get_idx(graph, node_tuple[0])
+        j = utils.get_idx(graph, node_tuple[1])
+        self.site_mask[i] = 1
+        self.site_mask[j] = 1
         if self.output == "swc":
             red = " 1.0 0.0 0.0"
             xyz = utils.get_xyz(graph, i)
             list_of_entries = [gr.get_swc_entry(xyz, 7, -1)]
             path_to_swc = os.path.join(self.output_dir, fn)
             gr.write_swc(path_to_swc, list_of_entries, color=red)
-        elif self.output in ["tif"]:
-            idx = utils.get_idx(graph, i)
-            self.site_mask[idx] = 1
 
     def log_complex_mistake(self, graph, list_of_edges, root, fn):
         """

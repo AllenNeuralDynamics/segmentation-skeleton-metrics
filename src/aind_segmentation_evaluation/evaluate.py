@@ -14,6 +14,7 @@ from aind_segmentation_evaluation.split_metric import SplitMetric
 
 def run_evaluation(
     shape,
+    clip=32,
     target_graphs=None,
     target_graphs_dir=None,
     target_volume=None,
@@ -93,8 +94,9 @@ def run_evaluation(
         output=output,
         output_dir=output_dir,
     )
-
     split_evaluator.detect_mistakes()
+    clipped_mask = utils.clip(split_evaluator.site_mask, clip)
+    split_evaluator.interior_site_cnt = int(np.sum(clipped_mask > 0))
     target_graphs = split_evaluator.graphs
 
     # Merge evaluation
@@ -111,8 +113,8 @@ def run_evaluation(
         output=output,
         output_dir=output_dir,
     )
-
     merge_evaluator.detect_mistakes()
+    merge_evaluator = rm_spurious_sites(merge_evaluator, pred_volume, clip)
 
     # Compute stats
     stats = dict()
@@ -122,15 +124,47 @@ def run_evaluation(
     stats["wgt_mistakes"] = (
         split_evaluator.site_cnt + 3 * merge_evaluator.site_cnt
     )
-    stats["erl"], stats["normalized_erl"] = compute_erl(
-        split_evaluator, merge_evaluator
-    )
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator,
         merge_evaluator,
         target_graphs,
     )
+    stats["erl"], stats["normalized_erl"] = compute_erl(
+        split_evaluator, merge_evaluator
+    )
     return stats
+
+
+def rm_spurious_sites(evaluator, pred_volume, clip):
+    """
+    Removes merge sites that are very close. This is a common issue that causes
+    merges to be over-counted.
+
+    Parameters
+    ----------
+    evaluator : MergeMetric
+        SegmentationMetric type object in which "detect_mistakes"
+        has been run.
+
+    """
+    merge_sites = pred_volume * evaluator.site_mask
+    for i in [i for i in np.unique(merge_sites) if i != 0]:
+        site_mask_i = (merge_sites == i).astype(int)
+        if np.sum(site_mask_i) > 1:
+            x, y, z = np.where(site_mask_i)
+            for i in range(len(x)):
+                for j in range(len(x)):
+                    nonzero_i = evaluator.site_mask[x[i], y[i], z[i]] > 0
+                    nonzero_j = evaluator.site_mask[x[j], y[j], z[j]] > 0
+                    if i < j and nonzero_i and nonzero_j:
+                        dists = [abs(val[i] - val[j]) for val in [x, y, z]]
+                        if np.sum(dists) <= 10:
+                            evaluator.site_mask[x[i], y[i], z[i]] = 0
+
+    clipped_mask = utils.clip(evaluator.site_mask, clip)
+    evaluator.site_cnt = int(np.sum(evaluator.site_mask > 0))
+    evaluator.interior_site_cnt = int(np.sum(clipped_mask))
+    return evaluator
 
 
 def compute_stats(evaluator, list_of_graphs, x):
@@ -159,6 +193,7 @@ def compute_stats(evaluator, list_of_graphs, x):
     total_edges = count_edges(list_of_graphs)
     stats = {
         x + "_cnt": site_cnt,
+        x + "_inside_cnt": evaluator.interior_site_cnt // 2,
         x + "_edge_cnt": edge_cnt,
         x + "_ratio": site_cnt / total_edges,
         x + "_edge_ratio": edge_cnt / total_edges,
@@ -226,7 +261,9 @@ def compute_erl(split_evaluator, merge_evaluator):
     erls = dict()
     for i in list(run_lengths.keys()):
         lens = np.array(run_lengths[i])
-        erls[i] = np.sum(lens ** 2) / path_lengths[i] if len(lens) > 0 else 0
+        if i in path_lengths.keys():
+            val = np.sum(lens**2) / path_lengths[i]
+            erls[i] = val if len(lens) > 0 else 0
 
     # compute erl
     erl = 0
