@@ -14,12 +14,11 @@ import networkx as nx
 import numpy as np
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
-
 from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
 
 # Conversion Routines
-def graph_to_volume(list_of_graphs, shape):
+def graph_to_volume(list_of_graphs, shape, sparse=True):
     """
     Converts "list_of_graphs" to a sparse image volume.
 
@@ -39,8 +38,8 @@ def graph_to_volume(list_of_graphs, shape):
     num_dilations = 3
     volume = graph_to_skeleton(list_of_graphs, shape)
     for _ in range(num_dilations):
-        volume = grey_dilation(volume, mode="constant", size=(3, 3, 3))
-    return volume_to_dict(volume)
+        volume = grey_dilation(volume, mode="constant", cval=0, size=(3, 3, 3))
+    return volume_to_dict(volume) if sparse else volume
 
 
 def graph_to_skeleton(list_of_graphs, shape):
@@ -220,7 +219,8 @@ def volume_to_graph(volume):
     for i in [i for i in np.unique(skeleton) if i != 0]:
         mask_i = (skeleton == i).astype(int)
         graph_i = skeleton_to_graph(mask_i)
-        list_of_graphs.append(graph_i)
+        pruned_graph_i = prune(graph_i, min_branch_length=5)
+        list_of_graphs.append(pruned_graph_i)
     return list_of_graphs
 
 
@@ -247,9 +247,8 @@ def embed_graph(graph, volume, val, root=1):
         Image volume.
 
     """
-    volume[get_idx(graph, root)] = val
-    for (i, j) in nx.bfs_edges(graph, root):
-        volume[get_idx(graph, j)] = val
+    for i in graph.nodes:
+        volume[get_idx(graph, i)] = val
     return volume
 
 
@@ -297,11 +296,46 @@ def get_nb(xyz, vec):
 
     Returns
     -------
-    TYPE
+    tuple
         Neighbor of node with coordinates "xyz".
 
     """
     return tuple([int(sum(i)) for i in zip(xyz, vec)])
+
+
+def prune(graph, min_branch_length=10):
+    """
+    Prune short branches that contain a leaf node
+
+    Parameters
+    ----------
+    graph : networkx.graph
+        Graph that represents a neuron.
+    min_branch_length : int
+        Minimum branch length
+
+    """
+    leaf_nodes = [i for i in graph.nodes if graph.degree[i] == 1]
+    for leaf in leaf_nodes:
+        # Traverse branch from leaf
+        queue = [leaf]
+        visited = set()
+        hit_junction = False
+        while len(queue) > 0:
+            node = queue.pop(0)
+            nbs = list(graph.neighbors(node))
+            if len(nbs) > 2:
+                hit_junction = True
+                break
+            else:
+                visited.add(node)
+                nb = [nb for nb in nbs if nb not in visited]
+                queue.extend(nb)
+
+        # Check length of branch
+        if hit_junction and len(visited) <= min_branch_length:
+            graph.remove_nodes_from(visited)
+    return graph
 
 
 # SWC read/write routines
