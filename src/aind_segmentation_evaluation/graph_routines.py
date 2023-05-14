@@ -9,15 +9,61 @@ Created on Wed Dec 10 19:00:00 2022
 
 import os
 from random import sample
-
 import networkx as nx
 import numpy as np
 from scipy.ndimage.morphology import grey_dilation
+from scipy.ndimage.measurements import label
 from skimage.morphology import skeletonize_3d
+from skimage.graph import pixel_graph
+from time import time
+from toolboxes.utils import time_writer
 from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
 
 # Conversion Routines
+def to_world(idx, permute, scale, shift):
+    """"
+    Converts "idx" to real-world coordinates.
+    
+    Parameters
+    ----------
+        idx : list[idx]
+            Image indexes to be converted.
+        permute :
+            Permutation that is applied to "idx".
+        scale : list[float]
+            Scaling factor that is applied to permuted "idx".
+        shift : list[float]
+            Shift that is applied to "idx".
+
+    Returns
+    -------
+    list
+        The result of applying this series of transformations to "idx".
+
+    """
+    xyz = [idx[i] + shift[i] for i in permute]
+    xyz = [xyz[i] * scale[i] for i in range(3)]
+    return xyz
+    
+def apply_permutation(l, permute):
+    """
+    Applies a permutation to a list.
+    
+    Parameters
+    ----------
+    l : list
+        List of any type of values
+    permute : list[int]
+        Permutation that is applied to "l"
+        
+    Returns
+    list
+        Permutation of input "l".
+    
+    """
+    return [l[i] for i in permute]
+
 def graph_to_volume(list_of_graphs, shape, sparse=True):
     """
     Converts "list_of_graphs" to a sparse image volume.
@@ -66,7 +112,7 @@ def graph_to_skeleton(list_of_graphs, shape):
     return volume
 
 
-def graph_to_swc(graph, path):
+def graph_to_swc(graph, path, permute=[0, 1, 2], scale=[1, 1, 1], shift=[0, 0, 0]):
     """
     Converts graph to an swc file.
 
@@ -76,6 +122,12 @@ def graph_to_swc(graph, path):
         Graph which represents a neuron.
     path : str
         Path that swc file will be written to.
+    permute : list[int]
+        Permutation from image to real-world coordinates.
+    scale : list[int]
+        Scaling factor from image to real-world coordinates.
+    shift : list[float]
+            Shift that is applied to "idx".
 
     Returns
     -------
@@ -89,14 +141,15 @@ def graph_to_swc(graph, path):
     reindex = dict()
     while len(queue) > 0:
         parent, child = queue.pop(0)
-        swc.append(get_swc_entry(get_xyz(graph, child), 2, parent))
+        entry = to_world(get_xyz(graph, child), permute, scale, shift)
+        entry.extend([2, int(parent)])
+        swc.append(entry)
         visited.add(child)
         reindex[child] = len(swc)
         for nb in list(graph.neighbors(child)):
             if nb not in visited:
                 queue.append((reindex[child], nb))
     write_swc(path, swc)
-
 
 def skeleton_to_graph(skel):
     """
@@ -136,7 +189,7 @@ def skeleton_to_graph(skel):
     return graph
 
 
-def swc_to_graph(swc_dir, shape):
+def swc_to_graph(swc_dir, shape, scaling_factors=[1, 1, 1]):
     """
     Converts directory of swc files to a list of graphs.
 
@@ -146,6 +199,8 @@ def swc_to_graph(swc_dir, shape):
         Path to directory containing swc files.
     shape : tuple
         Dimensions of image volume in the order of (x,y,z).
+    scaling_factors : List[int]
+        Image to real-world coordinates scaling factors for [x, y, z].
 
     Returns
     -------
@@ -165,7 +220,7 @@ def swc_to_graph(swc_dir, shape):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])
-                xyz = read_xyz(parts[2:5])
+                xyz = read_xyz(parts[2:5], scaling_factors)
                 idx = read_idx(xyz, shape)
                 graph.add_node(child, xyz=xyz, idx=idx)
                 if parent != -1:
@@ -197,7 +252,7 @@ def volume_to_dict(volume):
     return d
 
 
-def volume_to_graph(volume):
+def volume_to_graph(volume, min_branch_length=10):
     """
     Converts image to a list of graphs, where each label in the image
     corresponds to a distinct graph.
@@ -214,13 +269,21 @@ def volume_to_graph(volume):
 
     """
     list_of_graphs = []
+    
+    t0 = time()
     binary_skeleton = skeletonize_3d(volume > 0).astype(int)
     skeleton = volume * binary_skeleton
+    t, unit = time_writer(time() - t0)
+    print("   Running time of skeletonization: {} {}".format(t, unit))
+
+    t0 = time()
     for i in [i for i in np.unique(skeleton) if i != 0]:
         mask_i = (skeleton == i).astype(int)
         graph_i = skeleton_to_graph(mask_i)
-        pruned_graph_i = prune(graph_i, min_branch_length=5)
+        pruned_graph_i = prune(graph_i, min_branch_length=min_branch_length)
         list_of_graphs.append(pruned_graph_i)
+    t, unit = time_writer(time() - t0)
+    print("   Running time of converting skeletons to graphs: {} {}".format(t, unit))
     return list_of_graphs
 
 
@@ -302,7 +365,6 @@ def get_nb(xyz, vec):
     """
     return tuple([int(sum(i)) for i in zip(xyz, vec)])
 
-
 def prune(graph, min_branch_length=10):
     """
     Prune short branches that contain a leaf node
@@ -369,33 +431,7 @@ def write_swc(path_to_swc, list_of_entries, color=None):
                 f.write(str(x) + " ")
             f.write("\n")
 
-
-def get_swc_entry(xyz, radius, parent):
-    """
-    Gets text (i.e. "entry") that will be written to an swc file.
-
-    Parameters
-    ----------
-    xyz : tuple
-        (x,y,z) coordinates of node corresponding to this entry.
-    radius : int
-        Size of node written to swc file.
-    parent : int
-        Parent of node corresponding to this entry.
-
-    Returns
-    -------
-    entry : str
-        Text (i.e. "entry") that will be written to an swc file.
-
-    """
-    entry = [val * get_scaling_factor() for val in xyz]
-    entry.reverse()
-    entry.extend([radius, int(parent)])
-    return entry
-
-
-def read_xyz(zyx):
+def read_xyz(zyx, scaling_factors):
     """
     Reads the (z,y,x) coordinates from an swc file, then reverses and scales
     them.
@@ -404,6 +440,8 @@ def read_xyz(zyx):
     ----------
     zyx : str
         (z,y,x) coordinates.
+    scaling_factors : List[int]
+        Image to real-world coordinates scaling factors for [x, y, z].
 
     Returns
     -------
@@ -411,7 +449,7 @@ def read_xyz(zyx):
         The (x,y,z) coordinates from an swc file.
 
     """
-    zyx_scaled = [float(val) / get_scaling_factor() for val in zyx]
+    zyx_scaled = [float(val) / scaling_factors[i] for i, val in enumerate(zyx)]
     zyx_scaled.reverse()
     return zyx_scaled
 
@@ -456,16 +494,3 @@ def intergize(val, dim):
     """
     idx = min(max(np.round(val), 0), dim)
     return int(idx)
-
-
-def get_scaling_factor():
-    """
-    Gets scaling factor used in Janelia Workstation
-
-    Returns
-    -------
-    float
-        Scaling factor.
-
-    """
-    return 1.1010572351571979

@@ -15,6 +15,8 @@ import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
 from aind_segmentation_evaluation.graph_routines import volume_to_dict
 
+from random import sample
+
 
 class SplitMetric(sm.SegmentationMetrics):
     """
@@ -139,7 +141,8 @@ class SplitMetric(sm.SegmentationMetrics):
         # Detection
         for graph in self.graphs:
             miss_flag = True
-            dfs_edges = list(nx.dfs_edges(graph, source=1))
+            root = sample(list(graph.nodes), 1)[0]
+            dfs_edges = list(nx.dfs_edges(graph, source=root))
             while len(dfs_edges) > 0:
                 # Extract edge info
                 (i, j) = dfs_edges.pop(0)
