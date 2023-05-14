@@ -13,7 +13,7 @@ Python package for performing a skeleton-based evaluation of a predicted segment
 Here is a simple example of evaluating a predicted segmentation. Note that this package supports a number of different input types, see documentation for details. 
 
 ```python
-from aind_segmentation_evaluation.run_evaluation import graph_based_eval
+from aind_segmentation_evaluation.run_evaluation import run_evaluation
 
 # Initializations
 shape = (148, 226, 282)
@@ -23,18 +23,18 @@ path_to_target_volume = os.path.join(data_dir, "target_volume.tif")
 target_graphs_dir = os.path.join(data_dir, "target_graphs")
 
 # Evaluation
-stats = graph_based_eval(
-           shape,
-           target_graphs_dir=target_graphs_dir,
-           path_to_pred_volume=path_to_pred_volume,
-           output="tif",
-           output_dir=data_dir,
-        )
+stats = run_evaluation(
+        shape,
+        target_graphs_dir=target_graphs_dir,
+        path_to_pred_volume=path_to_pred_volume,
+        output="tif",
+        output_dir=data_dir,
+    )
 
 # Report results
-print("Skeleton-based evaluation...")
-for key in graph_stats.keys():
-   print("   " + key + ":", graph_stats[key])
+print("Graph-based evaluation...")
+for key in stats.keys():
+    print("   " + key + ":", stats[key])
 ```
 
 ## Installation

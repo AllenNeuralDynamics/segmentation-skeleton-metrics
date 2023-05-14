@@ -14,9 +14,6 @@ import numpy as np
 from scipy.ndimage.morphology import grey_dilation
 from scipy.ndimage.measurements import label
 from skimage.morphology import skeletonize_3d
-from skimage.graph import pixel_graph
-from time import time
-from toolboxes.utils import time_writer
 from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
 
@@ -63,6 +60,7 @@ def apply_permutation(l, permute):
     
     """
     return [l[i] for i in permute]
+  
 
 def graph_to_volume(list_of_graphs, shape, sparse=True):
     """
@@ -280,10 +278,8 @@ def volume_to_graph(volume, min_branch_length=10):
     for i in [i for i in np.unique(skeleton) if i != 0]:
         mask_i = (skeleton == i).astype(int)
         graph_i = skeleton_to_graph(mask_i)
-        pruned_graph_i = prune(graph_i, min_branch_length=min_branch_length)
+        pruned_graph_i = prune(graph_i, min_branch_length=5)
         list_of_graphs.append(pruned_graph_i)
-    t, unit = time_writer(time() - t0)
-    print("   Running time of converting skeletons to graphs: {} {}".format(t, unit))
     return list_of_graphs
 
 
@@ -364,6 +360,41 @@ def get_nb(xyz, vec):
 
     """
     return tuple([int(sum(i)) for i in zip(xyz, vec)])
+
+def prune(graph, min_branch_length=10):
+    """
+    Prune short branches that contain a leaf node
+
+    Parameters
+    ----------
+    graph : networkx.graph
+        Graph that represents a neuron.
+    min_branch_length : int
+        Minimum branch length
+
+    """
+    leaf_nodes = [i for i in graph.nodes if graph.degree[i] == 1]
+    for leaf in leaf_nodes:
+        # Traverse branch from leaf
+        queue = [leaf]
+        visited = set()
+        hit_junction = False
+        while len(queue) > 0:
+            node = queue.pop(0)
+            nbs = list(graph.neighbors(node))
+            if len(nbs) > 2:
+                hit_junction = True
+                break
+            else:
+                visited.add(node)
+                nb = [nb for nb in nbs if nb not in visited]
+                queue.extend(nb)
+
+        # Check length of branch
+        if hit_junction and len(visited) <= min_branch_length:
+            graph.remove_nodes_from(visited)
+    return graph
+
 
 def prune(graph, min_branch_length=10):
     """
