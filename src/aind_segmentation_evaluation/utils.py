@@ -11,6 +11,7 @@ import os
 
 import numpy as np
 import tensorstore as ts
+from tifffile import imread
 
 
 # Miscellaneous routines
@@ -128,7 +129,8 @@ def clip(arr, clip):
     return clipped_arr
 
 
-def upload_google_pred(path_to_data):
+# Upload routines
+def upload_tensorstore(path_to_data):
     """
     Uploads segmentation mask stored as a directory of shard files.
 
@@ -161,6 +163,27 @@ def upload_google_pred(path_to_data):
         for i in range(len(y)):
             sparse_volume[(x, y[i], z[i])] = plane_x[y[i], z[i]]
     return sparse_volume
+
+
+def upload_n5():
+    pass
+
+
+def upload_tif(path_to_data):
+    """
+    Uploads tif file.
+
+    Parameters
+    ----------
+    path_to_data : str
+        Path to tif file.
+
+    Returns
+    -------
+    np.array
+        Image volume.
+    """
+    return imread(path_to_data)
 
 
 # Networkx helper routines

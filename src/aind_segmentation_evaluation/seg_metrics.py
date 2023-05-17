@@ -11,20 +11,23 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from skimage.io import imread
 from tifffile import imwrite
 
 import aind_segmentation_evaluation.graph_routines as gr
 import aind_segmentation_evaluation.utils as utils
 
 
+SUPPORTED_FILETYPES = ["tif", "tiff", "n5"]
+
+
 class SegmentationMetrics(ABC):
     """
-    Class that evaluates a segmentation in terms of the number
-    of splits and merges.
+    Class that evaluates a segmentation in terms of the number of
+    splits and merges.
+
     """
 
-    def __init__(self, graphs, volume, shape, output, output_dir):
+    def __init__(self, graphs, labels, output, output_dir):
         """
         Constructs object that evaluates a segmentation mask.
 
@@ -32,12 +35,10 @@ class SegmentationMetrics(ABC):
         ----------
         graph : list[networkx.Graph]
             List of graphs where each graph represents a neuron.
-        volume : dict
-            Sparse image volume of segmentation mask.
-        shape : tuple
-            Dimensions of "volume" in the order of (x,y,z).
+        labels : dict
+            Segmentation mask.
         output : str
-            Type of output. Supported options include 'swc' and 'tif'.
+            Type of output. Supported options include "swc" and "tif".
         output_dir : str
             Directory where "output" is written to.
 
@@ -46,65 +47,33 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        assert output in [None, "tif", "swc"]
+        self.shape = labels.shape
+        self.graphs = graphs
+        self.labels = gr.volume_to_dict(labels)
+
         self.output = output
         self.output_dir = output_dir
 
-        self.graphs = graphs
-        self.volume = volume
-        self.shape = shape
+        # Initialize mistake trackers
+        self.site_cnt = 0
         self.edge_cnt = 0
-        self.site_mask = np.zeros(self.shape, dtype=np.uint8)
-        if self.output in ["tif"]:
-            self.edge_mask = np.zeros(self.shape, dtype=np.uint8)
+        self.site_mask = np.zeros(self.shape, dtype=bool)
+        if self.output in ["tif", "tiff"]:
+            self.edge_mask = np.zeros(self.shape, dtype=bool)
+        if self.output in ["swc"]:
+            utils.mkdir(output_dir)
 
-    def init_graphs(self, graphs_dir, volume, path_to_volume):
+    def init_labels(self, path_to_labels, filetype):
         """
-        Initializes a graph by either uploading swc files or dilating
-        the graph.
-
-        Parameters
-        ----------
-        graphs_dir : str
-            Path to directory containing swc files.
-        volume : np.array
-            Image volume.
-        path_to_volume : str
-            Path to image volume (i.e. tif file).
-
-        Returns
-        -------
-        list[networkx.Graph].
-            List of graphs where each graph represents a neuron.
-
-        """
-        assert any([graphs_dir, volume is not None, path_to_volume])
-        if graphs_dir is not None:
-            return gr.swc_to_graph(graphs_dir, self.shape)
-        elif path_to_volume is not None:
-            volume = imread(path_to_volume)
-
-        list_of_graphs = gr.volume_to_graph(volume)
-        return list_of_graphs
-
-    def init_volume(
-        self, path_to_volume, graphs, graphs_dir, tensorstore=False
-    ):
-        """
-        Initializes a volume by either uploading a tif file
-        or dilating its graph.
+        Initializes a volume by uploading file with extension "filetype".
 
         Parameters
         ----------
         path_to_volume : str
-            Path to image volume (i.e. tif file).
-        graphs : list[networkx.Graph]
-            List of graphs where each corresponds to a neuron.
-        graphs_dir : str
-            Path to directory containing swc files.
-        tensorstore : str
-            Indication of whether volume is stored as a tensorstore array.
-            The default is False.
+            Path to image volume.
+        file_type : str
+            Extension of file to be uploaded, supported values include tif, n5,
+            and tensorstore.
 
         Returns
         -------
@@ -112,19 +81,16 @@ class SegmentationMetrics(ABC):
             Sparse image volume of segmentation mask.
 
         """
-        assert any([path_to_volume, graphs, graphs_dir])
-        if tensorstore:
-            sparse_volume = utils.upload_tensorstore_mask(path_to_volume)
-            return sparse_volume
-        elif path_to_volume is not None:
-            volume = imread(path_to_volume)
-            sparse_volume = gr.volume_to_dict(volume)
-            return sparse_volume
+        assert (
+            filetype is not None
+        ), "Must provide filetype to upload image volumes!"
+        assert filetype in SUPPORTED_FILETYPES, "Filetype is not supported!"
+        if filetype == "tensorstore":
+            return utils.upload_tensorstore(path_to_labels)
+        elif filetype == "n5":
+            return utils.upload_n5(path_to_labels)
         else:
-            graphs = gr.swc_to_graph(graphs_dir, self.shape)
-
-        sparse_volume = gr.graph_to_volume(graphs, self.shape)
-        return sparse_volume
+            return utils.upload_tif(path_to_labels)
 
     def count_edges(self):
         """
@@ -208,7 +174,7 @@ class SegmentationMetrics(ABC):
         if self.output == "swc":
             red = " 1.0 0.0 0.0"
             xyz = utils.get_xyz(graph, i)
-            list_of_entries = [gr.get_swc_entry(xyz, 7, -1)]
+            list_of_entries = [gr.get_swc_entry(xyz, 8, -1)]
             path_to_swc = os.path.join(self.output_dir, fn)
             gr.write_swc(path_to_swc, list_of_entries, color=red)
 
@@ -237,10 +203,10 @@ class SegmentationMetrics(ABC):
             red = " 1.0 0.0 0.0"
             reindex = {root: 1}
             xyz = utils.get_xyz(graph, root)
-            swc = [gr.get_swc_entry(xyz, 7, -1)]
+            swc = [gr.get_swc_entry(xyz, 8, -1)]
             for (i, j) in list_of_edges:
                 xyz = utils.get_xyz(graph, j)
-                swc.append(gr.get_swc_entry(xyz, 7, reindex[i]))
+                swc.append(gr.get_swc_entry(xyz, 8, reindex[i]))
                 reindex[j] = len(reindex) + 1
             path = os.path.join(self.output_dir, fn)
             gr.write_swc(path, swc, color=red)
@@ -263,7 +229,7 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        if self.output in ["tif"]:
+        if self.output in ["tif", "tiff"]:
             path_to_site_mask = os.path.join(self.output_dir, fn + "sites.tif")
             path_to_edge_mask = os.path.join(self.output_dir, fn + "edges.tif")
             imwrite(path_to_site_mask, self.site_mask)

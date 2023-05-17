@@ -12,16 +12,15 @@ from random import sample
 import networkx as nx
 import numpy as np
 from scipy.ndimage.morphology import grey_dilation
-from scipy.ndimage.measurements import label
 from skimage.morphology import skeletonize_3d
 from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
 
 # Conversion Routines
 def to_world(idx, permute, scale, shift):
-    """"
+    """ "
     Converts "idx" to real-world coordinates.
-    
+
     Parameters
     ----------
         idx : list[idx]
@@ -42,25 +41,26 @@ def to_world(idx, permute, scale, shift):
     xyz = [idx[i] + shift[i] for i in permute]
     xyz = [xyz[i] * scale[i] for i in range(3)]
     return xyz
-    
-def apply_permutation(l, permute):
+
+
+def apply_permutation(my_list, permute):
     """
     Applies a permutation to a list.
-    
+
     Parameters
     ----------
-    l : list
+    my_list : list
         List of any type of values
     permute : list[int]
-        Permutation that is applied to "l"
-        
+        Permutation that is applied to "my_list"
+
     Returns
     list
-        Permutation of input "l".
-    
+        Permutation of input "my_list".
+
     """
-    return [l[i] for i in permute]
-  
+    return [my_list[i] for i in permute]
+
 
 def graph_to_volume(list_of_graphs, shape, sparse=True):
     """
@@ -110,7 +110,13 @@ def graph_to_skeleton(list_of_graphs, shape):
     return volume
 
 
-def graph_to_swc(graph, path, permute=[0, 1, 2], scale=[1, 1, 1], shift=[0, 0, 0]):
+def graph_to_swc(
+    graph,
+    path,
+    permute=[0, 1, 2],
+    scale=[1, 1, 1],
+    shift=[0, 0, 0],
+):
     """
     Converts graph to an swc file.
 
@@ -148,6 +154,7 @@ def graph_to_swc(graph, path, permute=[0, 1, 2], scale=[1, 1, 1], shift=[0, 0, 0
             if nb not in visited:
                 queue.append((reindex[child], nb))
     write_swc(path, swc)
+
 
 def skeleton_to_graph(skel):
     """
@@ -187,7 +194,7 @@ def skeleton_to_graph(skel):
     return graph
 
 
-def swc_to_graph(swc_dir, shape, scaling_factors=[1, 1, 1]):
+def swc_to_graph(swc_dir, shape, scaling_factors=[1.10, 1.10, 1.10]):
     """
     Converts directory of swc files to a list of graphs.
 
@@ -267,18 +274,12 @@ def volume_to_graph(volume, min_branch_length=10):
 
     """
     list_of_graphs = []
-    
-    t0 = time()
     binary_skeleton = skeletonize_3d(volume > 0).astype(int)
     skeleton = volume * binary_skeleton
-    t, unit = time_writer(time() - t0)
-    print("   Running time of skeletonization: {} {}".format(t, unit))
-
-    t0 = time()
     for i in [i for i in np.unique(skeleton) if i != 0]:
         mask_i = (skeleton == i).astype(int)
         graph_i = skeleton_to_graph(mask_i)
-        pruned_graph_i = prune(graph_i, min_branch_length=5)
+        pruned_graph_i = prune(graph_i, min_branch_length=min_branch_length)
         list_of_graphs.append(pruned_graph_i)
     return list_of_graphs
 
@@ -361,40 +362,6 @@ def get_nb(xyz, vec):
     """
     return tuple([int(sum(i)) for i in zip(xyz, vec)])
 
-def prune(graph, min_branch_length=10):
-    """
-    Prune short branches that contain a leaf node
-
-    Parameters
-    ----------
-    graph : networkx.graph
-        Graph that represents a neuron.
-    min_branch_length : int
-        Minimum branch length
-
-    """
-    leaf_nodes = [i for i in graph.nodes if graph.degree[i] == 1]
-    for leaf in leaf_nodes:
-        # Traverse branch from leaf
-        queue = [leaf]
-        visited = set()
-        hit_junction = False
-        while len(queue) > 0:
-            node = queue.pop(0)
-            nbs = list(graph.neighbors(node))
-            if len(nbs) > 2:
-                hit_junction = True
-                break
-            else:
-                visited.add(node)
-                nb = [nb for nb in nbs if nb not in visited]
-                queue.extend(nb)
-
-        # Check length of branch
-        if hit_junction and len(visited) <= min_branch_length:
-            graph.remove_nodes_from(visited)
-    return graph
-
 
 def prune(graph, min_branch_length=10):
     """
@@ -461,6 +428,7 @@ def write_swc(path_to_swc, list_of_entries, color=None):
             for x in entry:
                 f.write(str(x) + " ")
             f.write("\n")
+
 
 def read_xyz(zyx, scaling_factors):
     """

@@ -150,12 +150,16 @@ def break_crossovers(list_of_graphs, depth=10):
     """
     upd = []
     for i, graph in enumerate(list_of_graphs):
-        prune_nodes = detect_crossovers(graph, depth)
-        graph.remove_nodes_from(prune_nodes)
-        for g in nx.connected_components(graph):
-            subgraph = graph.subgraph(g).copy()
-            if subgraph.number_of_nodes() > 10:
-                upd.append(subgraph)
+        pruned_graph = prune_spurious_paths(graph, min_branch_length=depth + 1)
+        prune_nodes = detect_crossovers(pruned_graph, depth)
+        if len(prune_nodes) > 0:
+            graph.remove_nodes_from(prune_nodes)
+            for g in nx.connected_components(graph):
+                subgraph = graph.subgraph(g).copy()
+                if subgraph.number_of_nodes() > 10:
+                    upd.append(subgraph)
+        else:
+            upd.append(graph)
     return upd
 
 
