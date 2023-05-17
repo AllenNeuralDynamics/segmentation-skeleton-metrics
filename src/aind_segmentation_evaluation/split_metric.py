@@ -76,8 +76,8 @@ class SplitMetric(sm.SegmentationMetrics):
         if type(target_graphs) is str:
             target_graphs = swc_to_graph(target_graphs, pred_labels.shape)
 
-        if output in ['swc']:
-            output_dir = os.path.join(output_dir, 'splits')
+        if output in ["swc"]:
+            output_dir = os.path.join(output_dir, "splits")
 
         super().__init__(target_graphs, pred_labels, output, output_dir)
 
