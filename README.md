@@ -13,28 +13,38 @@ Python package for performing a skeleton-based evaluation of a predicted segment
 Here is a simple example of evaluating a predicted segmentation. Note that this package supports a number of different input types, see documentation for details. 
 
 ```python
-from aind_segmentation_evaluation.run_evaluation import run_evaluation
+import os
 
-# Initializations
-shape = (148, 226, 282)
-data_dir = "./resources"
-path_to_pred_volume = os.path.join(data_dir, "pred_volume.tif")
-path_to_target_volume = os.path.join(data_dir, "target_volume.tif")
-target_graphs_dir = os.path.join(data_dir, "target_graphs")
+from aind_segmentation_evaluation.evaluate import run_evaluation
+from aind_segmentation_evaluation.graph_routines import volume_to_graph 
+from tifffile import imread
 
-# Evaluation
-stats = run_evaluation(
-        shape,
-        target_graphs_dir=target_graphs_dir,
-        path_to_pred_volume=path_to_pred_volume,
+
+if __name__ == '__main__':
+
+    # Initializations
+    data_dir = './resources'
+    target_graphs_dir = os.path.join(data_dir, 'target_graphs')
+    path_to_target_labels = os.path.join(data_dir, 'target_labels.tif')
+    pred_labels = imread(os.path.join(data_dir, 'pred_labels.tif'))
+    pred_graphs = volume_to_graph(pred_labels)
+
+    # Evaluation
+    stats = run_evaluation(
+        target_graphs_dir,
+        path_to_target_labels,
+        pred_graphs,
+        pred_labels,
         output="tif",
         output_dir=data_dir,
+        filetype='tif',
     )
 
-# Report results
-print("Graph-based evaluation...")
-for key in stats.keys():
-    print("   " + key + ":", stats[key])
+    # Write out results
+    print("Graph-based evaluation...")
+    for key in stats.keys():
+        print("   " + key + ":", stats[key])
+
 ```
 
 ## Installation
