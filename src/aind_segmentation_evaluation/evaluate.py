@@ -171,7 +171,6 @@ def compute_stats(evaluator, list_of_graphs, x):
         x + "_cnt": site_cnt,
         x + "_inside_cnt": evaluator.interior_site_cnt // 2,
         x + "_edge_cnt": edge_cnt,
-        x + "_ratio": site_cnt / total_edges,
         x + "_edge_ratio": edge_cnt / total_edges,
     }
     return stats
