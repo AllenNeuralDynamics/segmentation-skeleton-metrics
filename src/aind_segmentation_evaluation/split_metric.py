@@ -124,7 +124,7 @@ class SplitMetric(sm.SegmentationMetrics):
             # Check whether whole neuron is missing
             if miss_flag:
                 fn = "split_edges-" + str(self.site_cnt) + ".swc"
-                list_of_edges = list(nx.dfs_edges(graph, source=1))
+                list_of_edges = list(nx.dfs_edges(graph))
                 super().log_complex_mistake(graph, list_of_edges, j, fn)
                 self.edge_cnt += len(list_of_edges)
 
