@@ -15,11 +15,12 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
-    'networkx',
-    'numpy',
-    'scikit-image',
-    'tensorstore',
-    'tifffile'
+    "networkx",
+    "numpy",
+    "scikit-image",
+    "tensorstore",
+    "tifffile",
+    "zarr",
 ]
 
 [project.optional-dependencies]
