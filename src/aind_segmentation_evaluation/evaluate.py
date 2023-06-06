@@ -21,7 +21,8 @@ def run_evaluation(
     filetype=None,
     output=None,
     output_dir=None,
-    scaling_factors=[1.10, 1.10, 1.10],
+    permute=[0, 1, 2],
+    scale=[1.0, 1.0, 1.0],
 ):
     """
     Evaluates a predicted segmentation in terms of the number of splits
@@ -48,7 +49,9 @@ def run_evaluation(
     output_dir : str, optional
         Path to directory that outputs are written to.
         The default is None.
-    scaling_factors : list[float], optional
+    permute : list[int], optional
+            Permutation that is applied to "idx". The default is None.
+    scale : list[float], optional
         Scaling factor from image to real-world coordinates.
         The default is None.
 
@@ -69,7 +72,8 @@ def run_evaluation(
         filetype=filetype,
         output=output,
         output_dir=output_dir,
-        scaling_factors=scaling_factors,
+        permute=permute,
+        scale=scale,
     )
     split_evaluator.detect_mistakes()
 
@@ -82,7 +86,8 @@ def run_evaluation(
         filetype=filetype,
         output=output,
         output_dir=output_dir,
-        scaling_factors=scaling_factors,
+        permute=permute,
+        scale=scale,
     )
     merge_evaluator.detect_mistakes()
 

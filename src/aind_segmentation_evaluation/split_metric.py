@@ -13,7 +13,7 @@ import networkx as nx
 
 import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
-from aind_segmentation_evaluation.graph_routines import swc_to_graph
+from aind_segmentation_evaluation.conversions import swc_to_graph
 
 from random import sample
 
@@ -33,7 +33,8 @@ class SplitMetric(sm.SegmentationMetrics):
         filetype=None,
         output=None,
         output_dir=None,
-        scaling_factors=[1.0, 1.0, 1.0],
+        permute=[0, 1, 2],
+        scale=[1.0, 1.0, 1.0],
     ):
         """
         Constructs an object that evaluates a predicted segmentation in terms
@@ -60,7 +61,9 @@ class SplitMetric(sm.SegmentationMetrics):
         output_dir : str, optional
             Path to directory that outputs are written to.
             The default is None.
-        scaling_factors : list[float], optional
+        permute : list[int]
+            Permutation that is applied to "idx". The default is None.
+        scale : list[float], optional
             Scaling factor from image to real-world coordinates.
             The default is None.
 
@@ -74,7 +77,12 @@ class SplitMetric(sm.SegmentationMetrics):
             pred_labels = super().init_labels(pred_labels, filetype)
 
         if type(target_graphs) is str:
-            target_graphs = swc_to_graph(target_graphs, pred_labels.shape)
+            target_graphs = swc_to_graph(
+                target_graphs,
+                pred_labels.shape,
+                permute=permute,
+                scale=scale,
+            )
 
         if output in ["swc"]:
             output_dir = os.path.join(output_dir, "splits")
@@ -137,12 +145,12 @@ class SplitMetric(sm.SegmentationMetrics):
 
         Parameters
         ----------
+        graph : networkx.graph
+            Graph with potential split.
         dfs_edges : list[tuple]
             List of edges in order wrt a depth first search.
         root_edge : tuple
             Edge where possible split starts.
-        fn : str
-            Filename of swc that is to be written.
 
         Returns
         -------

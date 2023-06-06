@@ -13,8 +13,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 from tifffile import imwrite
 
-import aind_segmentation_evaluation.graph_routines as gr
 import aind_segmentation_evaluation.utils as utils
+from aind_segmentation_evaluation.swc_routines import make_entry, write_swc
 
 
 SUPPORTED_FILETYPES = ["tif", "tiff", "n5"]
@@ -173,9 +173,9 @@ class SegmentationMetrics(ABC):
         if self.output == "swc":
             red = " 1.0 0.0 0.0"
             xyz = utils.get_xyz(graph, i)
-            list_of_entries = [gr.get_swc_entry(xyz, 8, -1)]
+            list_of_entries = [make_entry(xyz, 8, -1)]
             path_to_swc = os.path.join(self.output_dir, fn)
-            gr.write_swc(path_to_swc, list_of_entries, color=red)
+            write_swc(path_to_swc, list_of_entries, color=red)
 
     def log_complex_mistake(self, graph, list_of_edges, root, fn):
         """
@@ -202,13 +202,13 @@ class SegmentationMetrics(ABC):
             red = " 1.0 0.0 0.0"
             reindex = {root: 1}
             xyz = utils.get_xyz(graph, root)
-            swc = [gr.get_swc_entry(xyz, 8, -1)]
+            swc = [make_entry(xyz, 8, -1)]
             for i, j in list_of_edges:
                 xyz = utils.get_xyz(graph, j)
-                swc.append(gr.get_swc_entry(xyz, 8, reindex[i]))
+                swc.append(make_entry(xyz, 8, reindex[i]))
                 reindex[j] = len(reindex) + 1
             path = os.path.join(self.output_dir, fn)
-            gr.write_swc(path, swc, color=red)
+            write_swc(path, swc, color=red)
         elif self.output == "tif":
             for i, j in list_of_edges:
                 idx = utils.get_idx(graph, j)

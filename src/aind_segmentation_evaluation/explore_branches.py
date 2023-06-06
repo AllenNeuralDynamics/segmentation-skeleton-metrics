@@ -9,7 +9,7 @@ Created on Mon March 6 19:00:00 2023
 import networkx as nx
 
 
-def prune_spurious_paths(graph, min_branch_length=5):
+def prune_spurious_paths(graph, min_branch_length=10):
     """
     Prunes short branches.
 
@@ -150,8 +150,8 @@ def break_crossovers(list_of_graphs, depth=10):
     """
     upd = []
     for i, graph in enumerate(list_of_graphs):
-        pruned_graph = prune_spurious_paths(graph, min_branch_length=depth + 1)
-        prune_nodes = detect_crossovers(pruned_graph, depth)
+        graph = prune_spurious_paths(graph, min_branch_length=depth + 1)
+        prune_nodes = detect_crossovers(graph, depth)
         if len(prune_nodes) > 0:
             graph.remove_nodes_from(prune_nodes)
             for g in nx.connected_components(graph):
@@ -182,7 +182,7 @@ def detect_crossovers(graph, depth):
     """
     cnt = 0
     prune_nodes = []
-    junctions = [i for i in graph.nodes() if graph.degree(i) > 2]
+    junctions = [j for j in graph.nodes() if graph.degree(j) > 2]
     for j in junctions:
         # Explore node
         upd = False

@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 import aind_segmentation_evaluation.seg_metrics as sm
 import aind_segmentation_evaluation.utils as utils
-from aind_segmentation_evaluation.graph_routines import swc_to_graph
+from aind_segmentation_evaluation.conversions import swc_to_graph
 
 
 class MergeMetric(sm.SegmentationMetrics):
@@ -30,7 +30,8 @@ class MergeMetric(sm.SegmentationMetrics):
         filetype=None,
         output=None,
         output_dir=None,
-        scaling_factors=[1.0, 1.0, 1.0],
+        permute=[0, 1, 2],
+        scale=[1.0, 1.0, 1.0],
     ):
         """
         Constructs an object that evaluates a predicted segmentation in terms
@@ -57,7 +58,9 @@ class MergeMetric(sm.SegmentationMetrics):
         output_dir : str, optional
             Path to directory that outputs are written to.
             The default is None.
-        scaling_factors : list[float], optional
+        permute : list[int], optional
+            Permutation that is applied to "idx". The default is None.
+        scale : list[float], optional
             Scaling factor from image to real-world coordinates.
             The default is None.
 
@@ -71,7 +74,9 @@ class MergeMetric(sm.SegmentationMetrics):
             target_labels = super().init_labels(target_labels, filetype)
 
         if type(pred_graphs) is str:
-            pred_graphs = swc_to_graph(pred_graphs, target_labels.shape)
+            pred_graphs = swc_to_graph(
+                pred_graphs, target_labels.shape, permute=permute, scale=scale
+            )
 
         if output in ["swc"]:
             output_dir = os.path.join(output_dir, "merges")
