@@ -9,7 +9,7 @@ Created on Tue Jan 3 15:00:00 2023
 import os
 
 from aind_segmentation_evaluation.evaluate import run_evaluation
-from aind_segmentation_evaluation.graph_routines import volume_to_graph
+from aind_segmentation_evaluation.conversions import volume_to_graph
 from tifffile import imread
 
 
@@ -28,9 +28,11 @@ if __name__ == "__main__":
         path_to_target_labels,
         pred_graphs,
         pred_labels,
+        filetype="tif",
         output="tif",
         output_dir=data_dir,
-        filetype="tif",
+        permute=[2, 1, 0],
+        scale=[1.101, 1.101, 1.101],
     )
 
     # Write out results
