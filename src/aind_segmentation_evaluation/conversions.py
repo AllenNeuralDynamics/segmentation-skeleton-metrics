@@ -13,7 +13,7 @@ import networkx as nx
 import numpy as np
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
-from aind_segmentation_evaluation.explore_branches import prune_spurious_paths
+from aind_segmentation_evaluation.graph_routines import prune_spurious_paths
 import aind_segmentation_evaluation.swc_routines as swcr
 from aind_segmentation_evaluation.utils import get_idx, get_xyz
 
