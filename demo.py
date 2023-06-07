@@ -38,4 +38,4 @@ if __name__ == "__main__":
     # Write out results
     print("Graph-based evaluation...")
     for key in stats.keys():
-        print("   " + key + ":", stats[key])
+        print("   {}: {}".format(key, stats[key])
