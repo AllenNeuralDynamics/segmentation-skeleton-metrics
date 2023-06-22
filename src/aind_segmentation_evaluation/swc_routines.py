@@ -8,7 +8,7 @@ Created on Wed June 5 16:00:00 2023
 """
 
 import numpy as np
-from aind_segmentation_evaluation.conversions import to_world
+import aind_segmentation_evaluation.conversions as conv
 
 
 def make_entry(
@@ -43,7 +43,7 @@ def make_entry(
         Text (i.e. "entry") that will be written to an swc file.
 
     """
-    entry = to_world(xyz, permute, scale, shift)
+    entry = conv.to_world(xyz, permute, scale, shift)
     entry.extend([2, int(parent)])
     return entry
 
