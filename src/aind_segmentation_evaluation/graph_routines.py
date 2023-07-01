@@ -131,7 +131,7 @@ def prune_short_connectors(list_of_graphs, min_connector_length=10):
     return upd
 
 
-def break_crossovers(list_of_graphs, depth=10, prune=True):
+def break_crossovers(list_of_graphs, depth=10):
     """
     Breaks crossovers for each graph contained in "list_of_graphs".
 
@@ -152,9 +152,8 @@ def break_crossovers(list_of_graphs, depth=10, prune=True):
     """
     upd = []
     for i, graph in enumerate(list_of_graphs):
-        if prune:
-            graph = prune_spurious_paths(graph, min_branch_length=depth + 1)
-        prune_nodes = detect_crossovers(graph, depth)
+        pruned_graph = prune_spurious_paths(graph, min_branch_length=depth)
+        prune_nodes = detect_crossovers(pruned_graph, depth)
         if len(prune_nodes) > 0:
             graph.remove_nodes_from(prune_nodes)
             for g in nx.connected_components(graph):
