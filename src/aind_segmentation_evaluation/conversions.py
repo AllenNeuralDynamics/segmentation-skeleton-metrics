@@ -15,7 +15,7 @@ from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
 from aind_segmentation_evaluation.graph_routines import prune_spurious_paths
 import aind_segmentation_evaluation.swc_routines as swcr
-from aind_segmentation_evaluation.utils import get_idx, get_xyz
+from aind_segmentation_evaluation.utils import get_idx, get_xyz, mkdir
 
 
 # Conversion Routines
@@ -112,6 +112,42 @@ def graph_to_skeleton(list_of_graphs, shape):
     return volume
 
 
+def graphs_to_swc(
+    list_of_graphs,
+    root_dir,
+    permute=[0, 1, 2],
+    scale=[1, 1, 1],
+    shift=[0, 0, 0]
+):
+    """
+    Converts list of graphs to a directory of swc files.
+
+    Parameters
+    ----------
+    list_of_graphs : list[networkx.graph]
+        List of graphs to be written to swc files. Each graph is written as
+        its own swc file.
+    root_dir : path
+        Directory where swc files will be saved.
+    permute : list[int], optional
+        Permutation from image to real-world coordinates.
+    scale : list[int], optional
+        Scaling factor from image to real-world coordinates.
+    shift : list[float], optional
+        Shift that is applied to "idx".
+
+    Returns
+    -------
+    None
+
+    """
+    mkdir(root_dir)
+    cnt = 1
+    for i, graph in enumerate(list_of_graphs):
+        path = os.path.join(root_dir, str(i) + ".swc")
+        graph_to_swc(graph, path, permute=permute, scale=scale, shift=shift)
+
+
 def graph_to_swc(
     graph,
     path,
@@ -147,8 +183,21 @@ def graph_to_swc(
     reindex = dict()
     while len(queue) > 0:
         parent, child = queue.pop(0)
+        try:
+            radius = graph.nodes[child]["radius"]
+        except:
+            radius = 1
+            print("Node missing radius")
+
         swc.append(
-            swcr.make_entry(get_xyz(graph, child), permute, scale, shift)
+            swcr.make_entry(
+                get_xyz(graph, child),
+                radius,
+                parent,
+                permute=permute,
+                scale=scale,
+                shift=shift,
+            )
         )
         visited.add(child)
         reindex[child] = len(swc)
@@ -182,7 +231,7 @@ def skeleton_to_graph(skel):
         # Visit node
         parent_id, child_idx = queue.pop(0)
         child_id = graph.number_of_nodes() + 1
-        graph.add_node(child_id, idx=child_idx, xyz=child_idx)
+        graph.add_node(child_id, idx=child_idx, xyz=child_idx, radius=1)
         if parent_id != -1:
             graph.add_edge(parent_id, child_id)
         visited.append(child_idx)
@@ -232,7 +281,7 @@ def swc_to_graph(swc_dir, shape, permute=[0, 1, 2], scale=[1.0, 1.0, 1.0]):
                 parent = int(parts[-1])
                 xyz = swcr.read_xyz(parts[2:5], scale, permute)
                 idx = swcr.read_idx(xyz, shape)
-                graph.add_node(child, xyz=xyz, idx=idx)
+                graph.add_node(child, xyz=xyz, idx=idx, radius=parts[-2])
                 if parent != -1:
                     graph.add_edge(parent, child)
         list_of_graphs.append(graph)
