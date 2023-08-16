@@ -9,17 +9,18 @@ Created on Wed Dec 10 19:00:00 2022
 
 import os
 from random import sample
+
 import networkx as nx
 import numpy as np
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
-from aind_segmentation_evaluation.graph_routines import prune_spurious_paths
-import aind_segmentation_evaluation.swc_routines as swcr
-from aind_segmentation_evaluation.utils import get_idx, get_xyz, mkdir
+
+from aind_segmentation_evaluation import graph_utils as gutils
+from aind_segmentation_evaluation import swc_utils, utils
 
 
 # Conversion Routines
-def to_world(idx, permute, scale, shift):
+def to_world(idx, anisotropy):
     """ "
     Converts "idx" to real-world coordinates.
 
@@ -27,9 +28,7 @@ def to_world(idx, permute, scale, shift):
     ----------
         idx : list[idx]
             Image indexes to be converted.
-        permute : list[float]
-            Permutation that is applied to "idx".
-        scale : list[float]
+        anisotropy : list[float]
             Scaling factor that is applied to permuted "idx".
         shift : list[float]
             Shift that is applied to "idx".
@@ -40,28 +39,7 @@ def to_world(idx, permute, scale, shift):
         The result of applying this series of transformations to "idx".
 
     """
-    xyz = [idx[i] + shift[i] for i in permute]
-    xyz = [xyz[i] * scale[i] for i in range(3)]
-    return xyz
-
-
-def apply_permutation(my_list, permute):
-    """
-    Applies a permutation to a list.
-
-    Parameters
-    ----------
-    my_list : list
-        List of any type of values
-    permute : list[int]
-        Permutation that is applied to "my_list"
-
-    Returns
-    list
-        Permutation of input "my_list".
-
-    """
-    return [my_list[i] for i in permute]
+    return [idx[i] / anisotropy[i] for i in range(3)]
 
 
 def graph_to_volume(list_of_graphs, shape):
@@ -113,11 +91,7 @@ def graph_to_skeleton(list_of_graphs, shape):
 
 
 def graphs_to_swc(
-    list_of_graphs,
-    root_dir,
-    permute=[0, 1, 2],
-    scale=[1, 1, 1],
-    shift=[0, 0, 0]
+    list_of_graphs, root_dir, anisotropy=[1, 1, 1], shift=[0, 0, 0]
 ):
     """
     Converts list of graphs to a directory of swc files.
@@ -129,10 +103,9 @@ def graphs_to_swc(
         its own swc file.
     root_dir : path
         Directory where swc files will be saved.
-    permute : list[int], optional
-        Permutation from image to real-world coordinates.
-    scale : list[int], optional
-        Scaling factor from image to real-world coordinates.
+    anisotropy : list[int], optional
+        Image to real-world coordinates scaling factors for (x, y, z) which is
+        applied to swc files.
     shift : list[float], optional
         Shift that is applied to "idx".
 
@@ -145,16 +118,10 @@ def graphs_to_swc(
     cnt = 1
     for i, graph in enumerate(list_of_graphs):
         path = os.path.join(root_dir, str(i) + ".swc")
-        graph_to_swc(graph, path, permute=permute, scale=scale, shift=shift)
+        graph_to_swc(graph, path, anisotropy=anisotropy, shift=shift)
 
 
-def graph_to_swc(
-    graph,
-    path,
-    permute=[0, 1, 2],
-    scale=[1, 1, 1],
-    shift=[0, 0, 0],
-):
+def graph_to_swc(graph, path, scale=[1, 1, 1], shift=[0, 0, 0]):
     """
     Converts graph to an swc file.
 
@@ -243,49 +210,6 @@ def skeleton_to_graph(skel):
                 search_space.remove(nb_idx)
                 queue.append((child_id, nb_idx))
     return graph
-
-
-def swc_to_graph(swc_dir, shape, permute=[0, 1, 2], scale=[1.0, 1.0, 1.0]):
-    """
-    Converts directory of swc files to a list of graphs.
-
-    Parameters
-    ----------
-    swc_dir : str
-        Path to directory containing swc files.
-    shape : tuple
-        Dimensions of image volume in the order of (x, y, z).
-    permute : list[int], optional
-        Permutation from image to real-world coordinates. The default is None.
-    scale : list[float], optional
-        Image to real-world coordinates scaling factors for [x, y, z].
-        The default is None.
-
-    Returns
-    -------
-    list_of_graphs : list[networkx.Graph]
-        List of graphs where each graph represents a neuron.
-
-    """
-    list_of_graphs = []
-    for graph_id, f in enumerate(
-        [f for f in os.listdir(swc_dir) if "swc" in f]
-    ):
-        graph = nx.Graph(file_name=f, graph_id=graph_id)
-        with open(os.path.join(swc_dir, f), "r") as f:
-            for line in f.readlines():
-                if line.startswith("#"):
-                    continue
-                parts = line.split()
-                child = int(parts[0])
-                parent = int(parts[-1])
-                xyz = swcr.read_xyz(parts[2:5], scale, permute)
-                idx = swcr.read_idx(xyz, shape)
-                graph.add_node(child, xyz=xyz, idx=idx, radius=parts[-2])
-                if parent != -1:
-                    graph.add_edge(parent, child)
-        list_of_graphs.append(graph)
-    return list_of_graphs
 
 
 def volume_to_graph(volume, min_branch_length=10, prune=True):

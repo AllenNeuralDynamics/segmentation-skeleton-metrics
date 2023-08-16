@@ -13,11 +13,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 from tifffile import imwrite
 
-import aind_segmentation_evaluation.utils as utils
-from aind_segmentation_evaluation.swc_routines import make_entry, write_swc
+from aind_segmentation_evaluation import nx_utils, swc_utils, utils
 
-
-SUPPORTED_FILETYPES = ["tif", "tiff", "n5"]
+SUPPORTED_FILETYPES = ["tif", "n5"]
 
 
 class SegmentationMetrics(ABC):
@@ -27,7 +25,17 @@ class SegmentationMetrics(ABC):
 
     """
 
-    def __init__(self, graphs, labels, output, output_dir):
+    def __init__(
+        self,
+        swc_dir,
+        labels,
+        anisotropy=[1.0, 1.0, 1.0],
+        filetype=None,
+        log_dir=None,
+        img_log=False,
+        swc_log=False,
+        txt_log=False,
+    ):
         """
         Constructs object that evaluates a segmentation mask.
 
@@ -37,40 +45,54 @@ class SegmentationMetrics(ABC):
             List of graphs where each graph represents a neuron.
         labels : dict
             Segmentation mask.
-        output : str
-            Type of output. Supported options include "swc" and "tif".
-        output_dir : str
-            Directory where "output" is written to.
+        ...
 
         Returns
         -------
         None.
 
         """
-        self.graphs = graphs
-        self.labels = labels
+        # Graph and labels
+        self.graphs = swc_utils.dir_to_graphs(swc_dir, anisotropy=anisotropy)
+        if type(labels) is str:
+            self.labels = self.init_labels(pred_labels, filetype)
+        else:
+            self.labels = labels
 
-        self.output = output
-        self.output_dir = output_dir
-
-        # Initialize mistake trackers
+        # Mistake trackers
         self.site_cnt = 0
         self.edge_cnt = 0
-        self.site_mask = np.zeros(labels.shape, dtype=bool)
-        if self.output in ["tif", "tiff"]:
-            self.edge_mask = np.zeros(labels.shape, dtype=bool)
-        if self.output in ["swc"]:
-            utils.mkdir(output_dir)
+        if type(labels) == dict:
+            self.site_mask = dict()
+        else:
+            self.site_mask = np.zeros(labels.shape, dtype=bool)
 
-    def init_labels(self, path_to_labels, filetype):
+        # Mistake logs
+        self.log_dir = log_dir
+        self.img_log = img_log
+        self.swc_log = swc_log
+        self.txt_log = txt_log
+        if self.log_dir is not None:
+            utils.rmdir(self.log_dir)
+            utils.mkdir(self.log_dir)
+        if self.img_log:
+            assert type(labels) == np.array
+            self.edge_mask = np.zeros(labels.shape, dtype=bool)
+        if self.swc_log:
+            self.swc_dir = os.path.join(self.log_dir, "swc_files")
+            utils.mkdir(self.swc_dir)
+        if self.txt_log:
+            self.mistakes_log = ["# xyz1,  xyz2,  swc1,  swc2"]
+
+    def init_labels(self, path, filetype):
         """
         Initializes a volume by uploading file with extension "filetype".
 
         Parameters
         ----------
-        path_to_volume : str
+        path : str
             Path to image volume.
-        file_type : str
+        filetype : str
             Extension of file to be uploaded, supported values include tif, n5,
             and tensorstore.
 
@@ -85,11 +107,18 @@ class SegmentationMetrics(ABC):
         ), "Must provide filetype to upload image volumes!"
         assert filetype in SUPPORTED_FILETYPES, "Filetype is not supported!"
         if filetype == "tensorstore":
-            return utils.upload_tensorstore(path_to_labels)
+            return utils.read_tensorstore(path)
         elif filetype == "n5":
-            return utils.upload_n5(path_to_labels)
+            return utils.read_n5(path)
         else:
-            return utils.upload_tif(path_to_labels)
+            return utils.read_tif(path)
+
+    def get_labels(self):
+        if type(self.labels) == np.array:
+            labels = np.unique(self.labels)
+        else:
+            labels = np.unique(list(self.labels.keys()))
+        return [label for label in labels if label != 0]
 
     def count_edges(self):
         """
@@ -104,10 +133,12 @@ class SegmentationMetrics(ABC):
         None
 
         """
+        total_edges = 0
         for graph in self.graphs:
-            self.edge_cnt += graph.number_of_edges()
+            total_edges += graph.number_of_edges()
+        return total_edges
 
-    def check_simple_mistake(self, a, b):
+    def is_mistake(self, a, b):
         """
         Checks if "a" and "b" are positive and not equal.
 
@@ -124,30 +155,10 @@ class SegmentationMetrics(ABC):
             Indicates whether there is a mistake.
 
         """
-        return (a > 0 and b > 0) and (a != b)
+        return (a != 0 and b != 0) and (a != b)
 
-    def check_complex_mistake(self, a, b):
-        """
-        Checks if one of "a" and "b" is positive and the other is zero-valued.
 
-        Parameters
-        ----------
-        a : int
-            label at node i.
-        b : int
-            label at node j.
-
-        Returns
-        -------
-        bool
-            Indicates whether there is a mistake.
-
-        """
-        condition_1 = (a > 0) and (b == 0)
-        condition_2 = (b > 0) and (a == 0)
-        return condition_1 or condition_2
-
-    def log_simple_mistake(self, graph, node_tuple, fn):
+    def log_site(self, graph, edge, prefix):
         """
         Logs xyz coordinate of mistake in a numpy.array
         or writes an swc file.
@@ -166,53 +177,30 @@ class SegmentationMetrics(ABC):
         None
 
         """
-        i = utils.get_idx(graph, node_tuple[0])
-        j = utils.get_idx(graph, node_tuple[1])
-        self.site_mask[i] = 1
-        self.site_mask[j] = 1
-        if self.output == "swc":
+        # Get site info
+        xyz_i, xyz_j = nx_utils.get_edge_xyz(graph, edge)
+
+        # Log img info
+        self.site_mask[xyz_i] = 1
+        self.site_mask[xyz_j] = 1
+        if self.img_log:
+            self.edge_mask[xyz_i] = 1
+            self.edge_mask[xyz_j] = 1
+
+        # Log swc info
+        if self.swc_log:
             red = " 1.0 0.0 0.0"
-            xyz = utils.get_xyz(graph, i)
-            list_of_entries = [make_entry(xyz, 8, -1)]
-            path_to_swc = os.path.join(self.output_dir, fn)
-            write_swc(path_to_swc, list_of_entries, color=red)
+            list_of_entries = [swc_utils.make_entry(xyz_i, 10, -1)]
+            fn = prefix + str(self.site_cnt) + ".swc"
+            path = os.path.join(self.swc_dir, fn)
+            swc_utils.write_swc(path, list_of_entries, color=red)
 
-    def log_complex_mistake(self, graph, list_of_edges, root, fn):
-        """
-        Logs list of xyz coordinates of mistake in a
-        numpy.array or writes an swc file.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph that represents a neuron.
-        list_of_edges : list[tuple]
-            List of edges that form a path.
-        root_edge : int
-            Root node corresponding to "list_of_edges".
-        fn: str
-            Filename of swc that will be written.
-
-        Returns
-        -------
-        None.
-
-        """
-        if self.output == "swc":
-            red = " 1.0 0.0 0.0"
-            reindex = {root: 1}
-            xyz = utils.get_xyz(graph, root)
-            swc = [make_entry(xyz, 8, -1)]
-            for i, j in list_of_edges:
-                xyz = utils.get_xyz(graph, j)
-                swc.append(make_entry(xyz, 8, reindex[i]))
-                reindex[j] = len(reindex) + 1
-            path = os.path.join(self.output_dir, fn)
-            write_swc(path, swc, color=red)
-        elif self.output == "tif":
-            for i, j in list_of_edges:
-                idx = utils.get_idx(graph, j)
-                self.edge_mask[idx] = 1
+        # Log txt info
+        if self.txt_log:
+            label_i, label_j = nx_utils.get_labels(self.labels, graph, edge)
+            xyz = str(xyz_i) + ", " + str(xyz_j) + ", "
+            labels = str(label_i) + ", " + str(label_j)
+            self.mistakes_log.append(xyz + labels)
 
     def write_results(self, fn):
         """
@@ -228,11 +216,18 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        if self.output in ["tif", "tiff"]:
-            path_to_site_mask = os.path.join(self.output_dir, fn + "sites.tif")
-            path_to_edge_mask = os.path.join(self.output_dir, fn + "edges.tif")
-            imwrite(path_to_site_mask, self.site_mask)
-            imwrite(path_to_edge_mask, self.edge_mask)
+        # Write img log
+        if self.img_log:
+            site_path = os.path.join(self.log_dir, fn + "_sites.tif")
+            edges_path = os.path.join(self.log_dir, fn + "_edges.tif")
+            imwrite(site_path, self.site_mask)
+            imwrite(edges_path, self.edge_mask)
+
+        # Write txt log
+        if self.txt_log:
+            path = os.path.join(self.log_dir, fn + ".txt")
+            utils.write_txt(path, self.mistakes_log)
+
 
     @abstractmethod
     def detect_mistakes(self):
@@ -251,7 +246,7 @@ class SegmentationMetrics(ABC):
         pass
 
     @abstractmethod
-    def process_complex_mistake(self):
+    def mistake_search(self):
         """
         Determines whether a complex mistake is a misalignment between the
         volume and graph or a true mistake.

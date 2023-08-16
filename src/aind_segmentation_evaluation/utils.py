@@ -10,42 +10,27 @@ Created on Wed Dec 21 19:00:00 2022
 import os
 
 import numpy as np
+import shutil
 import tensorstore as ts
 import zarr
 from tifffile import imread
 
 
-# Miscellaneous routines
-def get_value(volume, graph, i):
+# -- os utils ---
+def listdir(path, ext=None):
+    if ext is None:
+        return [f for f in os.listdir(path)]
+    else:
+        return [f for f in os.listdir(path) if ext in f]
+
+
+def mkdir(path):
     """
-    Gets voxel value of node "i".
+    Makes a directory at "path" if it does not already exist.
 
     Parameters
     ----------
-    volume : dict
-        Sparse image volume.
-    graph : networkx.Graph
-        Graph which represents a neuron.
-    i : int
-        Node of "graph".
-
-    Returns
-    -------
-    int
-       Voxel value of node "i".
-
-    """
-    idx = get_idx(graph, i)
-    return volume[idx]
-
-
-def mkdir(path_to_dir):
-    """
-    Makes a directory if it does not already exist.
-
-    Parameters
-    ----------
-    path_to_dir : str
+    path : str
         Path to directory.
 
     Returns
@@ -53,10 +38,16 @@ def mkdir(path_to_dir):
     None.
 
     """
-    if not os.path.exists(path_to_dir):
-        os.mkdir(path_to_dir)
+    if not os.path.exists(path):
+        os.mkdir(path)
 
 
+def rmdir(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+
+# --- data structure utils ---
 def check_edge(set_of_edges, edge):
     """
     Checks whether "edge" is in "set_of_edges".
@@ -109,35 +100,14 @@ def remove_edge(set_of_edges, edge):
     return set_of_edges
 
 
-def clip(arr, clip):
-    """
-    Clips an array.
-
-    Parameters
-    ----------
-    arr : numpy.array
-        Array to be clipped.
-    clip : int
-        Number of rows/columns to be removed from each dimensions.
-
-    Returns
-    -------
-    clipped_arr : numpy.array
-        Clipped array.
-
-    """
-    clipped_arr = arr[clip:-clip, clip:-clip, clip:-clip]
-    return clipped_arr
-
-
-# Upload routines
-def upload_tensorstore(path_to_data):
+# --- io utils ---
+def read_tensorstore(path):
     """
     Uploads segmentation mask stored as a directory of shard files.
 
     Parameters
     ----------
-    path_to_data : str
+    path : str
         Path to directory containing shard files.
 
     Returns
@@ -149,10 +119,7 @@ def upload_tensorstore(path_to_data):
     dataset_ts = ts.open(
         {
             "driver": "neuroglancer_precomputed",
-            "kvstore": {
-                "driver": "file",
-                "path": path_to_data,
-            },
+            "kvstore": {"driver": "file", "path": path},
         }
     ).result()
     dataset_ts = dataset_ts[ts.d[:].transpose[::-1]]
@@ -166,13 +133,13 @@ def upload_tensorstore(path_to_data):
     return sparse_volume
 
 
-def upload_n5(path_to_data):
+def read_n5(path):
     """
     Uploads n5 file.
 
     Parameters
     ----------
-    path_to_data : str
+    path : str
         Path to n5.
 
     Returns
@@ -180,16 +147,16 @@ def upload_n5(path_to_data):
     np.array
         Image volume.
     """
-    return zarr.open(zarr.N5FSStore(path_to_data), "r").volume
+    return zarr.open(zarr.N5FSStore(path), "r").volume
 
 
-def upload_tif(path_to_data):
+def read_tif(path):
     """
     Uploads tif file.
 
     Parameters
     ----------
-    path_to_data : str
+    path : str
         Path to tif file.
 
     Returns
@@ -197,148 +164,10 @@ def upload_tif(path_to_data):
     np.array
         Image volume.
     """
-    return imread(path_to_data)
+    return imread(path)
 
 
-# Networkx helper routines
-def get_nbs(graph, i):
-    """
-    Gets neighbors of node "i".
-
-    Parameters
-    ----------
-    graph : networkx.Graph()
-        Graph that represents a neuron.
-    i : int
-        Node of "graph".
-
-    Returns
-    -------
-    list[int]
-        List of neighbors of node "i".
-
-    """
-    return list(graph.neighbors(i))
-
-
-def get_edge_values(volume, graph, edge):
-    """
-    Gets voxel value of both nodes contained in "edge".
-
-    Parameters
-    ----------
-    volume : dict
-        Sparse image volume.
-    graph : networkx.Graph
-        Graph that represents a neuron.
-    edge : tuple
-        Edge in "graph".
-
-    Returns
-    -------
-    tuple
-        Voxel values of both nodes contained in "edge".
-
-    """
-    return get_value(volume, graph, edge[0]), get_value(volume, graph, edge[1])
-
-
-def get_idx(graph, i):
-    """
-    Gets voxel index of node "i".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that represents a neuron.
-    i : int
-        Node of "graph".
-
-    Returns
-    -------
-    tuple
-        voxel index of node "i".
-
-    """
-    return tuple(graph.nodes[i]["idx"])
-
-
-def get_xyz(graph, i):
-    """
-    Gets (x,y,z) coordinates of node "i".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that represents a neuron.
-    i : int
-        Node of "graph".
-
-    Returns
-    -------
-    tuple
-        The (x,y,z) coordinates of node "i".
-
-    """
-    return graph.nodes[i]["xyz"]
-
-
-def get_edge_xyz(graph, edge):
-    """
-    Gets (x,y,z) coordinates of both nodes contained in "edge".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that represents a neuron.
-    edge : tuple
-        Edge contained in "graph".
-
-    Returns
-    -------
-    tuple
-        The (x,y,z) coordinates of both nodes contained in "edge".
-
-    """
-    return get_xyz(graph, edge[0]), get_xyz(graph, edge[1])
-
-
-def get_edge_idx(graph, edge):
-    """
-    Gets indices of both nodes contained in "edge".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that represents a neuron.
-    edge : tuple
-        Edge contained in "graph".
-
-    Returns
-    -------
-    tuple
-        Indices of both nodes contained in "edge".
-
-    """
-    return get_idx(graph, edge[0]), get_idx(graph, edge[1])
-
-
-def get_num_edges(list_of_graphs):
-    """
-    Gets total number of edges of all graphs in "list_of_graphs".
-
-    Parameters
-    ----------
-    list_of_graphs : list[networkx.Graph]
-        DESCRIPTION.
-
-    Returns
-    -------
-    num_edges : int
-        Total number of edges of all graphs in "list_of_graphs".
-
-    """
-    num_edges = 0
-    for graph in list_of_graphs:
-        num_edges += graph.number_of_edges()
-    return num_edges
+def write_txt(path, contents):
+    with open(path, 'w') as file:
+        for line in contents:
+            file.write(line + "\n")
