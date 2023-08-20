@@ -9,8 +9,8 @@ Created on Wed Dec 21 19:00:00 2022
 
 import os
 import networkx as nx
-import aind_segmentation_evaluation.seg_metrics as sm
-from aind_segmentation_evaluation import nx_utils, swc_utils, utils
+import segmentation_skeleton_metrics.seg_metrics as sm
+from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
 from random import sample
 
 class SplitMetric(sm.SegmentationMetrics):
@@ -37,11 +37,11 @@ class SplitMetric(sm.SegmentationMetrics):
             dfs_edges = list(nx.dfs_edges(graph, source=root))
             while len(dfs_edges) > 0:
                 (i, j) = dfs_edges.pop(0)
-                label_i = nx_utils.get_label(self.labels, graph, i)
-                label_j = nx_utils.get_label(self.labels, graph, j)
+                label_i = self.get_label(graph, i)
+                label_j = self.get_label(graph, j)
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
-                    super().log(graph, [(i, j)], "split_site-")
+                    super().log(graph, [(i, j)])
                 elif label_i == 0:
                     dfs_edges = self.mistake_search(graph, dfs_edges, i)
         super().write_results("splits")
@@ -72,7 +72,7 @@ class SplitMetric(sm.SegmentationMetrics):
         while len(queue) > 0:
             i = queue.pop(0)
             for j in nx_utils.get_nbs(graph, i):
-                label_j = nx_utils.get_label(self.labels, graph, j)
+                label_j = self.get_label(graph, j)
                 if frozenset([i, j]) in visited:
                     continue
                 elif label_j != 0 and label_j not in collisions.keys():
@@ -92,6 +92,6 @@ class SplitMetric(sm.SegmentationMetrics):
                     recorded.append((root, i))
 
         if len(collisions) > 1:
-            super().log(graph, list(recorded), "split-")
+            super().log(graph, list(recorded))
         self.edge_cnt += len(visited)
         return dfs_edges

@@ -15,8 +15,8 @@ import numpy as np
 from scipy.ndimage.morphology import grey_dilation
 from skimage.morphology import skeletonize_3d
 
-from aind_segmentation_evaluation import graph_utils as gutils
-from aind_segmentation_evaluation import swc_utils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils
+from segmentation_skeleton_metrics import swc_utils, utils
 
 
 # Conversion Routines

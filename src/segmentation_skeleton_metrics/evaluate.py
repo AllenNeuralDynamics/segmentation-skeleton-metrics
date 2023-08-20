@@ -8,9 +8,9 @@ Created on Wed Jan 10 12:00:00 2023
 
 import numpy as np
 import os
-from aind_segmentation_evaluation import utils
-from aind_segmentation_evaluation.merge_metric import MergeMetric
-from aind_segmentation_evaluation.split_metric import SplitMetric
+from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics.merge_metric import MergeMetric
+from segmentation_skeleton_metrics.split_metric import SplitMetric
 
 
 def run_evaluation(
@@ -63,6 +63,7 @@ def run_evaluation(
         pred_labels,
         anisotropy=anisotropy,
         filetype=filetype,
+        prefix="split-",
         log_dir=log_dir,
         swc_log=swc_log,
         txt_log=txt_log,
@@ -75,6 +76,7 @@ def run_evaluation(
         target_labels,
         anisotropy=anisotropy,
         filetype=filetype,
+        prefix="merge-",
         log_dir=log_dir,
         swc_log=swc_log,
         txt_log=txt_log,
@@ -151,8 +153,8 @@ def compute_edge_accuracy(eval1, eval2, list_of_graphs):
         "list_of_graphs".
 
     """
-    e1 = 0 if eval1 is None else eval1.edge_cnt
-    e2 = 0 if eval2 is None else eval2.edge_cnt
+    e1 = eval1.edge_cnt
+    e2 = eval2.edge_cnt
     total_edges = count_edges(list_of_graphs)
     return 1 - (e1 + e2) / total_edges
 

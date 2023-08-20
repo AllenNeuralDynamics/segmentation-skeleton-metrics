@@ -12,8 +12,8 @@ import os
 import networkx as nx
 import numpy as np
 
-import aind_segmentation_evaluation.conversions as conv
-from aind_segmentation_evaluation import utils
+import segmentation_skeleton_metrics.conversions as conv
+from segmentation_skeleton_metrics import utils
 
 
 def make_entry(

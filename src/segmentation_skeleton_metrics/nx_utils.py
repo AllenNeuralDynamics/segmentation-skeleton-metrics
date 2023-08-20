@@ -34,29 +34,6 @@ def get_nbs(graph, i):
     return list(graph.neighbors(i))
 
 
-def get_label(labels, graph, i):
-    """
-    Gets voxel value of node "i".
-
-    Parameters
-    ----------
-    labels : dict
-        Sparse image volume.
-    graph : networkx.Graph
-        Graph which represents a neuron.
-    i : int
-        Node of "graph".
-
-    Returns
-    -------
-    int
-       Label of node "i".
-
-    """
-    xyz = get_xyz(graph, i)
-    return 0 if xyz not in labels.keys() else labels[xyz]
-
-
 def get_labels(labels, graph, edge):
     """
     Gets labels of both nodes contained in "edge" from segmentation

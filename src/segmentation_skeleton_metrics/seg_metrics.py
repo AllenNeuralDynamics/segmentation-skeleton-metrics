@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from tifffile import imwrite
 
-from aind_segmentation_evaluation import nx_utils, swc_utils, utils
+from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
 
 SUPPORTED_FILETYPES = ["tif", "n5"]
 
@@ -31,6 +31,7 @@ class SegmentationMetrics(ABC):
         labels,
         anisotropy=[1.0, 1.0, 1.0],
         filetype=None,
+        prefix="",
         log_dir=None,
         swc_log=False,
         txt_log=False,
@@ -67,6 +68,7 @@ class SegmentationMetrics(ABC):
             self.site_mask = np.zeros(labels.shape, dtype=bool)
 
         # Mistake logs
+        self.prefix = prefix
         self.log_dir = log_dir
         self.swc_log = swc_log
         self.txt_log = txt_log
@@ -114,6 +116,26 @@ class SegmentationMetrics(ABC):
             labels = np.unique(list(self.labels.keys()))
         return [label for label in labels if label != 0]
 
+    def get_label(self, graph, i):
+        """
+        Gets segmentation id of node "i".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph which represents a neuron.
+        i : int
+            Node of "graph".
+
+        Returns
+        -------
+        int
+           Label of node "i".
+
+        """
+        xyz = nx_utils.get_xyz(graph, i)
+        return 0 if xyz not in self.labels.keys() else self.labels[xyz]
+
     def count_edges(self):
         """
         Counts number of edges in "self.graphs".
@@ -152,7 +174,7 @@ class SegmentationMetrics(ABC):
         return (a != 0 and b != 0) and (a != b)
 
 
-    def log(self, graph, edges, prefix):
+    def log(self, graph, edges):
         """
         Logs xyz coordinate of mistake in a numpy.array
         or writes an swc file.
@@ -175,7 +197,7 @@ class SegmentationMetrics(ABC):
         if self.swc_log:
             red = " 1.0 0.0 0.0"
             entries = self.make_entries(graph, edges)
-            fn = prefix + str(self.site_cnt) + ".swc"
+            fn = self.prefix + str(self.site_cnt) + ".swc"
             path = os.path.join(self.swc_dir, fn)
             swc_utils.write_swc(path, entries, color=red)
 
@@ -186,13 +208,13 @@ class SegmentationMetrics(ABC):
                 labels = ""
                 for k in pair:
                     xyz += str(nx_utils.get_xyz(graph, k)) + ", "
-                    labels += str(nx_utils.get_label(self.labels, graph, k)) + ", "
+                    labels += str(self.get_label(graph, k)) + ", "
                 self.mistakes_log.append(xyz + labels)
 
     def make_entries(self, graph, edges):
         entries = []
         reindex = dict()
-        for (i, j) in edges:
+        for i, j in edges:
             if len(entries) < 1:
                 xyz = nx_utils.get_xyz(graph, i)
                 entries = [swc_utils.make_entry(xyz, 8, -1)]
