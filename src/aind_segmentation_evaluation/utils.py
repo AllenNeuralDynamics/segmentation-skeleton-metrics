@@ -8,7 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-
+import json
 import numpy as np
 import shutil
 import tensorstore as ts
@@ -171,3 +171,8 @@ def write_txt(path, contents):
     with open(path, 'w') as file:
         for line in contents:
             file.write(line + "\n")
+
+
+def write_json(path, contents):
+    with open(path, 'w') as f:
+        json.dump(contents, f)

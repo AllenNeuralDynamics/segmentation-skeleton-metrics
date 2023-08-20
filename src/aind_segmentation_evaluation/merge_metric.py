@@ -46,14 +46,14 @@ class MergeMetric(sm.SegmentationMetrics):
                 label_j = nx_utils.get_label(self.labels, graph, j)
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
-                    super().log_site(graph, (i, j), "split-")
+                    super().log(graph, (i, j), "merge_site-")
                     dfs_edges = self.explore_merge(graph, dfs_edges, i, label_i)
                     dfs_edges = self.explore_merge(graph, dfs_edges, j, label_j)
                 elif label_i == 0:
                     dfs_edges, collisions = self.mistake_search(graph, dfs_edges, i)
 
         # Save Results
-        super().write_results("merge_")
+        super().write_results("merges")
         self.edge_cnt = len(self.merged_edges) // 2
 
     def mistake_search(self, graph, dfs_edges, root):
@@ -103,7 +103,7 @@ class MergeMetric(sm.SegmentationMetrics):
                     if i != j and frozenset((i, j)) not in recorded:
                         self.site_cnt += 1
                         recorded.add(frozenset((i, j)))
-                        super().log_site(graph, (i, j), "merge_site-")
+                        super().log(graph, (i, j), "merge_site-")
         return dfs_edges, collisions
 
     def explore_merge(self, graph, dfs_edges, root, val):

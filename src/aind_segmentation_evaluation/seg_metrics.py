@@ -32,7 +32,6 @@ class SegmentationMetrics(ABC):
         anisotropy=[1.0, 1.0, 1.0],
         filetype=None,
         log_dir=None,
-        img_log=False,
         swc_log=False,
         txt_log=False,
     ):
@@ -69,15 +68,10 @@ class SegmentationMetrics(ABC):
 
         # Mistake logs
         self.log_dir = log_dir
-        self.img_log = img_log
         self.swc_log = swc_log
         self.txt_log = txt_log
         if self.log_dir is not None:
-            utils.rmdir(self.log_dir)
             utils.mkdir(self.log_dir)
-        if self.img_log:
-            assert type(labels) == np.array
-            self.edge_mask = np.zeros(labels.shape, dtype=bool)
         if self.swc_log:
             self.swc_dir = os.path.join(self.log_dir, "swc_files")
             utils.mkdir(self.swc_dir)
@@ -158,7 +152,7 @@ class SegmentationMetrics(ABC):
         return (a != 0 and b != 0) and (a != b)
 
 
-    def log_site(self, graph, edge, prefix):
+    def log(self, graph, edges, prefix):
         """
         Logs xyz coordinate of mistake in a numpy.array
         or writes an swc file.
@@ -177,31 +171,38 @@ class SegmentationMetrics(ABC):
         None
 
         """
-        # Get site info
-        xyz_i, xyz_j = nx_utils.get_edge_xyz(graph, edge)
-
-        # Log img info
-        self.site_mask[xyz_i] = 1
-        self.site_mask[xyz_j] = 1
-        if self.img_log:
-            self.edge_mask[xyz_i] = 1
-            self.edge_mask[xyz_j] = 1
-
         # Log swc info
         if self.swc_log:
             red = " 1.0 0.0 0.0"
-            list_of_entries = [swc_utils.make_entry(xyz_i, 10, -1)]
+            entries = self.make_entries(graph, edges)
             fn = prefix + str(self.site_cnt) + ".swc"
             path = os.path.join(self.swc_dir, fn)
-            swc_utils.write_swc(path, list_of_entries, color=red)
+            swc_utils.write_swc(path, entries, color=red)
 
         # Log txt info
         if self.txt_log:
-            label_i, label_j = nx_utils.get_labels(self.labels, graph, edge)
-            xyz = str(xyz_i) + ", " + str(xyz_j) + ", "
-            labels = str(label_i) + ", " + str(label_j)
-            self.mistakes_log.append(xyz + labels)
+            for pair in edges:
+                xyz = ""
+                labels = ""
+                for k in pair:
+                    xyz += str(nx_utils.get_xyz(graph, k)) + ", "
+                    labels += str(nx_utils.get_label(self.labels, graph, k)) + ", "
+                self.mistakes_log.append(xyz + labels)
 
+    def make_entries(self, graph, edges):
+        entries = []
+        reindex = dict()
+        for (i, j) in edges:
+            if len(entries) < 1:
+                xyz = nx_utils.get_xyz(graph, i)
+                entries = [swc_utils.make_entry(xyz, 8, -1)]
+                reindex[i] = 0
+
+            xyz = nx_utils.get_xyz(graph, j)
+            reindex[j] = len(entries)
+            entries.append(swc_utils.make_entry(xyz, 8, reindex[j]))
+        return entries
+            
     def write_results(self, fn):
         """
         Writes "site_mask" and "edge" mask to.
@@ -216,14 +217,6 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        # Write img log
-        if self.img_log:
-            site_path = os.path.join(self.log_dir, fn + "_sites.tif")
-            edges_path = os.path.join(self.log_dir, fn + "_edges.tif")
-            imwrite(site_path, self.site_mask)
-            imwrite(edges_path, self.edge_mask)
-
-        # Write txt log
         if self.txt_log:
             path = os.path.join(self.log_dir, fn + ".txt")
             utils.write_txt(path, self.mistakes_log)

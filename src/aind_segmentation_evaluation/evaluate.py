@@ -7,7 +7,7 @@ Created on Wed Jan 10 12:00:00 2023
 """
 
 import numpy as np
-
+import os
 from aind_segmentation_evaluation import utils
 from aind_segmentation_evaluation.merge_metric import MergeMetric
 from aind_segmentation_evaluation.split_metric import SplitMetric
@@ -21,9 +21,8 @@ def run_evaluation(
     anisotropy=[1.0, 1.0, 1.0],
     filetype=None,
     log_dir=None,
-    log_mistakes_in_img=False,
-    log_mistakes_in_swc=False,
-    log_mistakes_in_txt=False,
+    swc_log=False,
+    txt_log=False,
 ):
     """
     Evaluates a predicted segmentation in terms of the number of splits
@@ -55,6 +54,9 @@ def run_evaluation(
         evaluation.
 
     """
+    if log_dir is not None:
+        utils.rmdir(log_dir)
+    
     # Split evaluation
     split_evaluator = SplitMetric(
         target_swc_dir,
@@ -62,9 +64,8 @@ def run_evaluation(
         anisotropy=anisotropy,
         filetype=filetype,
         log_dir=log_dir,
-        img_log=log_mistakes_in_img,
-        swc_log=log_mistakes_in_swc,
-        txt_log=log_mistakes_in_txt,
+        swc_log=swc_log,
+        txt_log=txt_log,
     )
     split_evaluator.detect_mistakes()
 
@@ -75,9 +76,8 @@ def run_evaluation(
         anisotropy=anisotropy,
         filetype=filetype,
         log_dir=log_dir,
-        img_log=log_mistakes_in_img,
-        swc_log=log_mistakes_in_swc,
-        txt_log=log_mistakes_in_txt,
+        swc_log=swc_log,
+        txt_log=txt_log,
     )
     merge_evaluator.detect_mistakes()
 
@@ -93,6 +93,8 @@ def run_evaluation(
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator, merge_evaluator, target_graphs
     )
+    
+    utils.write_json(os.path.join(log_dir, "stats.json"), stats)
     return stats
 
 
