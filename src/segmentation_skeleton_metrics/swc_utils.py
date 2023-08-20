@@ -116,7 +116,9 @@ def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])
-                xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+                xyz = read_xyz(
+                    parts[2:5], anisotropy=anisotropy, offset=offset
+                )
                 graph.add_node(child, xyz=xyz, radius=parts[-2])
                 if parent != -1:
                     graph.add_edge(parent, child)

@@ -13,6 +13,7 @@ import segmentation_skeleton_metrics.seg_metrics as sm
 from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
 from random import sample
 
+
 class SplitMetric(sm.SegmentationMetrics):
     """
     Class that detects splits in a predicted segmentation
@@ -85,7 +86,7 @@ class SplitMetric(sm.SegmentationMetrics):
         # Check for split
         recorded = list()
         if len(collisions) > 1:
-            root = sample(list(collisions.values()), 1)[0] 
+            root = sample(list(collisions.values()), 1)[0]
             for i in collisions.values():
                 if i != root:
                     self.site_cnt += 1

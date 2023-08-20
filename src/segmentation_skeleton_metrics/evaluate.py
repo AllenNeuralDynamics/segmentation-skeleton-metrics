@@ -56,7 +56,7 @@ def run_evaluation(
     """
     if log_dir is not None:
         utils.rmdir(log_dir)
-    
+
     # Split evaluation
     split_evaluator = SplitMetric(
         target_swc_dir,
@@ -95,7 +95,7 @@ def run_evaluation(
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator, merge_evaluator, target_graphs
     )
-    
+
     utils.write_json(os.path.join(log_dir, "stats.json"), stats)
     return stats
 

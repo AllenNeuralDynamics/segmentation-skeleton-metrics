@@ -14,6 +14,7 @@ from random import sample
 def sample_node(graph):
     return sample(list(graph.nodes), 1)[0]
 
+
 def get_nbs(graph, i):
     """
     Gets neighbors of node "i".

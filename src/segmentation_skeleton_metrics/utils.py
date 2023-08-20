@@ -65,9 +65,7 @@ def check_edge(set_of_edges, edge):
         Indication of whether "edge" is contained in "set_of_edges".
 
     """
-    edge_rev = list(edge)
-    edge_rev.reverse()
-    if edge in set_of_edges or edge_rev in set_of_edges:
+    if edge in set_of_edges or (edge[1], edge[0]) in set_of_edges:
         return True
     else:
         return False
@@ -168,11 +166,11 @@ def read_tif(path):
 
 
 def write_txt(path, contents):
-    with open(path, 'w') as file:
+    with open(path, "w") as file:
         for line in contents:
             file.write(line + "\n")
 
 
 def write_json(path, contents):
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         json.dump(contents, f)

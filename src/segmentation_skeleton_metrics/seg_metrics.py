@@ -173,7 +173,6 @@ class SegmentationMetrics(ABC):
         """
         return (a != 0 and b != 0) and (a != b)
 
-
     def log(self, graph, edges):
         """
         Logs xyz coordinate of mistake in a numpy.array
@@ -224,7 +223,7 @@ class SegmentationMetrics(ABC):
             reindex[j] = len(entries)
             entries.append(swc_utils.make_entry(xyz, 8, reindex[j]))
         return entries
-            
+
     def write_results(self, fn):
         """
         Writes "site_mask" and "edge" mask to.
@@ -242,7 +241,6 @@ class SegmentationMetrics(ABC):
         if self.txt_log:
             path = os.path.join(self.log_dir, fn + ".txt")
             utils.write_txt(path, self.mistakes_log)
-
 
     @abstractmethod
     def detect_mistakes(self):

@@ -22,6 +22,7 @@ class MergeMetric(sm.SegmentationMetrics):
     Class that evaluates the quality of a segmentation in terms of the
     number of merges.
     """
+
     def detect_mistakes(self):
         """
         Detects merges in the predicted segmentation.
@@ -46,8 +47,12 @@ class MergeMetric(sm.SegmentationMetrics):
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
                     super().log(graph, [(i, j)])
-                    dfs_edges = self.explore_merge(graph, dfs_edges, i, label_i)
-                    dfs_edges = self.explore_merge(graph, dfs_edges, j, label_j)
+                    dfs_edges = self.explore_merge(
+                        graph, dfs_edges, i, label_i
+                    )
+                    dfs_edges = self.explore_merge(
+                        graph, dfs_edges, j, label_j
+                    )
                 elif label_i == 0:
                     dfs_edges = self.mistake_search(graph, dfs_edges, i)
 
@@ -94,7 +99,7 @@ class MergeMetric(sm.SegmentationMetrics):
         # Check for split
         recorded = list()
         if len(collisions) > 1:
-            root = sample(list(collisions.values()), 1)[0] 
+            root = sample(list(collisions.values()), 1)[0]
             for i in collisions.values():
                 if i != root:
                     self.site_cnt += 1
