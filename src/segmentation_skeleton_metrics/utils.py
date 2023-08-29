@@ -7,10 +7,10 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
 import json
-import numpy as np
+import os
 import shutil
+
 import tensorstore as ts
 import zarr
 from tifffile import imread
@@ -18,6 +18,21 @@ from tifffile import imread
 
 # -- os utils ---
 def listdir(path, ext=None):
+    """
+    Lists files in directory with "ext" if provided.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory.
+    ext : str, optional
+        Extension of files of interest.
+
+    Returns
+    -------
+    list[str]
+        List of files in directory with "ext" if provided.
+    """
     if ext is None:
         return [f for f in os.listdir(path)]
     else:
@@ -43,65 +58,76 @@ def mkdir(path):
 
 
 def rmdir(path):
+    """
+    Removes a directory at "path" if it already exist.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory.
+
+    Returns
+    -------
+    None.
+
+    """
     if os.path.exists(path):
         shutil.rmtree(path)
 
 
 # --- data structure utils ---
-def check_edge(set_of_edges, edge):
+def check_edge(edge_list, edge):
     """
-    Checks whether "edge" is in "set_of_edges".
+    Checks if "edge" is in "edge_list".
 
     Parameters
     ----------
-    set_of_edges : set
-        Set of edges.
+    edge_list : list or set
+        List or set of edges.
     edge : tuple
         Edge.
 
     Returns
     -------
     bool : bool
-        Indication of whether "edge" is contained in "set_of_edges".
+        Indication of whether "edge" is contained in "edge_list".
 
     """
-    if edge in set_of_edges or (edge[1], edge[0]) in set_of_edges:
+    if edge in edge_list or (edge[1], edge[0]) in edge_list:
         return True
     else:
         return False
 
 
-def remove_edge(set_of_edges, edge):
+def remove_edge(edge_list, edge):
     """
-    Checks whether "edge" is in "set_of_edges" and removes it.
+    Checks whether "edge" is in "edge_list" and removes it.
 
     Parameters
     ----------
-    set_of_edges : set
-        Set of edges.
+    edge_list : list or set
+        List or set of edges.
     edge : tuple
         Edge.
 
     Returns
     -------
-    set_of_edges : set
-        Updated set of edges such that "edge" is removed if it was
-        contained in "set_of_edges".
+    edge_list : list or set
+        Updated list or set of edges with "edge" removed if it was contained
+        in "edge_list".
 
     """
-    edge_reverse = list(edge)
-    edge_reverse.reverse()
-    if edge_reverse in set_of_edges:
-        set_of_edges.remove(edge_reverse)
-    elif edge in set_of_edges:
-        set_of_edges.remove(edge)
-    return set_of_edges
+    if edge in edge_list:
+        edge_list.remove(edge)
+    elif (edge[1], edge[0]) in edge_list:
+        edge_list.remove((edge[1], edge[0]))
+    return edge_list
 
 
 # --- io utils ---
 def read_tensorstore(path):
     """
-    Uploads segmentation mask stored as a directory of shard files.
+    Reads neuroglancer_precomputed file at "path".
 
     Parameters
     ----------
@@ -110,8 +136,8 @@ def read_tensorstore(path):
 
     Returns
     -------
-    sparse_volume : dict
-        Sparse image volume.
+    ts.TensorStore
+        Image volume.
 
     """
     dataset_ts = ts.open(
@@ -120,20 +146,12 @@ def read_tensorstore(path):
             "kvstore": {"driver": "file", "path": path},
         }
     ).result()
-    dataset_ts = dataset_ts[ts.d[:].transpose[::-1]]
-    volume_ts = dataset_ts[ts.d["channel"][0]]
-    sparse_volume = dict()
-    for x in range(volume_ts.shape[0]):
-        plane_x = np.array(volume_ts[x, :, :].read().result())
-        y, z = np.nonzero(plane_x)
-        for i in range(len(y)):
-            sparse_volume[(x, y[i], z[i])] = plane_x[y[i], z[i]]
-    return sparse_volume
+    return dataset_ts[ts.d["channel"][0]]
 
 
 def read_n5(path):
     """
-    Uploads n5 file.
+    Reads n5 file at "path".
 
     Parameters
     ----------
@@ -150,12 +168,12 @@ def read_n5(path):
 
 def read_tif(path):
     """
-    Uploads tif file.
+    Reads tif file at "path".
 
     Parameters
     ----------
     path : str
-        Path to tif file.
+        Path to tif.
 
     Returns
     -------
@@ -166,11 +184,41 @@ def read_tif(path):
 
 
 def write_txt(path, contents):
+    """
+    Writes "contents" to a .txt file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path that .txt file is written to.
+    contents : list[str]
+        Contents to be written to .txt file.
+
+    Returns
+    -------
+    None
+
+    """
     with open(path, "w") as file:
         for line in contents:
             file.write(line + "\n")
 
 
 def write_json(path, contents):
+    """
+    Writes "contents" to a .json file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path that .txt file is written to.
+    contents : dict
+        Contents to be written to .txt file.
+
+    Returns
+    -------
+    None
+
+    """
     with open(path, "w") as f:
         json.dump(contents, f)

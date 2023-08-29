@@ -7,14 +7,12 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
+from random import sample
 
 import networkx as nx
-import numpy as np
-from more_itertools import zip_broadcast
 
 import segmentation_skeleton_metrics.seg_metrics as sm
-from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
+from segmentation_skeleton_metrics import nx_utils, utils
 
 
 class MergeMetric(sm.SegmentationMetrics):
@@ -38,7 +36,6 @@ class MergeMetric(sm.SegmentationMetrics):
         """
         self.merged_edges = set()
         for graph in self.graphs:
-            target_label = -1
             dfs_edges = list(nx.dfs_edges(graph))
             while len(dfs_edges) > 0:
                 (i, j) = dfs_edges.pop(0)

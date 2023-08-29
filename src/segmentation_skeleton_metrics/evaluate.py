@@ -6,8 +6,10 @@ Created on Wed Jan 10 12:00:00 2023
 
 """
 
-import numpy as np
 import os
+
+import numpy as np
+
 from segmentation_skeleton_metrics import utils
 from segmentation_skeleton_metrics.merge_metric import MergeMetric
 from segmentation_skeleton_metrics.split_metric import SplitMetric
@@ -31,21 +33,29 @@ def run_evaluation(
     Parameters
     ----------
     target_swc_dir : str
-        Path to directory of swc files corresponding to the target segmentation.
-    target_labels : np.array, dict, or str
-        Target segmentation mask or path to target segmentation.
+        Path to directory of swc files of the target segmentation.
+    target_labels : np.array, ts.TensorStore, dict, or str
+        Target segmentation mask or path to it.
     pred_swc_dir : str
-        Path to directory of swc files corresponding to the predicted
+        Path to directory of swc files of the predicted
         segmentation.
-    pred_labels : np.array, dict, or str
-        Predicted segmentation mask or path to predicted segmentation.
+    pred_labels : np.array, ts.TensorStore, dict, or str
+        Predicted segmentation mask or path to it.
     anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for (x, y, z) which is
+        Image to real-world coordinates scaling factor for (x, y, z) which is
         applied to swc files.
     filetype : str, optional
         File type of target_labels and pred_labels if path is provided.
-        Supported file types include tif and n5. The default is None.
-    ...
+        The default is None.
+    log_dir : str, optional
+        Directory where logged information (i.e. swc log and txt log)
+        is saved.
+    swc_log : bool, optional
+        Indicates whether to store swc files that indicates where mistakes are
+        located.
+    txt_log : bool, optional
+        Indicates whether to store a txt files that contains (x, y, z)
+        coordinates of where mistakes are located.
 
     Returns
     -------

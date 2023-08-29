@@ -7,11 +7,10 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
 import networkx as nx
+import random
 import segmentation_skeleton_metrics.seg_metrics as sm
-from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
-from random import sample
+from segmentation_skeleton_metrics import nx_utils, utils
 
 
 class SplitMetric(sm.SegmentationMetrics):
@@ -25,7 +24,7 @@ class SplitMetric(sm.SegmentationMetrics):
         Detects splits in the predicted segmentation.
 
         Parameters
-        -------
+        ----------
         None
 
         Returns
@@ -43,56 +42,60 @@ class SplitMetric(sm.SegmentationMetrics):
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
                     super().log(graph, [(i, j)])
-                elif label_i == 0:
-                    dfs_edges = self.mistake_search(graph, dfs_edges, i)
+                elif label_j == 0:
+                    dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
+        print("# Splits:", self.site_cnt)
+        print("% Omit:", self.edge_cnt / self.count_edges())
         super().write_results("splits")
 
-    def mistake_search(self, graph, dfs_edges, root):
+    def mistake_search(self, graph, dfs_edges, nb, root):
         """
         Determines whether complex mistake is a split.
 
         Parameters
         ----------
         graph : networkx.Graph
-            Graph with potential split.
+            Graph with possible split at "root".
         dfs_edges : list[tuple]
-            List of edges in order wrt a depth first search.
+            List of edges to be processed for mistake detection.
         root : int
-            Edge where possible split starts.
+            Node where possible split starts.
 
         Returns
         -------
         list[tuple].
-            Updated "dfs_edges".
+            Updated "dfs_edges" with visited edges removed.
 
         """
         # Search
         queue = [root]
-        collisions = dict()
         visited = set()
+        collisions = dict()
         while len(queue) > 0:
             i = queue.pop(0)
-            for j in nx_utils.get_nbs(graph, i):
-                label_j = self.get_label(graph, j)
-                if frozenset([i, j]) in visited:
-                    continue
-                elif label_j != 0 and label_j not in collisions.keys():
-                    collisions[label_j] = j
-                else:
-                    queue.append(j)
-                visited.add(frozenset([i, j]))
-                dfs_edges = utils.remove_edge(dfs_edges, (i, j))
+            label_i = self.get_label(graph, i)
+            visited.add(i)
+            if label_i != 0:
+                collisions[label_i] = i
+            else:
+                nbs =  nx_utils.get_nbs(graph, i)
+                for j in [j for j in nbs if j not in visited]:
+                    if utils.check_edge(dfs_edges, (i, j)):
+                        queue.append(j)
+                        dfs_edges = utils.remove_edge(dfs_edges, (i, j))
+                    elif j == nb:
+                        queue.append(j)
+
+        self.edge_cnt += len(visited)
 
         # Check for split
         recorded = list()
         if len(collisions) > 1:
-            root = sample(list(collisions.values()), 1)[0]
+            k = random.sample(list(collisions.values()), 1)[0]
             for i in collisions.values():
-                if i != root:
+                if i != k:
                     self.site_cnt += 1
-                    recorded.append((root, i))
-
-        if len(collisions) > 1:
+                    recorded.append((k, i))
             super().log(graph, list(recorded))
-        self.edge_cnt += len(visited)
+        
         return dfs_edges

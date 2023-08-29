@@ -11,7 +11,7 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from tifffile import imwrite
+import tensorstore as ts
 
 from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
 
@@ -53,19 +53,16 @@ class SegmentationMetrics(ABC):
 
         """
         # Graph and labels
+        self.anisotropy = anisotropy
         self.graphs = swc_utils.dir_to_graphs(swc_dir, anisotropy=anisotropy)
         if type(labels) is str:
-            self.labels = self.init_labels(pred_labels, filetype)
+            self.labels = self.init_labels(labels, filetype)
         else:
             self.labels = labels
 
         # Mistake trackers
         self.site_cnt = 0
         self.edge_cnt = 0
-        if type(labels) == dict:
-            self.site_mask = dict()
-        else:
-            self.site_mask = np.zeros(labels.shape, dtype=bool)
 
         # Mistake logs
         self.prefix = prefix
@@ -95,12 +92,10 @@ class SegmentationMetrics(ABC):
         Returns
         -------
         dict
-            Sparse image volume of segmentation mask.
+            Image volume.
 
         """
-        assert (
-            filetype is not None
-        ), "Must provide filetype to upload image volumes!"
+        assert filetype is not None, "Must provide filetype to upload image!"
         assert filetype in SUPPORTED_FILETYPES, "Filetype is not supported!"
         if filetype == "tensorstore":
             return utils.read_tensorstore(path)
@@ -110,6 +105,19 @@ class SegmentationMetrics(ABC):
             return utils.read_tif(path)
 
     def get_labels(self):
+        """
+        Gets list of all unique labels in "self.labels".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        list[int]
+            List of all unique labels in "self.labels".
+
+        """
         if type(self.labels) == np.array:
             labels = np.unique(self.labels)
         else:
@@ -118,14 +126,14 @@ class SegmentationMetrics(ABC):
 
     def get_label(self, graph, i):
         """
-        Gets segmentation id of node "i".
+        Gets label of node "i".
 
         Parameters
         ----------
         graph : networkx.Graph
             Graph which represents a neuron.
         i : int
-            Node of "graph".
+            Node in "graph".
 
         Returns
         -------
@@ -133,12 +141,33 @@ class SegmentationMetrics(ABC):
            Label of node "i".
 
         """
-        xyz = nx_utils.get_xyz(graph, i)
-        return 0 if xyz not in self.labels.keys() else self.labels[xyz]
+        return self._get_label(nx_utils.get_xyz(graph, i))
+
+    def _get_label(self, xyz):
+        """
+        Gets label at image coordinates "xyz".
+
+        Parameters
+        ----------
+        xyz : tuple[int]
+            Coordinates that index into "self.labels".
+
+        Returns
+        -------
+        int
+           Label at image coordinates "xyz".
+
+        """
+        if type(self.labels) == dict:
+            return 0 if xyz not in self.labels.keys() else self.labels[xyz]
+        elif type(self.labels) == ts.TensorStore:
+            return int(self.labels[xyz].read().result())
+        else:
+            return self.labels[xyz]
 
     def count_edges(self):
         """
-        Counts number of edges in "self.graphs".
+        Counts number of edges in all graphs in "self.graphs".
 
         Parameters
         ----------
@@ -146,7 +175,7 @@ class SegmentationMetrics(ABC):
 
         Returns
         -------
-        None
+        int
 
         """
         total_edges = 0
@@ -173,65 +202,81 @@ class SegmentationMetrics(ABC):
         """
         return (a != 0 and b != 0) and (a != b)
 
-    def log(self, graph, edges):
+    def log(self, graph, edge_list):
         """
-        Logs xyz coordinate of mistake in a numpy.array
-        or writes an swc file.
+        Logs xyz coordinates of mistake and swc ids in a list if "txt_log"
+        or writes an swc file if "log_swc".
 
         Parameters
         ----------
         graph : networkx.Graph
-            Graph that represents a neuron.
-        node_tuple : tuple
-            Node of "graph".
-        fn : str
-            Filename of swc that will be written.
+            Graph that contains edges in "edge_list".
+        edge_list : list[tuple]
+            Edges that correspond to a mistake.
 
         Returns
         -------
         None
 
         """
-        # Log swc info
         if self.swc_log:
-            red = " 1.0 0.0 0.0"
-            entries = self.make_entries(graph, edges)
-            fn = self.prefix + str(self.site_cnt) + ".swc"
-            path = os.path.join(self.swc_dir, fn)
-            swc_utils.write_swc(path, entries, color=red)
+            self.swc_logger(graph, edge_list)
 
-        # Log txt info
         if self.txt_log:
-            for pair in edges:
-                xyz = ""
-                labels = ""
-                for k in pair:
-                    xyz += str(nx_utils.get_xyz(graph, k)) + ", "
-                    labels += str(self.get_label(graph, k)) + ", "
-                self.mistakes_log.append(xyz + labels)
+            self.txt_logger(graph, edge_list)
 
-    def make_entries(self, graph, edges):
-        entries = []
-        reindex = dict()
-        for i, j in edges:
-            if len(entries) < 1:
-                xyz = nx_utils.get_xyz(graph, i)
-                entries = [swc_utils.make_entry(xyz, 8, -1)]
-                reindex[i] = 0
+    def swc_logger(self, graph, edge_list):
+        """
+        Logs mistakes in an swc file.
 
-            xyz = nx_utils.get_xyz(graph, j)
-            reindex[j] = len(entries)
-            entries.append(swc_utils.make_entry(xyz, 8, reindex[j]))
-        return entries
+        Parameters
+        ----------
+        graph : networkx.graph
+            Graph that contains edges in "edge_list".
+        edge_list : list[tuple]
+            Edges that correspond to a mistake.
+
+        Returns
+        -------
+        None
+
+        """
+        red = " 1.0 0.0 0.0"
+        entries = swc_utils.make_entries(graph, edge_list, self.anisotropy)
+        fn = self.prefix + str(self.site_cnt) + ".swc"
+        path = os.path.join(self.swc_dir, fn)
+        swc_utils.write_swc(path, entries, color=red)
+
+    def txt_logger(self, graph, edge_list):
+        """
+        Logs xyz coordinates of mistake and swc ids in a list.
+
+        Parameters
+        ----------
+        graph : networkx.graph
+            Graph that contains edges in "edge_list".
+        edge_list : list[tuple]
+            Edges that correspond to a mistake.
+        """
+        for pair in edge_list:
+            xyz_str = ""
+            labels_str = ""
+            for k in pair:
+                xyz = swc_utils.node_to_world(graph, k, self.anisotropy)
+                xyz_str += str(xyz) + ", "
+                labels_str += str(self.get_label(graph, k)) + ", "
+            self.mistakes_log.append(xyz_str + labels_str)
 
     def write_results(self, fn):
         """
-        Writes "site_mask" and "edge" mask to.
+        Writes "self.txt_log" to local machine at "self.log_dir".
 
         Parameters
         ----------
         fn : str
-            Filename.
+            Filename of text log.
+        edge_list : list[tuple]
+            List of edges that correspond to a mistakes.
 
         Returns
         -------

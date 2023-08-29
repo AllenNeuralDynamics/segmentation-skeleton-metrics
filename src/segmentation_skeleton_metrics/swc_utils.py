@@ -12,48 +12,113 @@ import os
 import networkx as nx
 import numpy as np
 
-import segmentation_skeleton_metrics.conversions as conv
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics import nx_utils, utils
 
 
-def make_entry(
-    xyz, radius, parent, anisotropy=[1.0, 1.0, 1.0], shift=[0, 0, 0]
-):
+def make_entries(graph, edge_list, anisotropy):
     """
-    Generates text (i.e. "entry") that will be written to an swc file.
+    Makes a list of entries to be written in an swc file.
 
     Parameters
     ----------
-    xyz : tuple
-        (x,y,z) coordinates of node corresponding to this entry.
-    radius : int
-        Size of node written to swc file.
-    parent : int
-        Parent of node corresponding to this entry.
-    anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors which are
-        applied to "xyz".
+    graph : networkx.Graph
+        Graph that edges in "edge_list" belong to.
+    edge_list : list[tuple[int]]
+        List of edges to be written to an swc file.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
 
     Returns
     -------
-    entry : str
-        Text (i.e. "entry") that will be written to an swc file.
+    list[str]
+        List of swc file entries to be written.
 
     """
-    entry = conv.to_world(xyz, anisotropy)
-    entry.extend([radius, int(parent)])
-    return entry
+    reindex = dict()
+    for i, j in edge_list:
+        if len(reindex) < 1:
+            entry, reindex = make_entry(graph, i, -1, reindex, anisotropy)
+            entry_list = [entry]
+        entry, reindex = make_entry(graph, j, reindex[i], reindex, anisotropy)
+        entry_list.append(entry)
+    return entry_list
 
 
-def write_swc(path_to_swc, list_of_entries, color=None):
+def make_entry(graph, i, parent, reindex, anisotropy):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that "i" and "parent" belong to.
+    i : int
+        Node that entry corresponds to.
+    parent : int
+         Parent of node "i".
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    """
+    reindex[i] = len(reindex) + 1
+    x, y, z = tuple(map(str, node_to_world(graph, i, anisotropy)))
+    return [x, y, z, 8, parent], reindex
+
+
+def node_to_world(graph, i, anisotropy):
+    """
+    Converts "xyz" from image coordinates to real-world coordinates.
+
+    Parameters
+    ----------
+    i : int
+        Node to be querried for (x, y, z) coordinates which are then converted
+        to read-world coordinates.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    Returns
+    -------
+    list[float]
+        Transformed coordinates.
+
+    """
+    return to_world(nx_utils.get_xyz(graph, i), anisotropy)
+
+
+def to_world(xyz, anisotropy):
+    """
+    Converts "xyz" from image coordinates to real-world coordinates.
+
+    Parameters
+    ----------
+    xyz : tuple or list
+        Coordinates to be transformed.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    Returns
+    -------
+    list[float]
+        Transformed coordinates.
+
+    """
+    return [xyz[i] * anisotropy[i] for i in range(3)]
+
+
+def write_swc(path, entry_list, color=None):
     """
     Writes an swc file.
 
     Parameters
     ----------
-    path_to_swc : str
-        Path that swc will be written to.
-    list_of_entries : list[list[int]]
+    path : str
+        Path on local machine that swc file will be written to.
+    entry_list : list[list]
         List of entries that will be written to an swc file.
     color : str, optional
         Color of nodes. The default is None.
@@ -63,13 +128,13 @@ def write_swc(path_to_swc, list_of_entries, color=None):
     None.
 
     """
-    with open(path_to_swc, "w") as f:
+    with open(path, "w") as f:
         if color is not None:
             f.write("# COLOR" + color)
         else:
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
-        for i, entry in enumerate(list_of_entries):
+        for i, entry in enumerate(entry_list):
             f.write(str(i + 1) + " " + str(0) + " ")
             for x in entry:
                 f.write(str(x) + " ")
@@ -84,10 +149,8 @@ def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
     ----------
     swc_dir : str
         Path to directory containing swc files.
-    shape : tuple
-        Dimensions of image volume in the order of (x, y, z).
     anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for (x, y, z) which is
+        Image to real-world coordinates scaling factors for (x, y, z) that is
         applied to swc files.
 
     Returns
@@ -106,8 +169,27 @@ def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
 
 
 def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
-    offset = [0.0, 0.0, 0.0]
+    """
+    Reads an swc file and constructs an undirected graph from it.
+
+    Parameters
+    ----------
+    path : str
+        Path to swc file to be read.
+    graph : networkx.Graph
+        Graph that info from swc file will be stored as a graph.
+    anisotropy : list[float], optional
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    Returns
+    -------
+    networkx.Graph
+        Graph constructed from an swc file.
+
+    """
     with open(path, "r") as f:
+        offset = [0, 0, 0]
         for line in f.readlines():
             if line.startswith("# OFFSET"):
                 parts = line.split()
@@ -125,7 +207,7 @@ def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
     return graph
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[1.0, 1.0, 1.0]):
+def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     """
     Reads the (x,y,z) coordinates from an swc file, then reverses and scales
     them.
@@ -135,14 +217,19 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[1.0, 1.0, 1.0]):
     xyz : str
         (x,y,z) coordinates.
     anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for [x, y, z] due to
-        anistropy of the microscope.
+        Image to real-world coordinates scaling factors applied to "xyz".
+    offset : list[int], optional
+        Offset of (x, y, z) coordinates in swc file.
 
     Returns
     -------
-    list
-        The (x,y,z) coordinates from an swc file.
+    tuple
+        The (x,y,z) coordinates of an entry from an swc file in real-world
+        coordinates.
 
     """
-    xyz = [int(float(xyz[i]) * anisotropy[i] + offset[i]) for i in range(3)]
+    xyz = [
+        int(np.round(float(xyz[i]) / anisotropy[i] + offset[i]))
+        for i in range(3)
+    ]
     return tuple(xyz)
