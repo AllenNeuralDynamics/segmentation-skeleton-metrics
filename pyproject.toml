@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aind_segmentation_evaluation"
+name = "segmentation_skeleton_metrics"
 description="Python package for evaluating neuron segmentations in terms of the number of splits and merges"
 authors = [{name="Anna Grim", email="anna.grim@alleninstitute.org"}]
 license = {text = "MIT"}
@@ -39,7 +39,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "aind_segmentation_evaluation.__version__"}
+version = {attr = "segmentation_skeleton_metrics.__version__"}
 readme = {file = ["README.md"]}
 
 [tool.black]
@@ -65,7 +65,7 @@ exclude = '''
 
 [tool.coverage.run]
 omit = ["*__init__*"]
-source = ["aind_segmentation_evaluation", "tests"]
+source = ["segmentation_skeleton_metrics", "tests"]
 
 [tool.coverage.report]
 exclude_lines = ["if __name__ == .__main__.:"]
