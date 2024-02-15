@@ -98,6 +98,7 @@ def run_evaluation(
         swc_log=swc_log,
         txt_log=txt_log,
     )
+
     # merge_evaluator.detect_mistakes()
 
     # Compute stats
@@ -106,7 +107,6 @@ def run_evaluation(
     stats.update(compute_stats(split_evaluator, target_graphs, "split"))
     stats.update(compute_stats(merge_evaluator, target_graphs, "merge"))
     stats["num_mistakes"] = split_evaluator.site_cnt + merge_evaluator.site_cnt
-    stats["wgt_mistakes"] = split_evaluator.site_cnt + 3 * merge_evaluator.site_cnt
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator, merge_evaluator, target_graphs
     )

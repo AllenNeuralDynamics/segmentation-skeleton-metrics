@@ -49,6 +49,7 @@ class SplitMetric(sm.SegmentationMetrics):
                 elif self.valid_ids is not None:
                     if label_j not in self.valid_ids:
                         dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
+
         print("# Splits:", self.site_cnt)
         print("% Omit:", self.edge_cnt / self.count_edges())
         super().write_results("splits")
@@ -86,6 +87,7 @@ class SplitMetric(sm.SegmentationMetrics):
                 collisions[label_i] = i
             else:
                 nbs = nx_utils.get_nbs(graph, i)
+
                 for j in [j for j in nbs if j not in visited]:
                     if utils.check_edge(dfs_edges, (i, j)):
                         queue.append(j)
@@ -104,5 +106,4 @@ class SplitMetric(sm.SegmentationMetrics):
                     self.site_cnt += 1
                     recorded.append((k, i))
             super().log(graph, list(recorded))
-
         return dfs_edges
