@@ -27,7 +27,7 @@ class SegmentationMetrics(ABC):
 
     def __init__(
         self,
-        swc_dir,
+        swc_path,
         labels,
         anisotropy=[1.0, 1.0, 1.0],
         filetype=None,
@@ -35,16 +35,13 @@ class SegmentationMetrics(ABC):
         log_dir=None,
         swc_log=False,
         txt_log=False,
+        valid_ids=None,
     ):
         """
-        Constructs object that evaluates a segmentation mask.
+        Constructs object that evaluates a predicted segmentation.
 
         Parameters
         ----------
-        graph : list[networkx.Graph]
-            List of graphs where each graph represents a neuron.
-        labels : dict
-            Segmentation mask.
         ...
 
         Returns
@@ -54,7 +51,13 @@ class SegmentationMetrics(ABC):
         """
         # Graph and labels
         self.anisotropy = anisotropy
-        self.graphs = swc_utils.dir_to_graphs(swc_dir, anisotropy=anisotropy)
+        self.valid_ids = valid_ids
+        print(swc_path)
+        if os.path.isdir(swc_path):
+            self.graphs = swc_utils.dir_to_graphs(swc_path, anisotropy=anisotropy)
+        else:
+            self.graphs = [swc_utils.file_to_graph(swc_path, anisotropy=anisotropy)]
+
         if type(labels) is str:
             self.labels = self.init_labels(labels, filetype)
         else:
@@ -200,6 +203,9 @@ class SegmentationMetrics(ABC):
             Indicates whether there is a mistake.
 
         """
+        if self.valid_ids is not None:
+            if a not in self.valid_ids or b not in self.valid_ids:
+                return False
         return (a != 0 and b != 0) and (a != b)
 
     def log(self, graph, edge_list):

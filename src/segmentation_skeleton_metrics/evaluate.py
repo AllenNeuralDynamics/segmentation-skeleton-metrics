@@ -67,6 +67,12 @@ def run_evaluation(
     if log_dir is not None:
         utils.rmdir(log_dir)
 
+    # Determine valid ids
+    valid_ids = set()
+    for f in utils.listdir(pred_swc_dir, ext=".swc"):
+        f = int(f.replace(".swc", ""))
+        valid_ids.add(f)
+
     # Split evaluation
     split_evaluator = SplitMetric(
         target_swc_dir,
@@ -77,6 +83,7 @@ def run_evaluation(
         log_dir=log_dir,
         swc_log=swc_log,
         txt_log=txt_log,
+        valid_ids=valid_ids,
     )
     split_evaluator.detect_mistakes()
 
@@ -91,7 +98,8 @@ def run_evaluation(
         swc_log=swc_log,
         txt_log=txt_log,
     )
-    merge_evaluator.detect_mistakes()
+
+    # merge_evaluator.detect_mistakes()
 
     # Compute stats
     stats = dict()
@@ -99,9 +107,6 @@ def run_evaluation(
     stats.update(compute_stats(split_evaluator, target_graphs, "split"))
     stats.update(compute_stats(merge_evaluator, target_graphs, "merge"))
     stats["num_mistakes"] = split_evaluator.site_cnt + merge_evaluator.site_cnt
-    stats["wgt_mistakes"] = (
-        split_evaluator.site_cnt + 3 * merge_evaluator.site_cnt
-    )
     stats["edge_accuracy"] = compute_edge_accuracy(
         split_evaluator, merge_evaluator, target_graphs
     )

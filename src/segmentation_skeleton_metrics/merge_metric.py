@@ -44,12 +44,8 @@ class MergeMetric(sm.SegmentationMetrics):
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
                     super().log(graph, [(i, j)])
-                    dfs_edges = self.explore_merge(
-                        graph, dfs_edges, i, label_i
-                    )
-                    dfs_edges = self.explore_merge(
-                        graph, dfs_edges, j, label_j
-                    )
+                    dfs_edges = self.explore_merge(graph, dfs_edges, i, label_i)
+                    dfs_edges = self.explore_merge(graph, dfs_edges, j, label_j)
                 elif label_i == 0:
                     dfs_edges = self.mistake_search(graph, dfs_edges, i)
 
