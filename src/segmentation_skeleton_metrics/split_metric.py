@@ -10,7 +10,7 @@ Created on Wed Dec 21 19:00:00 2022
 import networkx as nx
 import random
 import segmentation_skeleton_metrics.seg_metrics as sm
-from segmentation_skeleton_metrics import nx_utils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils, utils
 from toolbox.utils import progress_bar
 
 
@@ -34,27 +34,39 @@ class SplitMetric(sm.SegmentationMetrics):
 
         """
         for t, graph in enumerate(self.graphs):
+            # Initializations
             progress_bar(t, len(self.graphs))
-            root = nx_utils.sample_node(graph)
+            pred_graph = graph.copy()
+            pred_graph.graph.update({"pred_ids": set()})
+
+            # Run dfs
+            root = gutils.sample_node(graph)
             dfs_edges = list(nx.dfs_edges(graph, source=root))
             while len(dfs_edges) > 0:
+                # Visit edge
                 (i, j) = dfs_edges.pop(0)
-                label_i = self.get_label(graph, i)
-                label_j = self.get_label(graph, j)
+                label_i, label_j = self.get_labels(graph, i, j)
                 if super().is_mistake(label_i, label_j):
                     self.site_cnt += 1
+                    pred_graph = upd_pred_edge(pred_graph, i, j)
                     super().log(graph, [(i, j)])
                 elif label_j == 0:
-                    dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
-                elif self.valid_ids is not None:
-                    if label_j not in self.valid_ids:
-                        dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
+                    dfs_edges, pred_graph = self.mistake_search(
+                        graph, pred_graph, dfs_edges, i, j
+                    )
+
+                # Add label_j to pred_graph
+                pred_graph = upd_pred_node(pred_graph, j, label_j)
+                if i == root:
+                    pred_graph = upd_pred_node(pred_graph, i, label_i)
+
+            self.pred_graphs.append(pred_graph)
 
         print("# Splits:", self.site_cnt)
         print("% Omit:", self.edge_cnt / self.count_edges())
         super().write_results("splits")
 
-    def mistake_search(self, graph, dfs_edges, nb, root):
+    def mistake_search(self, graph, pred_graph, dfs_edges, nb, root):
         """
         Determines whether complex mistake is a split.
 
@@ -78,22 +90,19 @@ class SplitMetric(sm.SegmentationMetrics):
         visited = set()
         collisions = dict()
         while len(queue) > 0:
-            i = queue.pop(0)
-            label_i = self.get_label(graph, i)
-            visited.add(i)
-            if label_i != 0 and self.valid_ids is None:
-                collisions[label_i] = i
-            elif label_i != 0 and label_i in self.valid_ids:
-                collisions[label_i] = i
+            j = queue.pop(0)
+            label_j = self.get_label(graph, j)
+            pred_graph = upd_pred_node(pred_graph, j, label_j)
+            visited.add(j)
+            if label_j != 0:
+                collisions[label_j] = j
             else:
-                nbs = nx_utils.get_nbs(graph, i)
-
-                for j in [j for j in nbs if j not in visited]:
-                    if utils.check_edge(dfs_edges, (i, j)):
-                        queue.append(j)
-                        dfs_edges = utils.remove_edge(dfs_edges, (i, j))
-                    elif j == nb:
-                        queue.append(j)
+                for k in [k for k in graph.neighbors(j) if k not in visited]:
+                    if utils.check_edge(dfs_edges, (j, k)):
+                        queue.append(k)
+                        dfs_edges = utils.remove_edge(dfs_edges, (j, k))
+                    elif k == nb:
+                        queue.append(k)
 
         self.edge_cnt += len(visited)
 
@@ -106,4 +115,17 @@ class SplitMetric(sm.SegmentationMetrics):
                     self.site_cnt += 1
                     recorded.append((k, i))
             super().log(graph, list(recorded))
-        return dfs_edges
+
+        return dfs_edges, pred_graph
+
+
+# -- utils --
+def upd_pred_edge(pred_graph, i, j):
+    pred_graph.remove_edges_from([(i, j)])
+    return pred_graph
+
+
+def upd_pred_node(pred_graph, i, label):
+    pred_graph.graph["pred_ids"].update(set([label]))
+    pred_graph.nodes[i].update({"pred_id": label})
+    return pred_graph

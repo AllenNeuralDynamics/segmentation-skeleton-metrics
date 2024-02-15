@@ -105,29 +105,29 @@ def check_edge(edge_list, edge):
         return False
 
 
-def remove_edge(edge_list, edge):
+def remove_edge(edges, edge):
     """
-    Checks whether "edge" is in "edge_list" and removes it.
+    Checks whether "edge" is in "edges" and removes it.
 
     Parameters
     ----------
-    edge_list : list or set
+    edges : list or set
         List or set of edges.
     edge : tuple
         Edge.
 
     Returns
     -------
-    edge_list : list or set
+    edges : list or set
         Updated list or set of edges with "edge" removed if it was contained
-        in "edge_list".
+        in "edges".
 
     """
-    if edge in edge_list:
-        edge_list.remove(edge)
-    elif (edge[1], edge[0]) in edge_list:
-        edge_list.remove((edge[1], edge[0]))
-    return edge_list
+    if edge in edges:
+        edges.remove(edge)
+    elif (edge[1], edge[0]) in edges:
+        edges.remove((edge[1], edge[0]))
+    return edges
 
 
 # --- io utils ---
@@ -279,3 +279,25 @@ def write_json(path, contents):
     """
     with open(path, "w") as f:
         json.dump(contents, f)
+
+        
+# -- coordinate conversions --
+def to_world(xyz, anisotropy):
+    """
+    Converts "xyz" from image coordinates to real-world coordinates.
+
+    Parameters
+    ----------
+    xyz : tuple or list
+        Coordinates to be transformed.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files.
+
+    Returns
+    -------
+    list[float]
+        Transformed coordinates.
+
+    """
+    return [xyz[i] * anisotropy[i] for i in range(3)]
