@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import tensorstore as ts
 
-from segmentation_skeleton_metrics import nx_utils, swc_utils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils, swc_utils, utils
 
 SUPPORTED_FILETYPES = ["tif", "n5"]
 
@@ -52,12 +52,9 @@ class SegmentationMetrics(ABC):
         # Graph and labels
         self.anisotropy = anisotropy
         self.valid_ids = valid_ids
-        print(swc_path)
-        if os.path.isdir(swc_path):
-            self.graphs = swc_utils.dir_to_graphs(swc_path, anisotropy=anisotropy)
-        else:
-            self.graphs = [swc_utils.file_to_graph(swc_path, anisotropy=anisotropy)]
 
+        self.graphs = self.init_graphs(swc_path)
+        self.pred_graphs = []
         if type(labels) is str:
             self.labels = self.init_labels(labels, filetype)
         else:
@@ -80,6 +77,12 @@ class SegmentationMetrics(ABC):
         if self.txt_log:
             self.mistakes_log = ["# xyz1,  xyz2,  swc1,  swc2"]
 
+    def init_graphs(self, path):
+        if os.path.isdir(path):
+            return swc_utils.dir_to_graphs(path, anisotropy=self.anisotropy)
+        else:
+            return [swc_utils.file_to_graph(path, anisotropy=self.anisotropy)]
+        
     def init_labels(self, path, filetype):
         """
         Initializes a volume by uploading file with extension "filetype".
@@ -144,9 +147,10 @@ class SegmentationMetrics(ABC):
            Label of node "i".
 
         """
-        return self._get_label(nx_utils.get_xyz(graph, i))
+        label = self.__get_label(gutils.get_xyz(graph, i))
+        return self.adjust_label(label)
 
-    def _get_label(self, xyz):
+    def __get_label(self, xyz):
         """
         Gets label at image coordinates "xyz".
 
@@ -167,6 +171,38 @@ class SegmentationMetrics(ABC):
             return int(self.labels[xyz].read().result())
         else:
             return self.labels[xyz]
+
+    def get_labels(self, graph, i, j):
+        """
+        Gets labels of nodes "i" and "j".
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph which represents a neuron.
+        i : int
+            Node in "graph".
+        j : int
+            Node in "graph".
+
+        Returns
+        -------
+        int
+           Label of node "i".
+        int
+           Label of node "j".
+
+        """
+        return self.get_label(graph, i), self.get_label(graph, j)
+
+    def adjust_label(self, label):
+        if self.valid_ids:
+            if label not in self.valid_ids:
+                return 0
+        return label
+
+    def set_labels(self, label_i, label_j):
+        return self.set_label(label_i), self.set_label(label_j)
 
     def count_edges(self):
         """
@@ -253,7 +289,7 @@ class SegmentationMetrics(ABC):
         path = os.path.join(self.swc_dir, fn)
         swc_utils.write_swc(path, entries, color=red)
 
-    def txt_logger(self, graph, edge_list):
+    def txt_logger(self, graph, edges):
         """
         Logs xyz coordinates of mistake and swc ids in a list.
 
@@ -261,16 +297,16 @@ class SegmentationMetrics(ABC):
         ----------
         graph : networkx.graph
             Graph that contains edges in "edge_list".
-        edge_list : list[tuple]
+        edges : list[tuple]
             Edges that correspond to a mistake.
         """
-        for pair in edge_list:
+        for pair in edges:
             xyz_str = ""
             labels_str = ""
-            for k in pair:
-                xyz = swc_utils.node_to_world(graph, k, self.anisotropy)
+            for i in pair:
+                xyz = gutils.to_world(graph, i, self.anisotropy)
                 xyz_str += str(xyz) + ", "
-                labels_str += str(self.get_label(graph, k)) + ", "
+                labels_str += str(self.get_label(graph, i)) + ", "
             self.mistakes_log.append(xyz_str + labels_str)
 
     def write_results(self, fn):
@@ -281,8 +317,6 @@ class SegmentationMetrics(ABC):
         ----------
         fn : str
             Filename of text log.
-        edge_list : list[tuple]
-            List of edges that correspond to a mistakes.
 
         Returns
         -------

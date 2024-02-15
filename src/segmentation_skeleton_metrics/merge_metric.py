@@ -12,7 +12,7 @@ from random import sample
 import networkx as nx
 
 import segmentation_skeleton_metrics.seg_metrics as sm
-from segmentation_skeleton_metrics import nx_utils, utils
+from segmentation_skeleton_metrics import graph_utils as nx_utils, utils
 
 
 class MergeMetric(sm.SegmentationMetrics):

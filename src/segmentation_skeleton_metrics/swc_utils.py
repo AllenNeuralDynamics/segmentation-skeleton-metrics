@@ -12,7 +12,7 @@ import os
 import networkx as nx
 import numpy as np
 
-from segmentation_skeleton_metrics import nx_utils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils, utils
 
 
 def make_entries(graph, edge_list, anisotropy):
@@ -63,51 +63,8 @@ def make_entry(graph, i, parent, reindex, anisotropy):
 
     """
     reindex[i] = len(reindex) + 1
-    x, y, z = tuple(map(str, node_to_world(graph, i, anisotropy)))
+    x, y, z = tuple(map(str, gutils.to_world(graph, i, anisotropy)))
     return [x, y, z, 8, parent], reindex
-
-
-def node_to_world(graph, i, anisotropy):
-    """
-    Converts "xyz" from image coordinates to real-world coordinates.
-
-    Parameters
-    ----------
-    i : int
-        Node to be querried for (x, y, z) coordinates which are then converted
-        to read-world coordinates.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
-
-    Returns
-    -------
-    list[float]
-        Transformed coordinates.
-
-    """
-    return to_world(nx_utils.get_xyz(graph, i), anisotropy)
-
-
-def to_world(xyz, anisotropy):
-    """
-    Converts "xyz" from image coordinates to real-world coordinates.
-
-    Parameters
-    ----------
-    xyz : tuple or list
-        Coordinates to be transformed.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
-
-    Returns
-    -------
-    list[float]
-        Transformed coordinates.
-
-    """
-    return [xyz[i] * anisotropy[i] for i in range(3)]
 
 
 def write_swc(path, entry_list, color=None):
