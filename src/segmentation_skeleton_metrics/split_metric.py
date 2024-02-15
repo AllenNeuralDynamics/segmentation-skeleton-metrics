@@ -11,6 +11,7 @@ import networkx as nx
 import random
 import segmentation_skeleton_metrics.seg_metrics as sm
 from segmentation_skeleton_metrics import nx_utils, utils
+from toolbox.utils import progress_bar
 
 
 class SplitMetric(sm.SegmentationMetrics):
@@ -32,7 +33,8 @@ class SplitMetric(sm.SegmentationMetrics):
         None
 
         """
-        for graph in self.graphs:
+        for t, graph in enumerate(self.graphs):
+            progress_bar(t, len(self.graphs))
             root = nx_utils.sample_node(graph)
             dfs_edges = list(nx.dfs_edges(graph, source=root))
             while len(dfs_edges) > 0:
@@ -44,6 +46,9 @@ class SplitMetric(sm.SegmentationMetrics):
                     super().log(graph, [(i, j)])
                 elif label_j == 0:
                     dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
+                elif self.valid_ids is not None:
+                    if label_j not in self.valid_ids:
+                        dfs_edges = self.mistake_search(graph, dfs_edges, i, j)
         print("# Splits:", self.site_cnt)
         print("% Omit:", self.edge_cnt / self.count_edges())
         super().write_results("splits")
@@ -75,10 +80,12 @@ class SplitMetric(sm.SegmentationMetrics):
             i = queue.pop(0)
             label_i = self.get_label(graph, i)
             visited.add(i)
-            if label_i != 0:
+            if label_i != 0 and self.valid_ids is None:
+                collisions[label_i] = i
+            elif label_i != 0 and label_i in self.valid_ids:
                 collisions[label_i] = i
             else:
-                nbs =  nx_utils.get_nbs(graph, i)
+                nbs = nx_utils.get_nbs(graph, i)
                 for j in [j for j in nbs if j not in visited]:
                     if utils.check_edge(dfs_edges, (i, j)):
                         queue.append(j)
@@ -97,5 +104,5 @@ class SplitMetric(sm.SegmentationMetrics):
                     self.site_cnt += 1
                     recorded.append((k, i))
             super().log(graph, list(recorded))
-        
+
         return dfs_edges

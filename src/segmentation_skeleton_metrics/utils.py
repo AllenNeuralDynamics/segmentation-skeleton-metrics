@@ -15,23 +15,29 @@ import tensorstore as ts
 import zarr
 from tifffile import imread
 
+SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
+
 
 # -- os utils ---
 def listdir(path, ext=None):
     """
-    Lists files in directory with "ext" if provided.
+    Lists all files in the directory at "path". If an extension "ext" is
+    provided, then only files containing "ext" are returned.
 
     Parameters
     ----------
     path : str
-        Path to directory.
+        Path to directory to be searched.
+
     ext : str, optional
-        Extension of files of interest.
+       Extension of file type of interest. The default is None.
 
     Returns
     -------
-    list[str]
-        List of files in directory with "ext" if provided.
+    list
+        List of all files in directory at "path" with extension "ext" if
+        provided. Otherwise, list of all files in directory.
+
     """
     if ext is None:
         return [f for f in os.listdir(path)]
@@ -125,6 +131,45 @@ def remove_edge(edge_list, edge):
 
 
 # --- io utils ---
+def open_tensorstore(path, driver):
+    """
+    Uploads segmentation mask stored as a directory of shard files.
+
+    Parameters
+    ----------
+    path : str
+        Path to directory containing shard files.
+    driver : str
+        Storage driver needed to read data at "path".
+
+    Returns
+    -------
+    sparse_volume : dict
+        Sparse image volume.
+
+    """
+    assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
+    arr = ts.open(
+        {
+            "driver": driver,
+            "kvstore": {
+                "driver": "gcs",
+                "bucket": "allen-nd-goog",
+                "path": path,
+            },
+            "context": {
+                "cache_pool": {"total_bytes_limit": 1000000000},
+                "cache_pool#remote": {"total_bytes_limit": 1000000000},
+                "data_copy_concurrency": {"limit": 8},
+            },
+            "recheck_cached_data": "open",
+        }
+    ).result()
+    if driver == "neuroglancer_precomputed":
+        return arr[ts.d["channel"][0]]
+    return arr
+
+
 def read_tensorstore(path):
     """
     Reads neuroglancer_precomputed file at "path".
@@ -147,6 +192,18 @@ def read_tensorstore(path):
         }
     ).result()
     return dataset_ts[ts.d["channel"][0]]
+
+
+def read_tensorstore(arr, xyz, shape, from_center=True):
+    chunk = get_chunk(arr, xyz, shape, from_center=from_center)
+    return chunk.read().result()
+
+
+def get_chunk(arr, xyz, shape, from_center=True):
+    start, end = get_start_end(xyz, shape, from_center=from_center)
+    return deepcopy(
+        arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
+    )
 
 
 def read_n5(path):

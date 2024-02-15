@@ -163,12 +163,12 @@ def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
     for graph_id, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
         path = os.path.join(swc_dir, f)
         graph = nx.Graph(file_name=f, graph_id=graph_id)
-        graph = file_to_graph(path, graph, anisotropy=anisotropy)
+        graph = file_to_graph(path, graph=graph, anisotropy=anisotropy)
         list_of_graphs.append(graph)
     return list_of_graphs
 
 
-def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
+def file_to_graph(path, graph=None, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads an swc file and constructs an undirected graph from it.
 
@@ -188,6 +188,9 @@ def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
         Graph constructed from an swc file.
 
     """
+    if graph is None:
+        graph = nx.Graph()
+
     with open(path, "r") as f:
         offset = [0, 0, 0]
         for line in f.readlines():
@@ -198,9 +201,7 @@ def file_to_graph(path, graph, anisotropy=[1.0, 1.0, 1.0]):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])
-                xyz = read_xyz(
-                    parts[2:5], anisotropy=anisotropy, offset=offset
-                )
+                xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
                 graph.add_node(child, xyz=xyz, radius=parts[-2])
                 if parent != -1:
                     graph.add_edge(parent, child)
@@ -228,8 +229,5 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
         coordinates.
 
     """
-    xyz = [
-        int(np.round(float(xyz[i]) / anisotropy[i] + offset[i]))
-        for i in range(3)
-    ]
+    xyz = [int(np.round(float(xyz[i]) / anisotropy[i] + offset[i])) for i in range(3)]
     return tuple(xyz)
