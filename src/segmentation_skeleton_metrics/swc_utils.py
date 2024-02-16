@@ -130,7 +130,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
                 child = int(parts[0])
                 parent = int(parts[-1])
                 xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
-                graph.add_node(child, xyz=xyz, radius=parts[-2])
+                graph.add_node(child, xyz=xyz)
                 if parent != -1:
                     graph.add_edge(parent, child)
     return graph
@@ -157,5 +157,5 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
         coordinates.
 
     """
-    xyz = [int(np.round(float(xyz[i]) / anisotropy[i] + offset[i])) for i in range(3)]
-    return tuple(xyz)
+    xyz = [round(float(xyz[i]) / anisotropy[i] + offset[i]) for i in range(3)]
+    return np.array(xyz, dtype=int)
