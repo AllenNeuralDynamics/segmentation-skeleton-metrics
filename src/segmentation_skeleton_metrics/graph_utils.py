@@ -6,62 +6,58 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-import networkx as nx
 from random import sample
+
+import networkx as nx
+
 from segmentation_skeleton_metrics import utils
 
 
 def sample_leaf(graph):
-    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
-    return sample(leafs, 1)[0]
-    
-    
-def sample_node(graph):
     """
-    Samples a random node from "graph"
+    Samples leaf node from "graph".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph in which node is sampled from.
+        Graph to be sampled from.
 
     Returns
     -------
     int
-        Node contained in graph.
+        Leaf node of "graph"
 
     """
-    return sample(list(graph.nodes), 1)[0]
+    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
+    return sample(leafs, 1)[0]
 
 
-def get_nbs(graph, i):
+def remove_edge(graph, i, j):
     """
-    Gets neighbors of node "i".
+    Remove the edge "(i,j)" from "graph".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph that represents a neuron.
+        Graph to edited.
     i : int
-        Node of "graph".
+        Node part of edge to be removed.
+    j : int
+        Node part of edge to be removed.
 
     Returns
     -------
-    list[int]
-        List of neighbors of node "i".
+    graph : networkx.Graph
+        Graph with edge removed.
 
     """
-    return list(graph.neighbors(i))
-
-
-def remove_edge(pred_graph, i, j):
-    pred_graph.remove_edges_from([(i, j)])
-    return pred_graph
+    graph.remove_edges_from([(i, j)])
+    return graph
 
 
 def get_coord(graph, i):
     """
-    Gets (x,y,z) coordinates of node "i".
+    Gets (x,y,z) image coordinates of node "i".
 
     Parameters
     ----------
@@ -73,31 +69,10 @@ def get_coord(graph, i):
     Returns
     -------
     tuple
-        The (x,y,z) coordinates of node "i".
+        The (x,y,z) image coordinates of node "i".
 
     """
     return tuple(graph.nodes[i]["xyz"])
-
-
-def to_world(graph, i, anisotropy):
-    """
-    Converts image coordinates of node "i" to a real-world coordinate.
-
-    Parameters
-    ----------
-    i : int
-        Node to be querried for (x, y, z) coordinate which is then converted
-        to a read-world coordinate.
-    anisotropy : list[float]
-        Image to real-world coordinate scaling factors for (x, y, z).
-
-    Returns
-    -------
-    list[float]
-        Transformed coordinates.
-
-    """
-    return utils.to_world(get_xyz(graph, i), anisotropy)
 
 
 def empty_copy(graph):
@@ -119,5 +94,20 @@ def empty_copy(graph):
         graph_copy.nodes[i].clear()
     return graph_copy
 
+
 def count_splits(graph):
+    """
+    Counts the number of splits in "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be evaluated.
+
+    Returns
+    -------
+    int
+        Number of splits in "graph".
+
+    """
     return max(len(list(nx.connected_components(graph))) - 1, 0)

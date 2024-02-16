@@ -8,17 +8,16 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-import networkx as nx
-import numpy as np
-import random
-import tensorstore as ts
-
-
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from segmentation_skeleton_metrics import graph_utils as gutils, utils
-from segmentation_skeleton_metrics.swc_utils import to_graph
-from toolbox.utils import progress_bar
 from time import time
+
+import networkx as nx
+import tensorstore as ts
+from toolbox.utils import progress_bar
+
+from segmentation_skeleton_metrics import graph_utils as gutils
+from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics.swc_utils import to_graph
 
 
 class SkeletonMetric:
@@ -51,7 +50,7 @@ class SkeletonMetric:
         self.valid_ids = valid_ids
         self.labels = labels
         self.target_graphs = self.init_target_graphs(swc_paths, anisotropy)
-        self.pred_graphs = self.init_pred_graphs()    
+        self.pred_graphs = self.init_pred_graphs()
 
     def init_target_graphs(self, paths, anisotropy):
         target_graphs = dict()
@@ -78,9 +77,7 @@ class SkeletonMetric:
             threads = []
             for i in pred_graph.nodes:
                 img_coord = gutils.get_coord(target_graph, i)
-                threads.append(
-                    executor.submit(self.get_label, img_coord, i)
-                )
+                threads.append(executor.submit(self.get_label, img_coord, i))
             # Store results
             for thread in as_completed(threads):
                 i, label = thread.result()
@@ -223,7 +220,6 @@ class SkeletonMetric:
 
             # Run dfs
             r = gutils.sample_leaf(target_graph)
-            label_r = pred_graph.nodes[r]["pred_id"]
             dfs_edges = list(nx.dfs_edges(target_graph, source=r))
             while len(dfs_edges) > 0:
                 # Visit edge

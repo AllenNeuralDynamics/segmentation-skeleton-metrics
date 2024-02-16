@@ -13,7 +13,6 @@ import networkx as nx
 import numpy as np
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import utils
 
 
 def make_entries(graph, edge_list, anisotropy):
@@ -129,7 +128,9 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])
-                xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+                xyz = read_xyz(
+                    parts[2:5], anisotropy=anisotropy, offset=offset
+                )
                 graph.add_node(child, xyz=xyz)
                 if parent != -1:
                     graph.add_edge(parent, child)
