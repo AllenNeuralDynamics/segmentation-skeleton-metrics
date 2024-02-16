@@ -6,9 +6,8 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-
+import networkx as nx
 from random import sample
-
 from segmentation_skeleton_metrics import utils
 
 
@@ -55,7 +54,12 @@ def get_nbs(graph, i):
     return list(graph.neighbors(i))
 
 
-def get_xyz(graph, i):
+def remove_edge(pred_graph, i, j):
+    pred_graph.remove_edges_from([(i, j)])
+    return pred_graph
+
+
+def get_coord(graph, i):
     """
     Gets (x,y,z) coordinates of node "i".
 
@@ -110,7 +114,10 @@ def empty_copy(graph):
     graph : netowrkx.Graph
         Copy of "graph" that does not contain its node level attributes.
     """
-    graph_copy = nx.Graph(graph)
+    graph_copy = nx.Graph(graph, pred_ids=set())
     for i in graph_copy.nodes():
         graph_copy.nodes[i].clear()
     return graph_copy
+
+def count_splits(graph):
+    return max(len(list(nx.connected_components(graph))) - 1, 0)
