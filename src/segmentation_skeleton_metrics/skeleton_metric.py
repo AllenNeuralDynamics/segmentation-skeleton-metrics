@@ -13,7 +13,6 @@ import numpy as np
 import random
 import tensorstore as ts
 
-
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from segmentation_skeleton_metrics import graph_utils as gutils, utils
 from segmentation_skeleton_metrics.swc_utils import to_graph
