@@ -8,9 +8,15 @@ Created on Wed Aug 15 12:00:00 2023
 """
 
 from random import sample
+
 from segmentation_skeleton_metrics import utils
 
 
+def sample_leaf(graph):
+    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
+    return sample(leafs, 1)[0]
+    
+    
 def sample_node(graph):
     """
     Samples a random node from "graph"
