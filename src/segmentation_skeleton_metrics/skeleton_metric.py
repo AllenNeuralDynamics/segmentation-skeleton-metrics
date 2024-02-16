@@ -125,41 +125,32 @@ class SkeletonMetric:
         else:
             return self.labels[xyz]
 
-    def get_labels(self, graph, i, j):
+    def validate_label(self, label):
         """
-        Gets labels of nodes "i" and "j".
+        Validates label by checking whether it is contained in
+        "self.valid_ids".
 
         Parameters
         ----------
-        graph : networkx.Graph
-            Graph which represents a neuron.
-        i : int
-            Node in "graph".
-        j : int
-            Node in "graph".
+        label : int
+            Label to be validated.
 
         Returns
         -------
-        int
-           Label of node "i".
-        int
-           Label of node "j".
+        label : int
+            There are two possibilities: (1) original label if either "label"
+            is contained in "self.valid_ids" or "self.valid_labels" is None,
+            or (2) 0 if "label" is not contained in self.valid_ids.
 
         """
-        return self.get_label(graph, i), self.get_label(graph, j)
-
-    def validate_label(self, label):
         if self.valid_ids:
             if label not in self.valid_ids:
                 return 0
         return label
 
-    def set_labels(self, label_i, label_j):
-        return self.set_label(label_i), self.set_label(label_j)
-
-    def count_edges(self):
+    def compute_metrics(self):
         """
-        Counts number of edges in all graphs in "self.graphs".
+        Computes skeleton-based metrics.
 
         Parameters
         ----------
@@ -167,15 +158,56 @@ class SkeletonMetric:
 
         Returns
         -------
-        int
+        ...
 
         """
-        total_edges = 0
-        for graph in self.graphs:
-            total_edges += graph.number_of_edges()
-        return total_edges
+        self.detect_splits()
+        pass
 
-    def is_mistake(self, a, b):
+    def detect_splits(self):
+        """
+        Detects splits in the predicted segmentation.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        print("Detecting Splits...")
+        t0 = time()
+        target_graphs = self.target_graphs.items()
+        for cnt, (swc_id, target_graph) in enumerate(target_graphs):
+            # Initializations
+            progress_bar(cnt + 1, len(self.target_graphs))
+            pred_graph = self.pred_graphs[swc_id]
+
+            # Run dfs
+            r = gutils.sample_leaf(target_graph)
+            dfs_edges = list(nx.dfs_edges(target_graph, source=r))
+            while len(dfs_edges) > 0:
+                # Visit edge
+                (i, j) = dfs_edges.pop(0)
+                label_i = pred_graph.nodes[i]["pred_id"]
+                label_j = pred_graph.nodes[j]["pred_id"]
+                if self.is_split(label_i, label_j):
+                    pred_graph = gutils.remove_edge(pred_graph, i, j)
+                elif label_j == 0:
+                    dfs_edges, pred_graph = self.split_search(
+                        target_graph, pred_graph, dfs_edges, i, j
+                    )
+
+            # Update predicted graph
+            self.pred_graphs[swc_id] = edit_graph(pred_graph)
+
+        # Report runtime
+        t, unit = utils.time_writer(time() - t0)
+        print(f"\nRuntime: {round(t, 2)} {unit}\n")
+
+    def is_split(self, a, b):
         """
         Checks if "a" and "b" are positive and not equal.
 
@@ -197,66 +229,30 @@ class SkeletonMetric:
                 return False
         return (a != 0 and b != 0) and (a != b)
 
-    def detect_mistakes(self):
+    def split_search(self, target_graph, pred_graph, dfs_edges, nb, root):
         """
-        Detects splits in the predicted segmentation.
+        Determines whether zero-valued corresponds to a split or misalignment
+        between "target_graph" and the predicted segmentation mask.
 
         Parameters
         ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        print("Running Evaluation...")
-        t0 = time()
-        target_graphs = self.target_graphs.items()
-        for cnt, (swc_id, target_graph) in enumerate(target_graphs):
-            # Initializations
-            progress_bar(cnt + 1, len(self.target_graphs))
-            pred_graph = self.pred_graphs[swc_id]
-
-            # Run dfs
-            r = gutils.sample_leaf(target_graph)
-            dfs_edges = list(nx.dfs_edges(target_graph, source=r))
-            while len(dfs_edges) > 0:
-                # Visit edge
-                (i, j) = dfs_edges.pop(0)
-                label_i = pred_graph.nodes[i]["pred_id"]
-                label_j = pred_graph.nodes[j]["pred_id"]
-                if self.is_mistake(label_i, label_j):
-                    pred_graph = gutils.remove_edge(pred_graph, i, j)
-                elif label_j == 0:
-                    dfs_edges, pred_graph = self.mistake_search(
-                        target_graph, pred_graph, dfs_edges, i, j
-                    )
-
-            # Update predicted graph
-            self.pred_graphs[swc_id] = edit_graph(pred_graph)
-
-        # Report runtime
-        t, unit = utils.time_writer(time() - t0)
-        print(f"\nRuntime: {round(t, 2)} {unit}\n")
-
-    def mistake_search(self, target_graph, pred_graph, dfs_edges, nb, root):
-        """
-        Determines whether complex mistake is a split.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph with possible split at "root".
+        target_graph : networkx.Graph
+            ...
+        pred_graph : networkx.Graph
+            ...
         dfs_edges : list[tuple]
-            List of edges to be processed for mistake detection.
+            List of edges to be processed for split detection.
+        nb : int
+            Neighbor of "root".
         root : int
-            Node where possible split starts.
+            Node where possible split starts (i.e. zero-valued label).
 
         Returns
         -------
-        list[tuple].
+        dfs_edges : list[tuple].
             Updated "dfs_edges" with visited edges removed.
+        pred_graph : networkx.Graph
+            ...
 
         """
         # Search
@@ -286,9 +282,6 @@ class SkeletonMetric:
             pred_graph = upd_nodes(pred_graph, visited, label)
 
         return dfs_edges, pred_graph
-
-    def compute_metrics(self):
-        pass
 
 
 # -- utils --
