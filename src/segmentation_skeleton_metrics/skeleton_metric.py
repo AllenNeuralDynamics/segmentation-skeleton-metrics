@@ -13,6 +13,7 @@ import numpy as np
 import random
 import tensorstore as ts
 
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from segmentation_skeleton_metrics import graph_utils as gutils, utils
 from segmentation_skeleton_metrics.swc_utils import to_graph
@@ -49,65 +50,61 @@ class SkeletonMetric:
         """
         self.valid_ids = valid_ids
         self.labels = labels
-        self.graphs = self.init_graphs(swc_paths, anisotropy)
+        self.target_graphs = self.init_target_graphs(swc_paths, anisotropy)
         self.pred_graphs = self.init_pred_graphs()    
 
-    def init_graphs(self, paths, anisotropy):
-        graphs = dict()
+    def init_target_graphs(self, paths, anisotropy):
+        target_graphs = dict()
         for path in paths:
             swc_id = os.path.basename(path).replace(".swc", "")
-            graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
-        return graphs
+            target_graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
+        return target_graphs
 
     def init_pred_graphs(self):
         print("Labelling Target Graphs...")
+        t0 = time()
         pred_graphs = dict()
-        for t, (swc_id, graph) in enumerate(self.graphs.items()):
-            progress_bar(t + 1, len(self.graphs))
-            graph = gutils.empty_copy(graph)
+        for cnt, (swc_id, graph) in enumerate(self.target_graphs.items()):
+            progress_bar(cnt + 1, len(self.target_graphs))
             pred_graphs[swc_id] = self.label_graph(graph)
+        t, unit = utils.time_writer(time() - t0)
+        print(f"\nRuntime: {round(t, 2)} {unit}\n")
         return pred_graphs
 
-    def label_graph(self, graph):
+    def label_graph(self, target_graph):
+        pred_graph = gutils.empty_copy(target_graph)
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
-            for i in graph.nodes:
+            for i in pred_graph.nodes:
+                img_coord = gutils.get_coord(target_graph, i)
                 threads.append(
-                    executor.submit(self.get_label, graph, i, True)
+                    executor.submit(self.get_label, img_coord, i)
                 )
             # Store results
             for thread in as_completed(threads):
                 i, label = thread.result()
-                graph.nodes[i].update({"pred_id": label})
-        return graph
-    
-    def label_graph_synchronous(self, graph):
-        for i in graph.nodes:
-            label = self.get_label(graph, i)
-            graph.nodes[i].update({"pred_id": label})
-        return graph
+                pred_graph.nodes[i].update({"pred_id": label})
+        return pred_graph
 
-    def get_label(self, graph, i, return_node=False):
+    def get_label(self, img_coord, return_node=False):
         """
-        Gets label of node "i".
+        Gets label of voxel at "img_coord".
 
         Parameters
         ----------
-        graph : networkx.Graph
-            Graph which represents a neuron.
-        i : int
-            Node in "graph".
+        img_coord : numpy.ndarray
+            Image coordinate of voxel to be read.
 
         Returns
         -------
         int
-           Label of node "i".
+           Label of voxel at "img_coord".
 
         """
-        label = self.__read_label(gutils.get_xyz(graph, i))
+        label = self.__read_label(img_coord)
         if return_node:
-            return i, self.validate_label(label)
+            return return_node, self.validate_label(label)
         else:
             return self.validate_label(label)
 
@@ -216,43 +213,38 @@ class SkeletonMetric:
         None
 
         """
-        print("\nRunning Evaluation...")
-        for t, graph in enumerate(self.graphs):
+        print("Running Evaluation...")
+        t0 = time()
+        target_graphs = self.target_graphs.items()
+        for cnt, (swc_id, target_graph) in enumerate(target_graphs):
             # Initializations
-            progress_bar(t, len(self.graphs))
-            pred_graph = graph.copy()
-            pred_graph.graph.update({"pred_ids": set()})
-
-            # Sample root
-            r = gutils.sample_leaf(graph)
-            label_r = self.get_label(graph, r)
-            pred_graph = upd_node(pred_graph, r, label_r)
+            progress_bar(cnt + 1, len(self.target_graphs))
+            pred_graph = self.pred_graphs[swc_id]
 
             # Run dfs
-            dfs_edges = list(nx.dfs_edges(graph, source=r))
+            r = gutils.sample_leaf(target_graph)
+            label_r = pred_graph.nodes[r]["pred_id"]
+            dfs_edges = list(nx.dfs_edges(target_graph, source=r))
             while len(dfs_edges) > 0:
                 # Visit edge
                 (i, j) = dfs_edges.pop(0)
-                label_i, label_j = self.get_labels(graph, i, j)
+                label_i = pred_graph.nodes[i]["pred_id"]
+                label_j = pred_graph.nodes[j]["pred_id"]
                 if self.is_mistake(label_i, label_j):
-                    pred_graph = upd_edge(pred_graph, i, j, label_j)
+                    pred_graph = gutils.remove_edge(pred_graph, i, j)
                 elif label_j == 0:
                     dfs_edges, pred_graph = self.mistake_search(
-                        graph, pred_graph, dfs_edges, i, j
+                        target_graph, pred_graph, dfs_edges, i, j
                     )
-                else:
-                    pred_graph = upd_node(pred_graph, j, label_j)
 
-            pred_graph = remove_zeros(pred_graph)
-            self.pred_graphs.append(pred_graph)
-            print("")
-            print(graph.graph["swc_id"])
-            print("# splits:", count_splits(pred_graph))
+            # Update predicted graph
+            self.pred_graphs[swc_id] = edit_graph(pred_graph)
 
-        print("# Splits:", self.site_cnt)
-        print("% Omit:", self.edge_cnt / self.count_edges())
+        # Report runtime
+        t, unit = utils.time_writer(time() - t0)
+        print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def mistake_search(self, graph, pred_graph, dfs_edges, nb, root):
+    def mistake_search(self, target_graph, pred_graph, dfs_edges, nb, root):
         """
         Determines whether complex mistake is a split.
 
@@ -278,53 +270,67 @@ class SkeletonMetric:
         collision_nodes = set()
         while len(queue) > 0:
             j = queue.pop(0)
-            label_j = self.get_label(graph, j)
+            label_j = pred_graph.nodes[j]["pred_id"]
             visited.add(j)
             if label_j != 0:
                 collision_labels.add(label_j)
-                pred_graph = upd_node(pred_graph, j, label_j)
             else:
-                for k in [k for k in graph.neighbors(j) if k not in visited]:
+                nbs = target_graph.neighbors(j)
+                for k in [k for k in nbs if k not in visited]:
                     if utils.check_edge(dfs_edges, (j, k)):
                         queue.append(k)
-                        dfs_edges = utils.remove_edge(dfs_edges, (j, k))
+                        dfs_edges = remove_edge(dfs_edges, (j, k))
                     elif k == nb:
                         queue.append(k)
 
         # Upd zero nodes
-        visited = visited.difference(collision_nodes)
-        label = collision_labels.pop() if len(collision_labels) == 1 else 0
-        pred_graph = upd_nodes(pred_graph, visited, label)
+        if len(collision_labels) == 1:
+            label = collision_labels.pop()
+            visited = visited.difference(collision_nodes)
+            pred_graph = upd_nodes(pred_graph, visited, label)
 
         return dfs_edges, pred_graph
 
-    
+
 # -- utils --
-def upd_edge(pred_graph, i, j, label_j):
-    pred_graph.remove_edges_from([(i, j)])
-    pred_graph = upd_node(pred_graph, j, label_j)
-    return pred_graph
-
-
-def upd_node(pred_graph, i, label):
-    pred_graph.graph["pred_ids"].update(set([label]))
-    pred_graph.nodes[i].update({"pred_id": label})
-    return pred_graph
-
-
-def upd_nodes(pred_graph, nodes, label):
+def upd_nodes(graph, nodes, label):
     for i in nodes:
-        pred_graph = upd_node(pred_graph, i, label)
-    return pred_graph
+        graph.nodes[i].update({"pred_id": label})
+    return graph
 
 
-def remove_zeros(pred_graph):
+def edit_graph(graph):
     delete_nodes = []
-    for i in pred_graph.nodes:
-        if pred_graph.nodes[i]["pred_id"] == 0:
+    for i in graph.nodes:
+        label = graph.nodes[i]["pred_id"]
+        if label == 0:
             delete_nodes.append(i)
-    pred_graph.remove_nodes_from(delete_nodes)
-    return pred_graph
+        else:
+            graph.graph["pred_ids"].add(label)
+    graph.remove_nodes_from(delete_nodes)
+    return graph
 
-def count_splits(graph):
-    return max(len(list(nx.connected_components(graph))) - 1, 0)
+
+def remove_edge(dfs_edges, edge):
+    """
+    Checks whether "edge" is in "dfs_edges" and removes it.
+
+    Parameters
+    ----------
+    dfs_edges : list or set
+        List or set of edges.
+    edge : tuple
+        Edge.
+
+    Returns
+    -------
+    edges : list or set
+        Updated list or set of edges with "dfs_edges" removed if it was contained
+        in "dfs_edges".
+
+    """
+    if edge in dfs_edges:
+        dfs_edges.remove(edge)
+    elif (edge[1], edge[0]) in dfs_edges:
+        dfs_edges.remove((edge[1], edge[0]))
+    return dfs_edges

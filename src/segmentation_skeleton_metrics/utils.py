@@ -112,31 +112,6 @@ def check_edge(edge_list, edge):
         return False
 
 
-def remove_edge(edges, edge):
-    """
-    Checks whether "edge" is in "edges" and removes it.
-
-    Parameters
-    ----------
-    edges : list or set
-        List or set of edges.
-    edge : tuple
-        Edge.
-
-    Returns
-    -------
-    edges : list or set
-        Updated list or set of edges with "edge" removed if it was contained
-        in "edges".
-
-    """
-    if edge in edges:
-        edges.remove(edge)
-    elif (edge[1], edge[0]) in edges:
-        edges.remove((edge[1], edge[0]))
-    return edges
-
-
 # --- io utils ---
 def open_tensorstore(path, driver):
     """
@@ -297,7 +272,7 @@ def write_json(path, contents):
         json.dump(contents, f)
 
         
-# -- coordinate conversions --
+# -- miscellaneous --
 def to_world(xyz, anisotropy):
     """
     Converts "xyz" from image coordinates to real-world coordinates.
@@ -317,3 +292,15 @@ def to_world(xyz, anisotropy):
 
     """
     return [xyz[i] * anisotropy[i] for i in range(3)]
+
+
+def time_writer(t, unit="seconds"):
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit
