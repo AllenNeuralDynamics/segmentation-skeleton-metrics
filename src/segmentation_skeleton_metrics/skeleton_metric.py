@@ -291,6 +291,9 @@ class SkeletonMetric:
 
         return dfs_edges, pred_graph
 
+    def compute_metrics(self):
+        pass
+
 
 # -- utils --
 def upd_nodes(graph, nodes, label):
