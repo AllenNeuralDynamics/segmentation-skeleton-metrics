@@ -8,17 +8,19 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-from abc import ABC, abstractmethod
-
+import networkx as nx
 import numpy as np
+import random
 import tensorstore as ts
 
-from segmentation_skeleton_metrics import graph_utils as gutils, swc_utils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils, utils
+from segmentation_skeleton_metrics.swc_utils import to_graph
+from toolbox.utils import progress_bar
 
-SUPPORTED_FILETYPES = ["tif", "n5"]
+SUPPORTED_FILETYPES = ["tif", "n5", "neuroglancer_precomputed"]
 
 
-class SegmentationMetrics(ABC):
+class SkeletonMetric:
     """
     Class that evaluates a segmentation in terms of the number of
     splits and merges.
@@ -27,15 +29,12 @@ class SegmentationMetrics(ABC):
 
     def __init__(
         self,
-        swc_path,
+        swc_paths,
         labels,
         anisotropy=[1.0, 1.0, 1.0],
         filetype=None,
-        prefix="",
-        log_dir=None,
-        swc_log=False,
-        txt_log=False,
         valid_ids=None,
+        equivalent_ids=None,
     ):
         """
         Constructs object that evaluates a predicted segmentation.
@@ -49,40 +48,20 @@ class SegmentationMetrics(ABC):
         None.
 
         """
-        # Graph and labels
-        self.anisotropy = anisotropy
         self.valid_ids = valid_ids
-
-        self.graphs = self.init_graphs(swc_path)
+        self.graphs = self.init_graphs(swc_paths, anisotropy)
         self.pred_graphs = []
         if type(labels) is str:
             self.labels = self.init_labels(labels, filetype)
         else:
             self.labels = labels
 
-        # Mistake trackers
-        self.site_cnt = 0
-        self.edge_cnt = 0
+    def init_graphs(self, paths, anisotropy):
+        graphs = []
+        for path in paths:            
+            graphs.append(to_graph(path, anisotropy=anisotropy))
+        return graphs
 
-        # Mistake logs
-        self.prefix = prefix
-        self.log_dir = log_dir
-        self.swc_log = swc_log
-        self.txt_log = txt_log
-        if self.log_dir is not None:
-            utils.mkdir(self.log_dir)
-        if self.swc_log:
-            self.swc_dir = os.path.join(self.log_dir, "swc_files")
-            utils.mkdir(self.swc_dir)
-        if self.txt_log:
-            self.mistakes_log = ["# xyz1,  xyz2,  swc1,  swc2"]
-
-    def init_graphs(self, path):
-        if os.path.isdir(path):
-            return swc_utils.dir_to_graphs(path, anisotropy=self.anisotropy)
-        else:
-            return [swc_utils.file_to_graph(path, anisotropy=self.anisotropy)]
-        
     def init_labels(self, path, filetype):
         """
         Initializes a volume by uploading file with extension "filetype".
@@ -103,12 +82,7 @@ class SegmentationMetrics(ABC):
         """
         assert filetype is not None, "Must provide filetype to upload image!"
         assert filetype in SUPPORTED_FILETYPES, "Filetype is not supported!"
-        if filetype == "tensorstore":
-            return utils.read_tensorstore(path)
-        elif filetype == "n5":
-            return utils.read_n5(path)
-        else:
-            return utils.read_tif(path)
+        return utils.read_img(path, filetype)
 
     def get_labels(self):
         """
@@ -244,118 +218,125 @@ class SegmentationMetrics(ABC):
                 return False
         return (a != 0 and b != 0) and (a != b)
 
-    def log(self, graph, edge_list):
+    def detect_mistakes(self):
         """
-        Logs xyz coordinates of mistake and swc ids in a list if "txt_log"
-        or writes an swc file if "log_swc".
+        Detects splits in the predicted segmentation.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        for t, graph in enumerate(self.graphs):
+            # Initializations
+            progress_bar(t, len(self.graphs))
+            pred_graph = graph.copy()
+            pred_graph.graph.update({"pred_ids": set()})
+
+            # Sample root
+            r = gutils.sample_leaf(graph)
+            label_r = self.get_label(graph, r)
+            pred_graph = upd_node(pred_graph, r, label_r)
+
+            # Run dfs
+            dfs_edges = list(nx.dfs_edges(graph, source=r))
+            while len(dfs_edges) > 0:
+                # Visit edge
+                (i, j) = dfs_edges.pop(0)
+                label_i, label_j = self.get_labels(graph, i, j)
+                if self.is_mistake(label_i, label_j):
+                    pred_graph = upd_edge(pred_graph, i, j, label_j)
+                elif label_j == 0:
+                    dfs_edges, pred_graph = self.mistake_search(
+                        graph, pred_graph, dfs_edges, i, j
+                    )
+                else:
+                    pred_graph = upd_node(pred_graph, j, label_j)
+
+            pred_graph = remove_zeros(pred_graph)
+            self.pred_graphs.append(pred_graph)
+            self.site_cnt += count_splits(pred_graph)
+
+        print("# Splits:", self.site_cnt)
+        print("% Omit:", self.edge_cnt / self.count_edges())
+
+    def mistake_search(self, graph, pred_graph, dfs_edges, nb, root):
+        """
+        Determines whether complex mistake is a split.
 
         Parameters
         ----------
         graph : networkx.Graph
-            Graph that contains edges in "edge_list".
-        edge_list : list[tuple]
-            Edges that correspond to a mistake.
+            Graph with possible split at "root".
+        dfs_edges : list[tuple]
+            List of edges to be processed for mistake detection.
+        root : int
+            Node where possible split starts.
 
         Returns
         -------
-        None
+        list[tuple].
+            Updated "dfs_edges" with visited edges removed.
 
         """
-        if self.swc_log:
-            self.swc_logger(graph, edge_list)
+        # Search
+        queue = [root]
+        visited = set()
+        collision_labels = set()
+        collision_nodes = set()
+        while len(queue) > 0:
+            j = queue.pop(0)
+            label_j = self.get_label(graph, j)
+            visited.add(j)
+            if label_j != 0:
+                collision_labels.add(label_j)
+                pred_graph = upd_node(pred_graph, j, label_j)
+            else:
+                for k in [k for k in graph.neighbors(j) if k not in visited]:
+                    if utils.check_edge(dfs_edges, (j, k)):
+                        queue.append(k)
+                        dfs_edges = utils.remove_edge(dfs_edges, (j, k))
+                    elif k == nb:
+                        queue.append(k)
 
-        if self.txt_log:
-            self.txt_logger(graph, edge_list)
+        # Upd zero nodes
+        visited = visited.difference(collision_nodes)
+        label = collision_labels.pop() if len(collision_labels) == 1 else 0
+        pred_graph = upd_nodes(pred_graph, visited, label)
 
-    def swc_logger(self, graph, edge_list):
-        """
-        Logs mistakes in an swc file.
+        return dfs_edges, pred_graph
 
-        Parameters
-        ----------
-        graph : networkx.graph
-            Graph that contains edges in "edge_list".
-        edge_list : list[tuple]
-            Edges that correspond to a mistake.
+    
+# -- utils --
+def upd_edge(pred_graph, i, j, label_j):
+    pred_graph.remove_edges_from([(i, j)])
+    pred_graph = upd_node(pred_graph, j, label_j)
+    return pred_graph
 
-        Returns
-        -------
-        None
 
-        """
-        red = " 1.0 0.0 0.0"
-        entries = swc_utils.make_entries(graph, edge_list, self.anisotropy)
-        fn = self.prefix + str(self.site_cnt) + ".swc"
-        path = os.path.join(self.swc_dir, fn)
-        swc_utils.write_swc(path, entries, color=red)
+def upd_node(pred_graph, i, label):
+    pred_graph.graph["pred_ids"].update(set([label]))
+    pred_graph.nodes[i].update({"pred_id": label})
+    return pred_graph
 
-    def txt_logger(self, graph, edges):
-        """
-        Logs xyz coordinates of mistake and swc ids in a list.
 
-        Parameters
-        ----------
-        graph : networkx.graph
-            Graph that contains edges in "edge_list".
-        edges : list[tuple]
-            Edges that correspond to a mistake.
-        """
-        for pair in edges:
-            xyz_str = ""
-            labels_str = ""
-            for i in pair:
-                xyz = gutils.to_world(graph, i, self.anisotropy)
-                xyz_str += str(xyz) + ", "
-                labels_str += str(self.get_label(graph, i)) + ", "
-            self.mistakes_log.append(xyz_str + labels_str)
+def upd_nodes(pred_graph, nodes, label):
+    for i in nodes:
+        pred_graph = upd_node(pred_graph, i, label)
+    return pred_graph
 
-    def write_results(self, fn):
-        """
-        Writes "self.txt_log" to local machine at "self.log_dir".
 
-        Parameters
-        ----------
-        fn : str
-            Filename of text log.
+def remove_zeros(pred_graph):
+    delete_nodes = []
+    for i in pred_graph.nodes:
+        if pred_graph.nodes[i]["pred_id"] == 0:
+            delete_nodes.append(i)
+    pred_graph.remove_nodes_from(delete_nodes)
+    return pred_graph
 
-        Returns
-        -------
-        None.
-
-        """
-        if self.txt_log:
-            path = os.path.join(self.log_dir, fn + ".txt")
-            utils.write_txt(path, self.mistakes_log)
-
-    @abstractmethod
-    def detect_mistakes(self):
-        """
-        Detects differences between corresponding labels of graph and volume.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        pass
-
-    @abstractmethod
-    def mistake_search(self):
-        """
-        Determines whether a complex mistake is a misalignment between the
-        volume and graph or a true mistake.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        pass
+def count_splits(graph):
+    return max(len(list(nx.connected_components(graph))) - 1, 0)

@@ -12,7 +12,8 @@ import os
 import networkx as nx
 import numpy as np
 
-from segmentation_skeleton_metrics import graph_utils as gutils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils
+from segmentation_skeleton_metrics import utils
 
 
 def make_entries(graph, edge_list, anisotropy):
@@ -98,43 +99,14 @@ def write_swc(path, entry_list, color=None):
             f.write("\n")
 
 
-def dir_to_graphs(swc_dir, anisotropy=[1.0, 1.0, 1.0]):
+def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
     """
-    Converts directory of swc files to a list of graphs.
-
-    Parameters
-    ----------
-    swc_dir : str
-        Path to directory containing swc files.
-    anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
-
-    Returns
-    -------
-    list_of_graphs : list[networkx.Graph]
-        List of graphs where each graph represents a neuron.
-
-    """
-    list_of_graphs = []
-    for graph_id, f in enumerate(utils.listdir(swc_dir, ext=".swc")):
-        path = os.path.join(swc_dir, f)
-        graph = nx.Graph(file_name=f, graph_id=graph_id)
-        graph = file_to_graph(path, graph=graph, anisotropy=anisotropy)
-        list_of_graphs.append(graph)
-    return list_of_graphs
-
-
-def file_to_graph(path, graph=None, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Reads an swc file and constructs an undirected graph from it.
+    Reads an swc file and builds an undirected graph from it.
 
     Parameters
     ----------
     path : str
         Path to swc file to be read.
-    graph : networkx.Graph
-        Graph that info from swc file will be stored as a graph.
     anisotropy : list[float], optional
         Image to real-world coordinates scaling factors for (x, y, z) that is
         applied to swc files.
@@ -145,16 +117,15 @@ def file_to_graph(path, graph=None, anisotropy=[1.0, 1.0, 1.0]):
         Graph constructed from an swc file.
 
     """
-    if graph is None:
-        graph = nx.Graph()
-
+    swc_id = os.path.basename(path).replace(".swc", "")
+    graph = nx.Graph(swc_id=swc_id)
     with open(path, "r") as f:
         offset = [0, 0, 0]
         for line in f.readlines():
             if line.startswith("# OFFSET"):
                 parts = line.split()
                 offset = read_xyz(parts[2:5])
-            if not line.startswith("#") and len(line) > 0:
+            if not line.startswith("#"):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])

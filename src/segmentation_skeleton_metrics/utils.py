@@ -19,14 +19,14 @@ SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # -- os utils ---
-def listdir(path, ext=None):
+def listdir(directory, ext=None):
     """
-    Lists all files in the directory at "path". If an extension "ext" is
+    Lists all files in "directory". If an extension "ext" is
     provided, then only files containing "ext" are returned.
 
     Parameters
     ----------
-    path : str
+    directory : str
         Path to directory to be searched.
 
     ext : str, optional
@@ -40,10 +40,17 @@ def listdir(path, ext=None):
 
     """
     if ext is None:
-        return [f for f in os.listdir(path)]
+        return [f for f in os.listdir(directory)]
     else:
-        return [f for f in os.listdir(path) if ext in f]
+        return [f for f in os.listdir(directory) if ext in f]
 
+
+def list_paths(directory, ext=None):
+    paths = []
+    for f in listdir(directory, ext=ext):
+        paths.append(os.path.join(directory, f))
+    return paths
+    
 
 def mkdir(path):
     """
@@ -204,6 +211,15 @@ def get_chunk(arr, xyz, shape, from_center=True):
     return deepcopy(
         arr[start[0]: end[0], start[1]: end[1], start[2]: end[2]]
     )
+
+
+def read_img(path, filetype):
+    if filetype == "tensorstore":
+        return read_tensorstore(path)
+    elif filetype == "n5":
+        return read_n5(path)
+    else:
+        return read_tif(path)
 
 
 def read_n5(path):
