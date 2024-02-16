@@ -94,3 +94,23 @@ def to_world(graph, i, anisotropy):
 
     """
     return utils.to_world(get_xyz(graph, i), anisotropy)
+
+
+def empty_copy(graph):
+    """
+    Creates a copy of "graph" that does not contain the node level attributes.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be copied.
+
+    Returns
+    -------
+    graph : netowrkx.Graph
+        Copy of "graph" that does not contain its node level attributes.
+    """
+    graph_copy = nx.Graph(graph)
+    for i in graph_copy.nodes():
+        graph_copy.nodes[i].clear()
+    return graph_copy

@@ -15,11 +15,10 @@ from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
 
 
 def run_evaluation(
-    target_swc_paths,
-    pred_labels,
+    swc_paths,
+    labels,
     anisotropy=[1.0, 1.0, 1.0],
-    filetype=None,
-    pred_swc_paths=None
+    valid_ids=None,
 ):
     """
     Evaluates a predicted segmentation in terms of the number of splits
@@ -27,16 +26,15 @@ def run_evaluation(
 
     Parameters
     ----------
-    target_swc_paths : str
-        List of paths to swc files of the target segmentation.
-    pred_labels : np.array, ts.TensorStore, dict, or str
-        Predicted segmentation mask or path to it.
+    swc_paths : str
+        List of paths to swc files generated from the target segmentation.
+    labels : np.array or ts.TensorStore
+        Label mask of predicted segmentation.
     anisotropy : list[float], optional
         Image to real-world coordinates scaling factor for (x, y, z) which is
         applied to swc files.
-    filetype : str, optional
-        File type of target_labels and pred_labels if path is provided.
-        The default is None.
+    valid_ids : set
+        ...
 
     Returns
     -------
@@ -45,19 +43,11 @@ def run_evaluation(
         evaluation.
 
     """
-    # Determine valid ids
-    valid_ids = set()
-    if pred_swc_paths:
-        for path in pred_swc_paths:
-            swc_id = os.path.basename(path).replace(".swc", "")
-            valid_ids.add(swc_id)
-
     # Split evaluation
     skeleton_metric = SkeletonMetric(
-        target_swc_paths,
-        pred_labels,
+        swc_paths,
+        labels,
         anisotropy=anisotropy,
-        filetype=filetype,
         valid_ids=valid_ids,
     )
     skeleton_metric.detect_mistakes()

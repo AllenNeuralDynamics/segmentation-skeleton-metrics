@@ -13,11 +13,12 @@ import numpy as np
 import random
 import tensorstore as ts
 
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from segmentation_skeleton_metrics import graph_utils as gutils, utils
 from segmentation_skeleton_metrics.swc_utils import to_graph
 from toolbox.utils import progress_bar
-
-SUPPORTED_FILETYPES = ["tif", "n5", "neuroglancer_precomputed"]
+from time import time
 
 
 class SkeletonMetric:
@@ -32,9 +33,8 @@ class SkeletonMetric:
         swc_paths,
         labels,
         anisotropy=[1.0, 1.0, 1.0],
-        filetype=None,
-        valid_ids=None,
         equivalent_ids=None,
+        valid_ids=None,
     ):
         """
         Constructs object that evaluates a predicted segmentation.
@@ -49,62 +49,47 @@ class SkeletonMetric:
 
         """
         self.valid_ids = valid_ids
+        self.labels = labels
         self.graphs = self.init_graphs(swc_paths, anisotropy)
-        self.pred_graphs = []
-        if type(labels) is str:
-            self.labels = self.init_labels(labels, filetype)
-        else:
-            self.labels = labels
+        self.pred_graphs = self.init_pred_graphs()    
 
     def init_graphs(self, paths, anisotropy):
-        graphs = []
-        for path in paths:            
-            graphs.append(to_graph(path, anisotropy=anisotropy))
+        graphs = dict()
+        for path in paths:
+            swc_id = os.path.basename(path).replace(".swc", "")
+            graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
         return graphs
 
-    def init_labels(self, path, filetype):
-        """
-        Initializes a volume by uploading file with extension "filetype".
+    def init_pred_graphs(self):
+        print("Labelling Target Graphs...")
+        pred_graphs = dict()
+        for t, (swc_id, graph) in enumerate(self.graphs.items()):
+            progress_bar(t + 1, len(self.graphs))
+            graph = gutils.empty_copy(graph)
+            pred_graphs[swc_id] = self.label_graph(graph)
+        return pred_graphs
 
-        Parameters
-        ----------
-        path : str
-            Path to image volume.
-        filetype : str
-            Extension of file to be uploaded, supported values include tif, n5,
-            and tensorstore.
+    def label_graph(self, graph):
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = []
+            for i in graph.nodes:
+                threads.append(
+                    executor.submit(self.get_label, graph, i, True)
+                )
+            # Store results
+            for thread in as_completed(threads):
+                i, label = thread.result()
+                graph.nodes[i].update({"pred_id": label})
+        return graph
+    
+    def label_graph_synchronous(self, graph):
+        for i in graph.nodes:
+            label = self.get_label(graph, i)
+            graph.nodes[i].update({"pred_id": label})
+        return graph
 
-        Returns
-        -------
-        dict
-            Image volume.
-
-        """
-        assert filetype is not None, "Must provide filetype to upload image!"
-        assert filetype in SUPPORTED_FILETYPES, "Filetype is not supported!"
-        return utils.read_img(path, filetype)
-
-    def get_labels(self):
-        """
-        Gets list of all unique labels in "self.labels".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        list[int]
-            List of all unique labels in "self.labels".
-
-        """
-        if type(self.labels) == np.array:
-            labels = np.unique(self.labels)
-        else:
-            labels = np.unique(list(self.labels.keys()))
-        return [label for label in labels if label != 0]
-
-    def get_label(self, graph, i):
+    def get_label(self, graph, i, return_node=False):
         """
         Gets label of node "i".
 
@@ -121,10 +106,13 @@ class SkeletonMetric:
            Label of node "i".
 
         """
-        label = self.__get_label(gutils.get_xyz(graph, i))
-        return self.adjust_label(label)
+        label = self.__read_label(gutils.get_xyz(graph, i))
+        if return_node:
+            return i, self.validate_label(label)
+        else:
+            return self.validate_label(label)
 
-    def __get_label(self, xyz):
+    def __read_label(self, xyz):
         """
         Gets label at image coordinates "xyz".
 
@@ -139,9 +127,7 @@ class SkeletonMetric:
            Label at image coordinates "xyz".
 
         """
-        if type(self.labels) == dict:
-            return 0 if xyz not in self.labels.keys() else self.labels[xyz]
-        elif type(self.labels) == ts.TensorStore:
+        if type(self.labels) == ts.TensorStore:
             return int(self.labels[xyz].read().result())
         else:
             return self.labels[xyz]
@@ -169,7 +155,7 @@ class SkeletonMetric:
         """
         return self.get_label(graph, i), self.get_label(graph, j)
 
-    def adjust_label(self, label):
+    def validate_label(self, label):
         if self.valid_ids:
             if label not in self.valid_ids:
                 return 0
@@ -231,6 +217,7 @@ class SkeletonMetric:
         None
 
         """
+        print("\nRunning Evaluation...")
         for t, graph in enumerate(self.graphs):
             # Initializations
             progress_bar(t, len(self.graphs))
@@ -259,7 +246,9 @@ class SkeletonMetric:
 
             pred_graph = remove_zeros(pred_graph)
             self.pred_graphs.append(pred_graph)
-            self.site_cnt += count_splits(pred_graph)
+            print("")
+            print(graph.graph["swc_id"])
+            print("# splits:", count_splits(pred_graph))
 
         print("# Splits:", self.site_cnt)
         print("% Omit:", self.edge_cnt / self.count_edges())
