@@ -5,7 +5,7 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in the predicted segmentation by comparing it to the ground truth skeleton. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed and returned in a dictionary. There is also an optional to write either tiff or swc files that highlight each topological mistake.
+Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in the predicted segmentation by comparing the ground truth skeleton to it. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed and returned in a dictionary.
 
 
 ## Usage
