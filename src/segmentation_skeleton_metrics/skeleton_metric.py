@@ -43,6 +43,7 @@ class SkeletonMetric:
         anisotropy=[1.0, 1.0, 1.0],
         equivalent_ids=None,
         valid_ids=None,
+        zeroed_voxels=None,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -70,33 +71,50 @@ class SkeletonMetric:
         """
         self.valid_ids = valid_ids
         self.labels = labels
-        self.target_graphs = self.init_target_graphs(swc_paths, anisotropy)
-        self.pred_graphs = self.init_pred_graphs()
+        self.init_target_graphs(swc_paths, anisotropy)
+        self.init_pred_graphs()
 
     def init_target_graphs(self, paths, anisotropy):
-        target_graphs = dict()
+        """
+        Initializes "self.target_graphs" by iterating over "paths" which
+        correspond to neurons in the ground truth.
+
+        Parameters
+        ----------
+        paths : list[str]
+            List of paths to swc files which correspond to neurons in the
+            ground truth.
+        anisotropy : list[float]
+            Image to real-world coordinates scaling factors applied to swc
+            files.
+
+        Returns
+        -------
+        None
+
+        """
+        self.target_graphs = dict()
         for path in paths:
             swc_id = os.path.basename(path).replace(".swc", "")
-            target_graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
-        return target_graphs
+            self.target_graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
 
     def init_pred_graphs(self):
         print("Labelling Target Graphs...")
         t0 = time()
-        pred_graphs = dict()
+        self.pred_graphs = dict()
         for cnt, (swc_id, graph) in enumerate(self.target_graphs.items()):
             progress_bar(cnt + 1, len(self.target_graphs))
-            pred_graphs[swc_id] = self.label_graph(graph)
+            self.pred_graphs[swc_id] = self.label_graph(graph)
+
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
-        return pred_graphs
 
     def label_graph(self, target_graph):
         """
         Iterates over nodes in "target_graph" and stores the label in the
         predicted segmentation mask (i.e. "self.labels") which coincides with
         each node as a node-level attribute called "pred_id".
- 
+
         Parameters
         ----------
         target_graph : networkx.Graph
@@ -378,14 +396,12 @@ class SkeletonMetric:
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-        print("# merges:", np.sum(list(self.merge_cnts.values())) // 2)
-
     def init_merge_counter(self):
         return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
 
     def process_merge(self, swc_id, label):
         # Update graph
-        graph = self.pred_graphs[swc_id]
+        graph = self.pred_graphs[swc_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
         graph.graph["pred_ids"].remove(label)
         self.pred_graphs[swc_id] = graph
@@ -395,13 +411,27 @@ class SkeletonMetric:
         self.merged_cnts[swc_id] += merged_cnt
 
     def quantify_merges(self):
-        self.merged_percent = dict()
+        self.merged_percents = dict()
         for swc_id in self.target_graphs.keys():
             n_edges = self.target_graphs[swc_id].number_of_edges()
-            self.merged_percent[swc_id] = self.merged_cnts[swc_id] / n_edges
+            self.merged_percents[swc_id] = self.merged_cnts[swc_id] / n_edges
 
     def compile_results(self):
-        pass
+        # Compute remaining metrics
+        self.compute_edge_accuracy()
+        self.compute_erl()
+
+    def compute_edge_accuracy(self):
+        self.edge_accuracy = dict()
+        for swc_id in self.target_graphs.keys():
+            omit_percent = self.omit_percents[swc_id]
+            merged_percent = self.merged_percents[swc_id]
+            self.edge_accuracy[swc_id] = 1 - omit_percent - merged_percent
+
+    def compute_erl(self):
+        self.erl = dict()
+        for swc_id in self.target_graphs.keys():
+            None
 
 
 # -- utils --

@@ -62,10 +62,15 @@ def delete_nodes(graph, delete_id, return_cnt=False):
         if label == delete_id:
             delete_nodes.append(i)
 
+    # Count deleted edges (if applicable)
+    if return_cnt:
+        subgraph = graph.subgraph(delete_nodes)
+        cnt = subgraph.number_of_edges()
+
     # Update graph
     graph.remove_nodes_from(delete_nodes)
     if return_cnt:
-        return graph, len(delete_nodes)
+        return graph, cnt
     else:
         return graph
 
@@ -137,6 +142,29 @@ def store_labels(graph):
     return graph
 
 
+# -- eval tools --
+def count_splits(graph):
+    """
+    Counts the number of splits in "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be evaluated.
+
+    Returns
+    -------
+    int
+        Number of splits in "graph".
+
+    """
+    return max(len(list(nx.connected_components(graph))) - 1, 0)
+
+
+def compute_run_lengths(graph):
+    pass
+
+
 # -- miscellaneous --
 def sample_leaf(graph):
     """
@@ -175,21 +203,3 @@ def empty_copy(graph):
     for i in graph_copy.nodes():
         graph_copy.nodes[i].clear()
     return graph_copy
-
-
-def count_splits(graph):
-    """
-    Counts the number of splits in "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be evaluated.
-
-    Returns
-    -------
-    int
-        Number of splits in "graph".
-
-    """
-    return max(len(list(nx.connected_components(graph))) - 1, 0)
