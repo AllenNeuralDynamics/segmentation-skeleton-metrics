@@ -7,13 +7,9 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import json
 import os
-import shutil
 
 import tensorstore as ts
-import zarr
-from tifffile import imread
 
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
@@ -67,30 +63,6 @@ def list_paths(directory, ext=None):
     for f in listdir(directory, ext=ext):
         paths.append(os.path.join(directory, f))
     return paths
-
-
-# --- data structure utils ---
-def check_edge(edge_list, edge):
-    """
-    Checks if "edge" is in "edge_list".
-
-    Parameters
-    ----------
-    edge_list : list or set
-        List or set of edges.
-    edge : tuple
-        Edge.
-
-    Returns
-    -------
-    bool : bool
-        Indication of whether "edge" is contained in "edge_list".
-
-    """
-    if edge in edge_list or (edge[1], edge[0]) in edge_list:
-        return True
-    else:
-        return False
 
 
 # --- io utils ---
@@ -158,6 +130,29 @@ def read_tensorstore(path):
 
 
 # -- miscellaneous --
+def check_edge(edge_list, edge):
+    """
+    Checks if "edge" is in "edge_list".
+
+    Parameters
+    ----------
+    edge_list : list or set
+        List or set of edges.
+    edge : tuple
+        Edge.
+
+    Returns
+    -------
+    bool : bool
+        Indication of whether "edge" is contained in "edge_list".
+
+    """
+    if edge in edge_list or (edge[1], edge[0]) in edge_list:
+        return True
+    else:
+        return False
+
+
 def to_world(xyz, anisotropy):
     """
     Converts "xyz" from image coordinates to real-world coordinates.

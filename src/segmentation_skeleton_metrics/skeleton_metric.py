@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import time
 
 import networkx as nx
+import numpy as np
 import tensorstore as ts
 from toolbox.utils import progress_bar
 
@@ -22,8 +23,16 @@ from segmentation_skeleton_metrics.swc_utils import to_graph
 
 class SkeletonMetric:
     """
-    Class that evaluates a segmentation in terms of the number of
-    splits and merges.
+    Class that evaluates the quality of a predicted segmentation by comparing
+    the ground truth skeletons to the predicted segmentation mask. The
+    accuracy is then quantified by detecting splits and merges, then computing
+    the following metrics:
+        (1) Number of splits
+        (2) Number of merges
+        (3) Percentage of omit edges
+        (4) Percentage of merged edges
+        (5) Edge accuracy
+        (6) Expected Run Length (ERL)
 
     """
 
@@ -36,11 +45,23 @@ class SkeletonMetric:
         valid_ids=None,
     ):
         """
-        Constructs object that evaluates a predicted segmentation.
+        Constructs skeleton metric object that evaluates the quality of a
+        predicted segmentation.
 
         Parameters
         ----------
-        ...
+        swc_paths : list[str]
+            List of paths to swc files such that each file corresponds to a
+            neuron in the ground truth.
+        labels : numpy.ndarray or tensorstore.TensorStore
+            Predicted segmentation mask.
+        anisotropy : list[float], optional
+            Image to real-world coordinates scaling factors applied to swc
+            files. The default is [1.0, 1.0, 1.0]
+        equivalent_ids : ...
+            ...
+        valid_ids : set
+            ...
 
         Returns
         -------
@@ -71,6 +92,22 @@ class SkeletonMetric:
         return pred_graphs
 
     def label_graph(self, target_graph):
+        """
+        Iterates over nodes in "target_graph" and stores the label in the
+        predicted segmentation mask (i.e. "self.labels") which coincides with
+        each node as a node-level attribute called "pred_id".
+ 
+        Parameters
+        ----------
+        target_graph : networkx.Graph
+            Graph that represents a neuron from the ground truth.
+
+        Returns
+        -------
+        target_graph : networkx.Graph
+            Updated graph with node-level attributes called "pred_id".
+
+        """
         pred_graph = gutils.empty_copy(target_graph)
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -105,13 +142,13 @@ class SkeletonMetric:
         else:
             return self.validate_label(label)
 
-    def __read_label(self, xyz):
+    def __read_label(self, coord):
         """
         Gets label at image coordinates "xyz".
 
         Parameters
         ----------
-        xyz : tuple[int]
+        coord : tuple[int]
             Coordinates that index into "self.labels".
 
         Returns
@@ -121,9 +158,9 @@ class SkeletonMetric:
 
         """
         if type(self.labels) == ts.TensorStore:
-            return int(self.labels[xyz].read().result())
+            return int(self.labels[coord].read().result())
         else:
-            return self.labels[xyz]
+            return self.labels[coord]
 
     def validate_label(self, label):
         """
@@ -161,12 +198,23 @@ class SkeletonMetric:
         ...
 
         """
+        # Split evaluation
+        print("Detecting Splits...")
         self.detect_splits()
-        pass
+        self.quantify_splits()
+
+        # Merge evaluation
+        print("Detecting Merges...")
+        self.detect_merges()
+        self.quantify_merges()
+
+        # Compute metrics
+        self.compile_results()
 
     def detect_splits(self):
         """
-        Detects splits in the predicted segmentation.
+        Detects splits in the predicted segmentation, then deletes node and
+        edges in "self.pred_graphs" that correspond to a split.
 
         Parameters
         ----------
@@ -177,7 +225,6 @@ class SkeletonMetric:
         None
 
         """
-        print("Detecting Splits...")
         t0 = time()
         target_graphs = self.target_graphs.items()
         for cnt, (swc_id, target_graph) in enumerate(target_graphs):
@@ -193,7 +240,7 @@ class SkeletonMetric:
                 (i, j) = dfs_edges.pop(0)
                 label_i = pred_graph.nodes[i]["pred_id"]
                 label_j = pred_graph.nodes[j]["pred_id"]
-                if self.is_split(label_i, label_j):
+                if is_split(label_i, label_j):
                     pred_graph = gutils.remove_edge(pred_graph, i, j)
                 elif label_j == 0:
                     dfs_edges, pred_graph = self.split_search(
@@ -201,38 +248,19 @@ class SkeletonMetric:
                     )
 
             # Update predicted graph
-            self.pred_graphs[swc_id] = edit_graph(pred_graph)
+            pred_graph = gutils.delete_nodes(pred_graph, 0)
+            pred_graph = gutils.store_labels(pred_graph)
+            self.pred_graphs[swc_id] = pred_graph
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def is_split(self, a, b):
-        """
-        Checks if "a" and "b" are positive and not equal.
-
-        Parameters
-        ----------
-        a : int
-            label at node i.
-        b : int
-            label at node j.
-
-        Returns
-        -------
-        bool
-            Indicates whether there is a mistake.
-
-        """
-        if self.valid_ids is not None:
-            if a not in self.valid_ids or b not in self.valid_ids:
-                return False
-        return (a != 0 and b != 0) and (a != b)
-
     def split_search(self, target_graph, pred_graph, dfs_edges, nb, root):
         """
-        Determines whether zero-valued corresponds to a split or misalignment
-        between "target_graph" and the predicted segmentation mask.
+        Determines whether zero-valued labels correspond to a split or
+        misalignment between "target_graph" and the predicted segmentation
+        mask.
 
         Parameters
         ----------
@@ -279,28 +307,119 @@ class SkeletonMetric:
         if len(collision_labels) == 1:
             label = collision_labels.pop()
             visited = visited.difference(collision_nodes)
-            pred_graph = upd_nodes(pred_graph, visited, label)
+            pred_graph = gutils.upd_labels(pred_graph, visited, label)
 
         return dfs_edges, pred_graph
 
+    def quantify_splits(self):
+        """
+        Counts the number of splits, number of omit edges, and percent of omit
+        edges for each graph in "self.pred_graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        self.split_cnts = []
+        self.omit_cnts = []
+        self.omit_percents = []
+        for swc_id in self.target_graphs.keys():
+            n_splits = gutils.count_splits(self.pred_graphs[swc_id])
+            n_pred_edges = self.pred_graphs[swc_id].number_of_edges()
+            n_target_edges = self.target_graphs[swc_id].number_of_edges()
+
+            self.split_cnts.append(n_splits)
+            self.omit_cnts.append(n_target_edges - n_pred_edges)
+            self.omit_percents.append(1 - n_pred_edges / n_target_edges)
+
+    def detect_merges(self):
+        """
+        Detects merges in the predicted segmentation, then deletes node and
+        edges in "self.pred_graphs" that correspond to a merge.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Initilize counts
+        self.merge_cnts = self.init_merge_counter()
+        self.merged_cnts = self.init_merge_counter()
+        self.merged_percents = self.init_merge_counter()
+
+        # Run detection
+        t0 = time()
+        for cnt, swc_id_1 in enumerate(self.pred_graphs.keys()):
+            progress_bar(cnt + 1, len(self.target_graphs))
+            for swc_id_2 in self.pred_graphs.keys():
+                # Check if identical
+                if swc_id_1 == swc_id_2:
+                    continue
+
+                # Compare pred_ids contained in graph
+                pred_ids_1 = self.pred_graphs[swc_id_1].graph["pred_ids"]
+                pred_ids_2 = self.pred_graphs[swc_id_2].graph["pred_ids"]
+                intersection = pred_ids_1.intersection(pred_ids_2)
+                if len(intersection) > 0:
+                    for label in intersection:
+                        self.process_merge(swc_id_1, label)
+                        self.process_merge(swc_id_2, label)
+
+        # Report Runtime
+        t, unit = utils.time_writer(time() - t0)
+        print(f"\nRuntime: {round(t, 2)} {unit}\n")
+
+        print("# merges:", np.sum(list(self.merge_cnts.values())) // 2)
+
+    def quantify_merges(self):
+        pass
+
+    def process_merge(self, swc_id, label):
+        # Update graph
+        graph = self.pred_graphs[swc_id]
+        graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
+        graph.graph["pred_ids"].remove(label)
+        self.pred_graphs[swc_id] = graph
+
+        # Update cnts
+        self.merge_cnts[swc_id] += 1
+        self.merged_cnts[swc_id] += merged_cnt
+
+    def init_merge_counter(self):
+        return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
+
+    def compile_results(self):
+        pass
+
 
 # -- utils --
-def upd_nodes(graph, nodes, label):
-    for i in nodes:
-        graph.nodes[i].update({"pred_id": label})
-    return graph
+def is_split(a, b):
+    """
+    Checks if "a" and "b" are positive and not equal.
 
+    Parameters
+    ----------
+    a : int
+        label at node i.
+    b : int
+        label at node j.
 
-def edit_graph(graph):
-    delete_nodes = []
-    for i in graph.nodes:
-        label = graph.nodes[i]["pred_id"]
-        if label == 0:
-            delete_nodes.append(i)
-        else:
-            graph.graph["pred_ids"].add(label)
-    graph.remove_nodes_from(delete_nodes)
-    return graph
+    Returns
+    -------
+    bool
+        Indication of whether there is a split.
+
+    """
+    return (a != 0 and b != 0) and (a != b)
 
 
 def remove_edge(dfs_edges, edge):
@@ -317,8 +436,8 @@ def remove_edge(dfs_edges, edge):
     Returns
     -------
     edges : list or set
-        Updated list or set of edges with "dfs_edges" removed if it was contained
-        in "dfs_edges".
+        Updated list or set of edges with "dfs_edges" removed if it was
+        contained in "dfs_edges".
 
     """
     if edge in dfs_edges:
