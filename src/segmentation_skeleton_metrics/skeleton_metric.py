@@ -14,7 +14,6 @@ from time import time
 import networkx as nx
 import numpy as np
 import tensorstore as ts
-from toolbox.utils import progress_bar
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
@@ -117,7 +116,7 @@ class SkeletonMetric:
         t0 = time()
         self.pred_graphs = dict()
         for cnt, (swc_id, graph) in enumerate(self.target_graphs.items()):
-            progress_bar(cnt + 1, len(self.target_graphs))
+            utils.progress_bar(cnt + 1, len(self.target_graphs))
             self.pred_graphs[swc_id] = self.label_graph(graph)
 
         t, unit = utils.time_writer(time() - t0)
@@ -262,7 +261,7 @@ class SkeletonMetric:
         target_graphs = self.target_graphs.items()
         for cnt, (swc_id, target_graph) in enumerate(target_graphs):
             # Initializations
-            progress_bar(cnt + 1, len(self.target_graphs))
+            utils.progress_bar(cnt + 1, len(self.target_graphs))
             pred_graph = self.pred_graphs[swc_id]
 
             # Run dfs
@@ -392,7 +391,7 @@ class SkeletonMetric:
         # Run detection
         t0 = time()
         for cnt, swc_id_1 in enumerate(self.pred_graphs.keys()):
-            progress_bar(cnt + 1, len(self.target_graphs))
+            utils.progress_bar(cnt + 1, len(self.target_graphs))
             for swc_id_2 in self.pred_graphs.keys():
                 # Check if identical
                 if swc_id_1 == swc_id_2:
