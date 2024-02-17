@@ -126,12 +126,12 @@ class SkeletonMetric:
             Updated graph with node-level attributes called "pred_id".
 
         """
-        pred_graph = gutils.empty_copy(target_graph)
+        pred_graph = nx.Graph(target_graph, pred_ids=set())
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
             for i in pred_graph.nodes:
-                img_coord = gutils.get_coord(target_graph, i)
+                img_coord = gutils.get_coord(pred_graph, i)
                 threads.append(executor.submit(self.get_label, img_coord, i))
             # Store results
             for thread in as_completed(threads):
@@ -431,7 +431,9 @@ class SkeletonMetric:
     def compute_erl(self):
         self.erl = dict()
         for swc_id in self.target_graphs.keys():
-            None
+            graph = self.pred_graphs[swc_id]
+            path_lengths = gutils.compute_run_lengths(graph)
+            self.erl[swc_id] = np.mean(path_lengths)
 
 
 # -- utils --

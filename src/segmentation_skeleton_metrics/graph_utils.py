@@ -6,8 +6,10 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
+from scipy.spatial.distance import euclidean as dist
 from random import sample
 
+import math
 import networkx as nx
 
 
@@ -162,8 +164,34 @@ def count_splits(graph):
 
 
 def compute_run_lengths(graph):
-    pass
+    run_lengths = []
+    for nodes in nx.connected_components(graph):
+        subgraph = graph.subgraph(nodes)
+        run_lengths.append(compute_path_length(subgraph))
+    return run_lengths
 
+
+def compute_path_length(graph):
+    """
+    Computes path length of graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be parsed.
+
+    Returns
+    -------
+    path_length : float
+        Path length of graph.
+
+    """
+    path_length = 0
+    for i, j in nx.dfs_edges(graph):
+        xyz_1 = graph.nodes[i]["xyz"]
+        xyz_2 = graph.nodes[j]["xyz"]
+        path_length += dist(xyz_1, xyz_2)
+    return path_length
 
 # -- miscellaneous --
 def sample_leaf(graph):
@@ -183,23 +211,3 @@ def sample_leaf(graph):
     """
     leafs = [i for i in graph.nodes if graph.degree[i] == 1]
     return sample(leafs, 1)[0]
-
-
-def empty_copy(graph):
-    """
-    Creates a copy of "graph" that does not contain the node level attributes.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be copied.
-
-    Returns
-    -------
-    graph : netowrkx.Graph
-        Copy of "graph" that does not contain its node level attributes.
-    """
-    graph_copy = nx.Graph(graph, pred_ids=set())
-    for i in graph_copy.nodes():
-        graph_copy.nodes[i].clear()
-    return graph_copy

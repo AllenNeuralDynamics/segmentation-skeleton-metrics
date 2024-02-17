@@ -202,3 +202,9 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def progress_bar(current, total, bar_length=50):
+    progress = int(current / total * bar_length)
+    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
+    print(f"\r{bar}", end="", flush=True)
