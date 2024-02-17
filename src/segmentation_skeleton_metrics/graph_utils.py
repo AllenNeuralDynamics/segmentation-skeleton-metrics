@@ -6,11 +6,10 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-from scipy.spatial.distance import euclidean as dist
 from random import sample
 
-import math
 import networkx as nx
+from scipy.spatial.distance import euclidean as dist
 
 
 # -- edit graph --
@@ -164,10 +163,27 @@ def count_splits(graph):
 
 
 def compute_run_lengths(graph):
+    """
+    Computes the path length of each connected component in "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be parsed.
+
+    Returns
+    -------
+    run_lengths : list
+        List of run lengths of each connected component in "graph".
+
+    """
     run_lengths = []
-    for nodes in nx.connected_components(graph):
-        subgraph = graph.subgraph(nodes)
-        run_lengths.append(compute_path_length(subgraph))
+    if graph.number_of_nodes():
+        for nodes in nx.connected_components(graph):
+            subgraph = graph.subgraph(nodes)
+            run_lengths.append(compute_path_length(subgraph))
+    else:
+        run_lengths.append(0)
     return run_lengths
 
 
@@ -192,6 +208,7 @@ def compute_path_length(graph):
         xyz_2 = graph.nodes[j]["xyz"]
         path_length += dist(xyz_1, xyz_2)
     return path_length
+
 
 # -- miscellaneous --
 def sample_leaf(graph):

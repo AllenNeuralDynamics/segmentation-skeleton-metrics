@@ -83,7 +83,7 @@ def open_tensorstore(path, driver):
         Sparse image volume.
 
     """
-    assert driver in SUPPORTED_DRIVERS, "Error! Driver is not supported!"
+    assert driver in SUPPORTED_DRIVERS, "Driver is not supported!"
     arr = ts.open(
         {
             "driver": driver,
@@ -112,7 +112,7 @@ def read_tensorstore(path):
     Parameters
     ----------
     path : str
-        Path to directory containing shard files.
+        Path to directory containing shardsS.
 
     Returns
     -------
@@ -205,6 +205,25 @@ def time_writer(t, unit="seconds"):
 
 
 def progress_bar(current, total, bar_length=50):
+    """
+    Reports the progress of completing some process.
+
+    Parameters
+    ----------
+    current : int
+        Current iteration of process.
+    total : int
+        Total number of iterations to be completed
+    bar_length : int, optional
+        Length of progress bar
+
+    Returns
+    -------
+    None
+
+    """
     progress = int(current / total * bar_length)
-    bar = f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
+    bar = (
+        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
+    )
     print(f"\r{bar}", end="", flush=True)
