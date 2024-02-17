@@ -325,17 +325,17 @@ class SkeletonMetric:
         None
 
         """
-        self.split_cnts = []
-        self.omit_cnts = []
-        self.omit_percents = []
+        self.split_cnts = dict()
+        self.omit_cnts = dict()
+        self.omit_percents = dict()
         for swc_id in self.target_graphs.keys():
             n_splits = gutils.count_splits(self.pred_graphs[swc_id])
             n_pred_edges = self.pred_graphs[swc_id].number_of_edges()
             n_target_edges = self.target_graphs[swc_id].number_of_edges()
 
-            self.split_cnts.append(n_splits)
-            self.omit_cnts.append(n_target_edges - n_pred_edges)
-            self.omit_percents.append(1 - n_pred_edges / n_target_edges)
+            self.split_cnts[swc_id] = n_splits
+            self.omit_cnts[swc_id] = n_target_edges - n_pred_edges
+            self.omit_percents[swc_id] = 1 - n_pred_edges / n_target_edges
 
     def detect_merges(self):
         """
@@ -380,8 +380,8 @@ class SkeletonMetric:
 
         print("# merges:", np.sum(list(self.merge_cnts.values())) // 2)
 
-    def quantify_merges(self):
-        pass
+    def init_merge_counter(self):
+        return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
 
     def process_merge(self, swc_id, label):
         # Update graph
@@ -394,8 +394,11 @@ class SkeletonMetric:
         self.merge_cnts[swc_id] += 1
         self.merged_cnts[swc_id] += merged_cnt
 
-    def init_merge_counter(self):
-        return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
+    def quantify_merges(self):
+        self.merged_percent = dict()
+        for swc_id in self.target_graphs.keys():
+            n_edges = self.target_graphs[swc_id].number_of_edges()
+            self.merged_percent[swc_id] = self.merged_cnts[swc_id] / n_edges
 
     def compile_results(self):
         pass
