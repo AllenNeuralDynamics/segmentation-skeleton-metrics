@@ -99,6 +99,20 @@ class SkeletonMetric:
             self.target_graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
 
     def init_pred_graphs(self):
+        """
+        Initializes "self.pred_graphs" by copying each graph in
+        "self.target_graphs", then labels each node with the label in
+        "self.labels" that coincides with it.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         print("Labelling Target Graphs...")
         t0 = time()
         self.pred_graphs = dict()
@@ -227,7 +241,8 @@ class SkeletonMetric:
         self.quantify_merges()
 
         # Compute metrics
-        self.compile_results()
+        full_results, avg_results = self.compile_results()
+        return full_results, avg_results
 
     def detect_splits(self):
         """
@@ -397,9 +412,39 @@ class SkeletonMetric:
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
     def init_merge_counter(self):
+        """
+        Initializes a dictionary that is used to count the number of merge
+        type mistakes for each pred_graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Dictionary used to count number of merge type mistakes.
+
+        """
         return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
 
     def process_merge(self, swc_id, label):
+        """
+        Once a merge has been detected that corresponds to "label", every node
+        in "self.pred_graph[swc_id]" with that label is deleted.
+
+        Parameters
+        ----------
+        swc_id : str
+            Key associated with the pred_graph to be searched.
+        label : int
+            Label assocatied with a merge.
+
+        Returns
+        -------
+        None
+
+        """
         # Update graph
         graph = self.pred_graphs[swc_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
@@ -411,17 +456,96 @@ class SkeletonMetric:
         self.merged_cnts[swc_id] += merged_cnt
 
     def quantify_merges(self):
+        """
+        Computes the percentage of merged edges for each pred_graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         self.merged_percents = dict()
         for swc_id in self.target_graphs.keys():
             n_edges = self.target_graphs[swc_id].number_of_edges()
             self.merged_percents[swc_id] = self.merged_cnts[swc_id] / n_edges
 
     def compile_results(self):
+        """
+        Compiles a dictionary containing the metrics computed by this module.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        full_results : dict
+            Dictionary where the keys are swc_ids and the values are the result
+            of computing each metric for the corresponding graphs.
+        avg_result : dict
+            Dictionary where the keys are names of metrics computed by this
+            module and values are the averaged result over all swc_ids.
+
+        """
         # Compute remaining metrics
         self.compute_edge_accuracy()
         self.compute_erl()
 
+        # Summarize results
+        swc_ids, full_results = self.generate_report()
+        avg_results = dict([(k, np.mean(v)) for k, v in full_results.items()])
+        full_results = dict(zip(swc_ids, full_results))
+        return full_results, avg_results
+
+    def generate_report(self):
+        """
+        Generates a report by creating a list of the results for each metric.
+        Each item in this list corresponds to a graph in "self.pred_graphs"
+        and this list is ordered with respect to "swc_ids".
+
+        Parameters
+        ----------
+        None
+
+        Results
+        -------
+        swc_ids : list[str]
+            Specifies the ordering of results for each value in "stats".
+        stats : dict
+            Dictionary where the keys are metrics and values are the result of
+            computing that metric for each graph in "self.pred_graphs".
+
+        """
+        swc_ids = list(self.pred_graphs.keys())
+        swc_ids.sort()
+        stats = {
+            "# splits": generate_result(swc_ids, self.split_cnts),
+            "# merges": generate_result(swc_ids, self.merge_cnts),
+            "% omit edges": generate_result(swc_ids, self.omit_percents),
+            "% merged edges": generate_result(swc_ids, self.merged_percents),
+            "edge accuracy": generate_result(swc_ids, self.edge_accuracy),
+            "erl": generate_result(swc_ids, self.erl),
+            "normalized erl": generate_result(swc_ids, self.normalized_erl),
+        }
+        return swc_ids, stats
+
     def compute_edge_accuracy(self):
+        """
+        Computes the edge accuracy of each pred_graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         self.edge_accuracy = dict()
         for swc_id in self.target_graphs.keys():
             omit_percent = self.omit_percents[swc_id]
@@ -429,11 +553,27 @@ class SkeletonMetric:
             self.edge_accuracy[swc_id] = 1 - omit_percent - merged_percent
 
     def compute_erl(self):
+        """
+        Computes the expected run length (ERL) of each pred_graph.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         self.erl = dict()
+        self.normalized_erl = dict()
         for swc_id in self.target_graphs.keys():
-            graph = self.pred_graphs[swc_id]
-            path_lengths = gutils.compute_run_lengths(graph)
+            pred_graph = self.pred_graphs[swc_id]
+            target_graph = self.target_graphs[swc_id]
+            path_lengths = gutils.compute_run_lengths(pred_graph)
+            path_length = gutils.compute_path_length(target_graph)
             self.erl[swc_id] = np.mean(path_lengths)
+            self.normalized_erl[swc_id] = np.mean(path_lengths) / path_length
 
 
 # -- utils --
@@ -480,3 +620,25 @@ def remove_edge(dfs_edges, edge):
     elif (edge[1], edge[0]) in dfs_edges:
         dfs_edges.remove((edge[1], edge[0]))
     return dfs_edges
+
+
+def generate_result(swc_ids, stats):
+    """
+    Reorders items in "stats" with respect to the order defined by "swc_ids".
+
+    Parameters
+    ----------
+    swc_ids : list[str]
+        List of all swc_ids of graphs in "self.pred_graphs".
+    stats : dict
+        Dictionary where the keys are swc_ids and values are the result of
+        computing some metrics.
+
+    Returns
+    -------
+    list
+        Reorded items in "stats" with respect to the order defined by
+        "swc_ids".
+
+    """
+    return [stats[swc_id] for swc_id in swc_ids]
