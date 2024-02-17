@@ -496,9 +496,16 @@ class SkeletonMetric:
         self.compute_erl()
 
         # Summarize results
-        swc_ids, full_results = self.generate_report()
-        avg_results = dict([(k, np.mean(v)) for k, v in full_results.items()])
-        full_results = dict(zip(swc_ids, full_results))
+        swc_ids, results = self.generate_report()
+        avg_results = dict([(k, np.mean(v)) for k, v in results.items()])
+
+        # Reformat full results
+        full_results = dict()
+        for i, swc_id in enumerate(swc_ids):
+            full_results[swc_id] = dict(
+                [(key, results[key][i]) for key in results.keys()]
+            )
+
         return full_results, avg_results
 
     def generate_report(self):
