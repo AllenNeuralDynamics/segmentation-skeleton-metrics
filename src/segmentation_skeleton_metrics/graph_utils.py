@@ -10,28 +10,8 @@ from random import sample
 
 import networkx as nx
 
-from segmentation_skeleton_metrics import utils
 
-
-def sample_leaf(graph):
-    """
-    Samples leaf node from "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be sampled from.
-
-    Returns
-    -------
-    int
-        Leaf node of "graph"
-
-    """
-    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
-    return sample(leafs, 1)[0]
-
-
+# -- edit graph --
 def remove_edge(graph, i, j):
     """
     Remove the edge "(i,j)" from "graph".
@@ -55,6 +35,42 @@ def remove_edge(graph, i, j):
     return graph
 
 
+def delete_nodes(graph, delete_id, return_cnt=False):
+    """
+    Deletes nodes in "graph" whose pred_id is identical to "delete_id".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched and edited.
+    delete_id : int
+        pred_id to be removed from graph.
+    return : bool, optional
+        Indication of whether to return the number of nodes deleted from
+        "graph". The default is False.
+
+    Returns
+    -------
+    graph : networkx.Graph
+        Updated graph.
+
+    """
+    # Find nodes matching delete_marker
+    delete_nodes = []
+    for i in graph.nodes:
+        label = graph.nodes[i]["pred_id"]
+        if label == delete_id:
+            delete_nodes.append(i)
+
+    # Update graph
+    graph.remove_nodes_from(delete_nodes)
+    if return_cnt:
+        return graph, len(delete_nodes)
+    else:
+        return graph
+
+
+# -- attribute utils --
 def get_coord(graph, i):
     """
     Gets (x,y,z) image coordinates of node "i".
@@ -62,7 +78,7 @@ def get_coord(graph, i):
     Parameters
     ----------
     graph : networkx.Graph
-        Graph that represents a neuron.
+        Graph to be queried.
     i : int
         Node of "graph".
 
@@ -73,6 +89,72 @@ def get_coord(graph, i):
 
     """
     return tuple(graph.nodes[i]["xyz"])
+
+
+def upd_labels(graph, nodes, label):
+    """
+    Updates the label of each node in "nodes" with "label".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be updated.
+    nodes : list
+        List of nodes to be updated.
+    label : int
+        New label of each node in "nodes".
+
+    Returns
+    -------
+    graph : networkx.Graph
+        Updated graph.
+
+    """
+    for i in nodes:
+        graph.nodes[i].update({"pred_id": label})
+    return graph
+
+
+def store_labels(graph):
+    """
+    Iterates over all nodes in "graph" and stores their pred_id in a graph
+    attribute called pred_ids.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be updated
+
+    Returns
+    -------
+    graph : networkx.Graph
+        Updated graph.
+
+    """
+    for i in graph.nodes:
+        label = graph.nodes[i]["pred_id"]
+        graph.graph["pred_ids"].add(label)
+    return graph
+
+
+# -- miscellaneous --
+def sample_leaf(graph):
+    """
+    Samples leaf node from "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be sampled from.
+
+    Returns
+    -------
+    int
+        Leaf node of "graph"
+
+    """
+    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
+    return sample(leafs, 1)[0]
 
 
 def empty_copy(graph):
