@@ -9,6 +9,7 @@ Created on Wed Aug 15 12:00:00 2023
 from random import sample
 
 import networkx as nx
+import numpy as np
 from scipy.spatial.distance import euclidean as dist
 
 
@@ -173,8 +174,8 @@ def compute_run_lengths(graph):
 
     Returns
     -------
-    run_lengths : list
-        List of run lengths of each connected component in "graph".
+    run_lengths : numpy.ndarray
+        Array containing run lengths of each connected component in "graph".
 
     """
     run_lengths = []
@@ -184,7 +185,7 @@ def compute_run_lengths(graph):
             run_lengths.append(compute_path_length(subgraph))
     else:
         run_lengths.append(0)
-    return run_lengths
+    return np.array(run_lengths)
 
 
 def compute_path_length(graph):

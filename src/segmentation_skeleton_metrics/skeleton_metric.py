@@ -576,11 +576,38 @@ class SkeletonMetric:
         for swc_id in self.target_graphs.keys():
             pred_graph = self.pred_graphs[swc_id]
             target_graph = self.target_graphs[swc_id]
-            path_lengths = gutils.compute_run_lengths(pred_graph)
-            path_length = gutils.compute_path_length(target_graph)
-            self.erl[swc_id] = np.mean(path_lengths)
-            self.normalized_erl[swc_id] = np.mean(path_lengths) / path_length
 
+            path_length = gutils.compute_path_length(target_graph)
+            path_lengths = gutils.compute_run_lengths(pred_graph)
+            wgts = path_lengths / max(np.sum(path_lengths), 1)
+
+            self.erl[swc_id] = np.sum(wgts * path_lengths)
+            self.normalized_erl[swc_id] = self.erl[swc_id] / path_length
+
+    def list_metrics(self):
+        """
+        Lists metrics that are computed by this module.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        metrics : list[str]
+            List of metrics computed by this module.
+
+        """
+        metrics = [
+            "# splits",
+            "# merges",
+            "% omit edges",
+            "% merged edges",
+            "edge accuracy",
+            "erl",
+            "normalized erl",
+        ]
+        return metrics
 
 # -- utils --
 def is_split(a, b):
