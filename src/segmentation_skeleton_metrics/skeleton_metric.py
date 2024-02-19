@@ -497,6 +497,7 @@ class SkeletonMetric:
         # Summarize results
         swc_ids, results = self.generate_report()
         avg_results = dict([(k, np.mean(v)) for k, v in results.items()])
+        avg_results["# merges"] = avg_results["# merges"] // 2
 
         # Reformat full results
         full_results = dict()
