@@ -481,7 +481,7 @@ class SkeletonMetric:
 
     def near_bdd(self, swc_id_1, swc_id_2, label):
         near_bdd_bool = False
-        if not self.ignore_boundary_mistakes:
+        if self.ignore_boundary_mistakes:
             # Get merged nodes
             merged_1 = self.label_to_node[swc_id_1][label]
             merged_2 = self.label_to_node[swc_id_2][label]
@@ -502,8 +502,7 @@ class SkeletonMetric:
             dims = self.labels.shape
             above = [midpoint[i] > dims[i] - 32 for i in range(3)]
             below = [midpoint[i] < 32 for i in range(3)]
-            if above.any() or below.any():
-                near_bdd_bool = True
+            near_bdd_bool = True if any(above) or any(below) else False
 
         return near_bdd_bool
 
