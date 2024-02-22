@@ -9,6 +9,7 @@ Created on Wed Dec 21 19:00:00 2022
 
 import os
 
+import numpy as np
 import tensorstore as ts
 from scipy.spatial import distance
 
