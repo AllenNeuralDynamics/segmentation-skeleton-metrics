@@ -124,8 +124,8 @@ def upd_labels(graph, nodes, label):
 
 def store_labels(graph):
     """
-    Iterates over all nodes in "graph" and stores their pred_id in a graph
-    attribute called pred_ids.
+    Iterates over all nodes in "graph" and stores the pred_id and node id in
+    a dictionary called "label_to_node".
 
     Parameters
     ----------
@@ -134,14 +134,18 @@ def store_labels(graph):
 
     Returns
     -------
-    graph : networkx.Graph
-        Updated graph.
+    label_to_node : dict
+        Dictionary that stores the pred_id and node id.
 
     """
+    label_to_node = dict()
     for i in graph.nodes:
         label = graph.nodes[i]["pred_id"]
-        graph.graph["pred_ids"].add(label)
-    return graph
+        if label in label_to_node.keys():
+            label_to_node[label].add(i)
+        else:
+            label_to_node[label] = set([i])
+    return label_to_node
 
 
 # -- eval tools --
