@@ -14,6 +14,7 @@ from time import time
 import networkx as nx
 import numpy as np
 import tensorstore as ts
+from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
@@ -40,9 +41,10 @@ class SkeletonMetric:
         swc_paths,
         labels,
         anisotropy=[1.0, 1.0, 1.0],
+        black_holes=None,
+        black_hole_radius=24,
         equivalent_ids=None,
         valid_ids=None,
-        zeroed_voxels=None,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -58,6 +60,10 @@ class SkeletonMetric:
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files. The default is [1.0, 1.0, 1.0]
+        black_holes : numpy.ndarray
+            ...
+        black_hole_radius : float
+            ...
         equivalent_ids : ...
             ...
         valid_ids : set
@@ -68,10 +74,35 @@ class SkeletonMetric:
         None.
 
         """
+        # Store label options
         self.valid_ids = valid_ids
         self.labels = labels
+        self.black_hole_radius = black_hole_radius
+        self.init_black_holes(black_holes)
+        self.black_hole_labels = set()
+
+        # Build Graphs
         self.init_target_graphs(swc_paths, anisotropy)
         self.init_pred_graphs()
+        self.black_hole_labels.discard(0)
+
+    def init_black_holes(self, black_holes):
+        if black_holes:
+            self.black_holes = KDTree(black_holes)
+        else:
+            self.black_holes = None
+
+    def in_black_hole(self, xyz):
+        # Check whether black_holes exists
+        if self.black_holes is None:
+            return False
+
+        # Search black_holes
+        pts = self.black_holes.query_ball_point(xyz, self.black_hole_radius)
+        if len(pts) > 0:
+            return True
+        else:
+            return False
 
     def init_target_graphs(self, paths, anisotropy):
         """
@@ -115,9 +146,12 @@ class SkeletonMetric:
         print("Labelling Target Graphs...")
         t0 = time()
         self.pred_graphs = dict()
+        self.label_to_node = dict()
         for cnt, (swc_id, graph) in enumerate(self.target_graphs.items()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
-            self.pred_graphs[swc_id] = self.label_graph(graph)
+            pred_graph, label_to_node = self.label_graph(graph)
+            self.pred_graphs[swc_id] = pred_graph
+            self.label_to_node[swc_id] = label_to_node
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
@@ -139,7 +173,8 @@ class SkeletonMetric:
             Updated graph with node-level attributes called "pred_id".
 
         """
-        pred_graph = nx.Graph(target_graph, pred_ids=set())
+        pred_graph = nx.Graph(target_graph)
+        label_to_node = dict()
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
@@ -150,7 +185,11 @@ class SkeletonMetric:
             for thread in as_completed(threads):
                 i, label = thread.result()
                 pred_graph.nodes[i].update({"pred_id": label})
-        return pred_graph
+                if label in label_to_node.keys():
+                    label_to_node[label].add(i)
+                else:
+                    label_to_node[label] = set([i])
+        return pred_graph, label_to_node
 
     def get_label(self, img_coord, return_node=False):
         """
@@ -168,6 +207,12 @@ class SkeletonMetric:
 
         """
         label = self.__read_label(img_coord)
+        if self.in_black_hole(img_coord):
+            self.black_hole_labels.add(label)
+            label = -1
+        return self.output_label(label, return_node)
+
+    def output_label(self, label, return_node):
         if return_node:
             return return_node, self.validate_label(label)
         else:
@@ -243,6 +288,18 @@ class SkeletonMetric:
         full_results, avg_results = self.compile_results()
         return full_results, avg_results
 
+    def get_pred_ids(self, swc_id):
+        """
+        Gets the predicted label ids that intersect with the target graph
+        corresponding to "swc_id".
+
+        Parameters
+        ----------
+        swc_id : str
+
+        """
+        return set(self.label_to_node[swc_id].keys())
+
     def detect_splits(self):
         """
         Detects splits in the predicted segmentation, then deletes node and
@@ -281,8 +338,10 @@ class SkeletonMetric:
 
             # Update predicted graph
             pred_graph = gutils.delete_nodes(pred_graph, 0)
-            pred_graph = gutils.store_labels(pred_graph)
+            pred_graph = gutils.delete_nodes(pred_graph, -1)
+            label_to_node = gutils.store_labels(pred_graph)
             self.pred_graphs[swc_id] = pred_graph
+            self.label_to_node[swc_id] = label_to_node
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
@@ -324,7 +383,7 @@ class SkeletonMetric:
             j = queue.pop(0)
             label_j = pred_graph.nodes[j]["pred_id"]
             visited.add(j)
-            if label_j != 0:
+            if label_j > 0:
                 collision_labels.add(label_j)
             else:
                 nbs = target_graph.neighbors(j)
@@ -398,13 +457,18 @@ class SkeletonMetric:
                     continue
 
                 # Compare pred_ids contained in graph
-                pred_ids_1 = self.pred_graphs[swc_id_1].graph["pred_ids"]
-                pred_ids_2 = self.pred_graphs[swc_id_2].graph["pred_ids"]
+                pred_ids_1 = self.get_pred_ids(swc_id_1)
+                pred_ids_2 = self.get_pred_ids(swc_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
                 if len(intersection) > 0:
                     for label in intersection:
-                        self.process_merge(swc_id_1, label)
-                        self.process_merge(swc_id_2, label)
+                        if label not in self.black_hole_labels:
+                            merged_1 = self.label_to_node[swc_id_1][label]
+                            merged_2 = self.label_to_node[swc_id_2][label]
+                            print(min(len(merged_1), len(merged_2)))
+                            if min(len(merged_1), len(merged_2)) > 5:
+                                self.process_merge(swc_id_1, label)
+                                self.process_merge(swc_id_2, label)
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
@@ -447,7 +511,7 @@ class SkeletonMetric:
         # Update graph
         graph = self.pred_graphs[swc_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
-        graph.graph["pred_ids"].remove(label)
+        del self.label_to_node[swc_id][label]
         self.pred_graphs[swc_id] = graph
 
         # Update cnts
@@ -609,6 +673,7 @@ class SkeletonMetric:
             "normalized erl",
         ]
         return metrics
+
 
 # -- utils --
 def is_split(a, b):
