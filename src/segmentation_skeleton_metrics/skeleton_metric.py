@@ -41,6 +41,7 @@ class SkeletonMetric:
         swc_paths,
         labels,
         anisotropy=[1.0, 1.0, 1.0],
+        ignore_boundary_mistakes=False,
         black_holes=None,
         black_hole_radius=24,
         equivalent_ids=None,
@@ -77,9 +78,10 @@ class SkeletonMetric:
         # Store label options
         self.valid_ids = valid_ids
         self.labels = labels
+        self.ignore_boundary_mistakes = ignore_boundary_mistakes
+        self.black_hole_labels = set()
         self.black_hole_radius = black_hole_radius
         self.init_black_holes(black_holes)
-        self.black_hole_labels = set()
 
         # Build Graphs
         self.init_target_graphs(swc_paths, anisotropy)
@@ -460,19 +462,50 @@ class SkeletonMetric:
                 pred_ids_1 = self.get_pred_ids(swc_id_1)
                 pred_ids_2 = self.get_pred_ids(swc_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
-                if len(intersection) > 0:
-                    for label in intersection:
-                        if label not in self.black_hole_labels:
-                            merged_1 = self.label_to_node[swc_id_1][label]
-                            merged_2 = self.label_to_node[swc_id_2][label]
-                            print(min(len(merged_1), len(merged_2)))
-                            if min(len(merged_1), len(merged_2)) > 5:
-                                self.process_merge(swc_id_1, label)
-                                self.process_merge(swc_id_2, label)
+                for label in intersection:
+                    if label not in self.black_hole_labels:
+                        merged_1 = self.label_to_node[swc_id_1][label]
+                        merged_2 = self.label_to_node[swc_id_2][label]
+                        near_bdd = self.near_bdd(swc_id_1, swc_id_2, label)
+                        too_small = min(len(merged_1), len(merged_2)) > 16
+                        if not near_bdd and not too_small:
+                            self.process_merge(swc_id_1, label)
+                            self.process_merge(swc_id_2, label)
+                    else:
+                        del self.label_to_node[swc_id_1][label]
+                        del self.label_to_node[swc_id_2][label]
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
+
+    def near_bdd(self, swc_id_1, swc_id_2, label):
+        near_bdd_bool = False
+        if not self.ignore_boundary_mistakes:
+            # Get merged nodes
+            merged_1 = self.label_to_node[swc_id_1][label]
+            merged_2 = self.label_to_node[swc_id_2][label]
+
+            # Find closest pair
+            min_dist = np.inf
+            midpoint = None
+            for i in merged_1:
+                for j in merged_2:
+                    xyz_1 = self.target_graphs[swc_id_1].nodes[i]["xyz"]
+                    xyz_2 = self.target_graphs[swc_id_2].nodes[j]["xyz"]
+                    d = utils.dist(xyz_1, xyz_2)
+                    if d < min_dist:
+                        min_dist = d
+                        midpoint = utils.get_midpoint(xyz_1, xyz_2)
+
+            # Check whether midpoint is too close to bdd
+            dims = self.labels.shape
+            above = [midpoint[i] > dims[i] - 32 for i in range(3)]
+            below = [midpoint[i] < 32 for i in range(3)]
+            if above.any() or below.any():
+                near_bdd_bool = True
+
+        return near_bdd_bool
 
     def init_merge_counter(self):
         """

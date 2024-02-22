@@ -10,6 +10,7 @@ Created on Wed Dec 21 19:00:00 2022
 import os
 
 import tensorstore as ts
+from scipy.spatial import distance
 
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
@@ -151,6 +152,40 @@ def check_edge(edge_list, edge):
         return True
     else:
         return False
+
+
+def dist(v_1, v_2):
+    """
+    Computes distance between "v_1" and "v_2".
+
+    Parameters
+    ----------
+    v_1 : np.ndarray
+        Vector.
+    v_2 : np.ndarray
+        Vector.
+
+    Returns
+    -------
+    float
+        Distance between "v_1" and "v_2".
+
+    """
+    return distance.euclidean(v_1, v_2)
+
+
+def get_midpoint(xyz_1, xyz_2):
+    """
+    Computes the midpoint between "xyz_1" and "xyz_2".
+
+    Parameters
+    ----------
+    xyz_1 : numpy.ndarray
+        n-dimensional coordinate.
+    xyz_2 : numpy.ndarray
+        n-dimensional coordinate.
+    """
+    return np.mean([xyz_1, xyz_2], axis=0)
 
 
 def to_world(xyz, anisotropy):
