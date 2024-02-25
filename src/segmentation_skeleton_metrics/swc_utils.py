@@ -15,37 +15,7 @@ import numpy as np
 from segmentation_skeleton_metrics import graph_utils as gutils
 
 
-def make_entries(graph, edge_list, anisotropy):
-    """
-    Makes a list of entries to be written in an swc file.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that edges in "edge_list" belong to.
-    edge_list : list[tuple[int]]
-        List of edges to be written to an swc file.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
-
-    Returns
-    -------
-    list[str]
-        List of swc file entries to be written.
-
-    """
-    reindex = dict()
-    for i, j in edge_list:
-        if len(reindex) < 1:
-            entry, reindex = make_entry(graph, i, -1, reindex, anisotropy)
-            entry_list = [entry]
-        entry, reindex = make_entry(graph, j, reindex[i], reindex, anisotropy)
-        entry_list.append(entry)
-    return entry_list
-
-
-def make_entry(graph, i, parent, reindex, anisotropy):
+def make_entry(node_id, parent_id, xyz):
     """
     Makes an entry to be written in an swc file.
 
@@ -62,12 +32,12 @@ def make_entry(graph, i, parent, reindex, anisotropy):
         applied to swc files.
 
     """
-    reindex[i] = len(reindex) + 1
-    x, y, z = tuple(map(str, gutils.to_world(graph, i, anisotropy)))
-    return [x, y, z, 8, parent], reindex
+    x, y, z = tuple(xyz.tolist())
+    entry = f"{node_id} 2 {x} {y} {z} 7.5 {parent_id}"
+    return entry
 
 
-def write_swc(path, entry_list, color=None):
+def write_swc(path, xyz_1, xyz_2, color=None):
     """
     Writes an swc file.
 
@@ -85,17 +55,18 @@ def write_swc(path, entry_list, color=None):
     None.
 
     """
+    # Preamble
     with open(path, "w") as f:
         if color is not None:
             f.write("# COLOR" + color)
         else:
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
-        for i, entry in enumerate(entry_list):
-            f.write(str(i + 1) + " " + str(0) + " ")
-            for x in entry:
-                f.write(str(x) + " ")
-            f.write("\n")
+
+    # Entries
+    f.write(write_entry(1, -1, xyz_1))
+    f.write("\n")
+    f.write(write_entry(2, 1, xyz_2))
 
 
 def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
@@ -158,5 +129,5 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
         coordinates.
 
     """
-    xyz = [round(float(xyz[i]) / anisotropy[i] + offset[i]) for i in range(3)]
-    return np.array(xyz, dtype=int)
+    xyz = [float(xyz[i]) + offset[i] for i in range(3)]
+    return np.array([xyz[i] / anisotropy[i] for i in range(3)], dtype=int)

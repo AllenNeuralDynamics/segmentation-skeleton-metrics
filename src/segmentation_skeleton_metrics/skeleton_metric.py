@@ -46,6 +46,8 @@ class SkeletonMetric:
         black_hole_radius=24,
         equivalent_ids=None,
         valid_ids=None,
+        write_to_swc=False,
+        output_dir=None,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -82,6 +84,8 @@ class SkeletonMetric:
         self.black_hole_labels = set()
         self.black_hole_radius = black_hole_radius
         self.init_black_holes(black_holes)
+        self.write_to_swc = False
+        self.output_dir = output_dir
 
         # Build Graphs
         self.init_target_graphs(swc_paths, anisotropy)
@@ -100,7 +104,8 @@ class SkeletonMetric:
             return False
 
         # Search black_holes
-        pts = self.black_holes.query_ball_point(xyz, self.black_hole_radius)
+        radius = self.black_hole_radius
+        pts = self.black_holes.query_ball_point(xyz, radius)
         if len(pts) > 0:
             return True
         else:
@@ -333,7 +338,7 @@ class SkeletonMetric:
                 label_j = pred_graph.nodes[j]["pred_id"]
                 if is_split(label_i, label_j):
                     pred_graph = gutils.remove_edge(pred_graph, i, j)
-                elif label_j == 0:
+                elif label_j == 0 or label_j == -1:
                     dfs_edges, pred_graph = self.split_search(
                         target_graph, pred_graph, dfs_edges, i, j
                     )
@@ -463,47 +468,56 @@ class SkeletonMetric:
                 pred_ids_2 = self.get_pred_ids(swc_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
                 for label in intersection:
-                    if label not in self.black_hole_labels:
-                        merged_1 = self.label_to_node[swc_id_1][label]
-                        merged_2 = self.label_to_node[swc_id_2][label]
-                        near_bdd = self.near_bdd(swc_id_1, swc_id_2, label)
-                        too_small = min(len(merged_1), len(merged_2)) > 16
-                        if not near_bdd and not too_small:
+                    merged_1 = self.label_to_node[swc_id_1][label]
+                    merged_2 = self.label_to_node[swc_id_2][label]
+                    too_small = min(len(merged_1), len(merged_2)) > 16
+                    if not too_small:
+                        site, dist = self.localize(swc_id_1, swc_id_2, label)
+                        near_bdd = self.near_bdd(site)
+                        if not near_bdd:
+                            # Write site to swc
+                            if self.write_to_swc:
+                                self.save_swc(site[0], site[1], "merge")
+
+                            # Process merge
                             self.process_merge(swc_id_1, label)
                             self.process_merge(swc_id_2, label)
-                    else:
-                        del self.label_to_node[swc_id_1][label]
-                        del self.label_to_node[swc_id_2][label]
+
+                    # Remove label to avoid reprocessing
+                    del self.label_to_node[swc_id_1][label]
+                    del self.label_to_node[swc_id_2][label]
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def near_bdd(self, swc_id_1, swc_id_2, label):
+    def localize(self, swc_id_1, swc_id_2, label):
+        # Get merged nodes
+        merged_1 = self.label_to_node[swc_id_1][label]
+        merged_2 = self.label_to_node[swc_id_2][label]
+
+        # Find closest pair
+        min_dist = np.inf
+        xyz_pair = [None, None]
+        for i in merged_1:
+            for j in merged_2:
+                xyz_1 = self.target_graphs[swc_id_1].nodes[i]["xyz"]
+                xyz_2 = self.target_graphs[swc_id_2].nodes[j]["xyz"]
+                dist = utils.dist(xyz_1, xyz_2)
+                if dist < min_dist:
+                    min_dist = dist
+                    xyz_pair = [xyz_1, xyz_2]
+        return xyz_pair, min_dist
+
+
+    def near_bdd(self, xyz_pair):
         near_bdd_bool = False
         if self.ignore_boundary_mistakes:
-            # Get merged nodes
-            merged_1 = self.label_to_node[swc_id_1][label]
-            merged_2 = self.label_to_node[swc_id_2][label]
-
-            # Find closest pair
-            min_dist = np.inf
-            midpoint = None
-            for i in merged_1:
-                for j in merged_2:
-                    xyz_1 = self.target_graphs[swc_id_1].nodes[i]["xyz"]
-                    xyz_2 = self.target_graphs[swc_id_2].nodes[j]["xyz"]
-                    d = utils.dist(xyz_1, xyz_2)
-                    if d < min_dist:
-                        min_dist = d
-                        midpoint = utils.get_midpoint(xyz_1, xyz_2)
-
-            # Check whether midpoint is too close to bdd
+            merge_site = utils.get_midpoint(xyz_pair[0], xyz_pair[1])
             dims = self.labels.shape
-            above = [midpoint[i] > dims[i] - 32 for i in range(3)]
-            below = [midpoint[i] < 32 for i in range(3)]
+            above = [merge_site[i] > dims[i] - 32 for i in range(3)]
+            below = [merge_site[i] < 32 for i in range(3)]
             near_bdd_bool = True if any(above) or any(below) else False
-
         return near_bdd_bool
 
     def init_merge_counter(self):
@@ -543,7 +557,6 @@ class SkeletonMetric:
         # Update graph
         graph = self.pred_graphs[swc_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
-        del self.label_to_node[swc_id][label]
         self.pred_graphs[swc_id] = graph
 
         # Update cnts
@@ -705,6 +718,16 @@ class SkeletonMetric:
             "normalized erl",
         ]
         return metrics
+
+    def save_swc(self, xyz_1, xyz_2, mistake_type):
+        if mistake_type == "split":
+            color = "1.0 0.0 0.0"
+            cnt = 1 + np.sum(self.split_cnts) // 2
+        else:
+            color = "0.0 1.0 0.0"
+            cnt = 1 + np.sum(self.merge_cnts) // 2
+
+        path = f"{self.output_dir}/{mistake_type}-{cnt}.swc"
 
 
 # -- utils --
