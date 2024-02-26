@@ -18,7 +18,7 @@ from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
-from segmentation_skeleton_metrics.swc_utils import to_graph
+from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
 
 class SkeletonMetric:
@@ -42,7 +42,7 @@ class SkeletonMetric:
         labels,
         anisotropy=[1.0, 1.0, 1.0],
         ignore_boundary_mistakes=False,
-        black_holes=None,
+        black_holes_xyz_id=None,
         black_hole_radius=24,
         equivalent_ids=None,
         valid_ids=None,
@@ -63,7 +63,7 @@ class SkeletonMetric:
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files. The default is [1.0, 1.0, 1.0]
-        black_holes : numpy.ndarray
+        black_holes_xyz_id : list
             ...
         black_hole_radius : float
             ...
@@ -80,25 +80,30 @@ class SkeletonMetric:
         # Store label options
         self.valid_ids = valid_ids
         self.labels = labels
+
+        self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
-        self.black_hole_labels = set()
+        self.init_black_holes(black_holes_xyz_id)
         self.black_hole_radius = black_hole_radius
-        self.init_black_holes(black_holes)
-        self.write_to_swc = False
+
+        self.write_to_swc = write_to_swc
         self.output_dir = output_dir
 
         # Build Graphs
         self.init_target_graphs(swc_paths, anisotropy)
         self.init_pred_graphs()
-        self.black_hole_labels.discard(0)
 
     def init_black_holes(self, black_holes):
         if black_holes:
-            self.black_holes = KDTree(black_holes)
+            black_holes_xyz = [bh_dict["xyz"] for bh_dict in black_holes]
+            black_holes_id = [bh_dict["swc_id"] for bh_dict in black_holes]
+            self.black_holes = KDTree(black_holes_xyz)
+            self.black_hole_labels = set(black_holes_id)
         else:
             self.black_holes = None
+            self.black_hole_labels = set()
 
-    def in_black_hole(self, xyz):
+    def in_black_hole(self, xyz, print_nn=False):
         # Check whether black_holes exists
         if self.black_holes is None:
             return False
@@ -106,6 +111,9 @@ class SkeletonMetric:
         # Search black_holes
         radius = self.black_hole_radius
         pts = self.black_holes.query_ball_point(xyz, radius)
+        if print_nn:
+            dd, ii = self.black_holes.query([xyz], k=[1])
+            print("Nearest neighbor:", dd)
         if len(pts) > 0:
             return True
         else:
@@ -188,6 +196,7 @@ class SkeletonMetric:
             for i in pred_graph.nodes:
                 img_coord = gutils.get_coord(pred_graph, i)
                 threads.append(executor.submit(self.get_label, img_coord, i))
+
             # Store results
             for thread in as_completed(threads):
                 i, label = thread.result()
@@ -215,7 +224,6 @@ class SkeletonMetric:
         """
         label = self.__read_label(img_coord)
         if self.in_black_hole(img_coord):
-            self.black_hole_labels.add(label)
             label = -1
         return self.output_label(label, return_node)
 
@@ -337,9 +345,12 @@ class SkeletonMetric:
                 label_i = pred_graph.nodes[i]["pred_id"]
                 label_j = pred_graph.nodes[j]["pred_id"]
                 if is_split(label_i, label_j):
-                    pred_graph = gutils.remove_edge(pred_graph, i, j)
+                    # pred_graph = gutils.remove_edge(pred_graph, i, j)
+                    dfs_edges, pred_graph = self.is_nonzero_misalignment(
+                        target_graph, pred_graph, dfs_edges, i, j
+                    )
                 elif label_j == 0 or label_j == -1:
-                    dfs_edges, pred_graph = self.split_search(
+                    dfs_edges, pred_graph = self.is_zero_misalignment(
                         target_graph, pred_graph, dfs_edges, i, j
                     )
 
@@ -354,7 +365,9 @@ class SkeletonMetric:
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def split_search(self, target_graph, pred_graph, dfs_edges, nb, root):
+    def is_zero_misalignment(
+        self, target_graph, pred_graph, dfs_edges, nb, root
+    ):
         """
         Determines whether zero-valued labels correspond to a split or
         misalignment between "target_graph" and the predicted segmentation
@@ -382,10 +395,10 @@ class SkeletonMetric:
 
         """
         # Search
+        black_hole = False
+        collision_labels = set([pred_graph.nodes[nb]["pred_id"]])
         queue = [root]
         visited = set()
-        collision_labels = set()
-        collision_nodes = set()
         while len(queue) > 0:
             j = queue.pop(0)
             label_j = pred_graph.nodes[j]["pred_id"]
@@ -393,21 +406,64 @@ class SkeletonMetric:
             if label_j > 0:
                 collision_labels.add(label_j)
             else:
+                # Check for black hole
+                if label_j == -1:
+                    black_hole = True
+
+                # Add nbs to queue
                 nbs = target_graph.neighbors(j)
                 for k in [k for k in nbs if k not in visited]:
                     if utils.check_edge(dfs_edges, (j, k)):
                         queue.append(k)
                         dfs_edges = remove_edge(dfs_edges, (j, k))
-                    elif k == nb:
-                        queue.append(k)
 
         # Upd zero nodes
-        if len(collision_labels) == 1:
+        if len(collision_labels) == 1 and not black_hole:
             label = collision_labels.pop()
-            visited = visited.difference(collision_nodes)
             pred_graph = gutils.upd_labels(pred_graph, visited, label)
 
         return dfs_edges, pred_graph
+
+    def is_nonzero_misalignment(
+        self, target_graph, pred_graph, dfs_edges, nb, root
+    ):
+        # Initialize
+        origin_label = pred_graph.nodes[nb]["pred_id"]
+        hit_label = pred_graph.nodes[root]["pred_id"]
+        parent = nb
+        depth = 0
+
+        # Search
+        queue = [root]
+        visited = set([nb])
+        while len(queue) > 0:
+            j = queue.pop(0)
+            label_j = pred_graph.nodes[j]["pred_id"]
+            visited.add(j)
+            depth += 1
+            if label_j == origin_label:
+                # misalignment
+                pred_graph = gutils.upd_labels(
+                    pred_graph, visited, origin_label
+                )
+                return dfs_edges, pred_graph
+            elif label_j == hit_label and depth < 16:
+                # continue search
+                nbs = list(target_graph.neighbors(j))
+                nbs.remove(parent)
+                if len(nbs) == 1:
+                    if utils.check_edge(dfs_edges, (j, nbs[0])):
+                        parent = j
+                        queue.append(nbs[0])
+                        dfs_edges = remove_edge(dfs_edges, (j, nbs[0]))
+                else:
+                    pred_graph = gutils.remove_edge(pred_graph, nb, root)
+                    return dfs_edges, pred_graph
+            else:
+                # left hit label
+                dfs_edges.insert(0, (parent, j))
+                pred_graph = gutils.remove_edge(pred_graph, nb, root)
+                return dfs_edges, pred_graph
 
     def quantify_splits(self):
         """
@@ -468,16 +524,16 @@ class SkeletonMetric:
                 pred_ids_2 = self.get_pred_ids(swc_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
                 for label in intersection:
-                    merged_1 = self.label_to_node[swc_id_1][label]
-                    merged_2 = self.label_to_node[swc_id_2][label]
-                    too_small = min(len(merged_1), len(merged_2)) > 16
-                    if not too_small:
-                        site, dist = self.localize(swc_id_1, swc_id_2, label)
-                        near_bdd = self.near_bdd(site)
-                        if not near_bdd:
+                    #merged_1 = self.label_to_node[swc_id_1][label]
+                    #merged_2 = self.label_to_node[swc_id_2][label]
+                    # too_small = min(len(merged_1), len(merged_2)) > 16
+                    if True:  # not too_small:
+                        sites, dist = self.localize(swc_id_1, swc_id_2, label)
+                        xyz = utils.get_midpoint(sites[0], sites[1])
+                        if dist > 20 and not self.near_bdd(xyz):
                             # Write site to swc
                             if self.write_to_swc:
-                                self.save_swc(site[0], site[1], "merge")
+                                self.save_swc(sites[0], sites[1], "merge")
 
                             # Process merge
                             self.process_merge(swc_id_1, label)
@@ -508,7 +564,6 @@ class SkeletonMetric:
                     min_dist = dist
                     xyz_pair = [xyz_1, xyz_2]
         return xyz_pair, min_dist
-
 
     def near_bdd(self, xyz_pair):
         near_bdd_bool = False
@@ -720,14 +775,17 @@ class SkeletonMetric:
         return metrics
 
     def save_swc(self, xyz_1, xyz_2, mistake_type):
+        xyz_1 = utils.to_world(xyz_1, self.anisotropy)
+        xyz_2 = utils.to_world(xyz_2, self.anisotropy)
         if mistake_type == "split":
             color = "1.0 0.0 0.0"
-            cnt = 1 + np.sum(self.split_cnts) // 2
+            cnt = 1 + np.sum(list(self.split_cnts.values())) // 2
         else:
             color = "0.0 1.0 0.0"
-            cnt = 1 + np.sum(self.merge_cnts) // 2
+            cnt = 1 + np.sum(list(self.merge_cnts.values())) // 2
 
         path = f"{self.output_dir}/{mistake_type}-{cnt}.swc"
+        save(path, xyz_1, xyz_2, color=color)
 
 
 # -- utils --

@@ -12,8 +12,6 @@ import os
 import networkx as nx
 import numpy as np
 
-from segmentation_skeleton_metrics import graph_utils as gutils
-
 
 def make_entry(node_id, parent_id, xyz):
     """
@@ -32,12 +30,12 @@ def make_entry(node_id, parent_id, xyz):
         applied to swc files.
 
     """
-    x, y, z = tuple(xyz.tolist())
-    entry = f"{node_id} 2 {x} {y} {z} 7.5 {parent_id}"
+    x, y, z = tuple(xyz)
+    entry = f"{node_id} 2 {x} {y} {z} 8 {parent_id}"
     return entry
 
 
-def write_swc(path, xyz_1, xyz_2, color=None):
+def save(path, xyz_1, xyz_2, color=None):
     """
     Writes an swc file.
 
@@ -55,18 +53,18 @@ def write_swc(path, xyz_1, xyz_2, color=None):
     None.
 
     """
-    # Preamble
     with open(path, "w") as f:
+        # Preamble
         if color is not None:
-            f.write("# COLOR" + color)
+            f.write("# COLOR " + color)
         else:
             f.write("# id, type, z, y, x, r, pid")
         f.write("\n")
 
-    # Entries
-    f.write(write_entry(1, -1, xyz_1))
-    f.write("\n")
-    f.write(write_entry(2, 1, xyz_2))
+        # Entries
+        f.write(make_entry(1, -1, xyz_1))
+        f.write("\n")
+        f.write(make_entry(2, 1, xyz_2))
 
 
 def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
