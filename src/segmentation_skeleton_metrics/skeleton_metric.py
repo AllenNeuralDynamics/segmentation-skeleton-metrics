@@ -345,7 +345,6 @@ class SkeletonMetric:
                 label_i = pred_graph.nodes[i]["pred_id"]
                 label_j = pred_graph.nodes[j]["pred_id"]
                 if is_split(label_i, label_j):
-                    pred_graph = gutils.remove_edge(pred_graph, i, j)
                     dfs_edges, pred_graph = self.is_nonzero_misalignment(
                         target_graph, pred_graph, dfs_edges, i, j
                     )
@@ -416,8 +415,6 @@ class SkeletonMetric:
                     if utils.check_edge(dfs_edges, (j, k)):
                         queue.append(k)
                         dfs_edges = remove_edge(dfs_edges, (j, k))
-                    elif k == nb:
-                        queue.append(k)
 
         # Upd zero nodes
         if len(collision_labels) == 1 and not black_hole:
