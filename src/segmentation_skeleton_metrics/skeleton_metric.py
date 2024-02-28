@@ -111,9 +111,6 @@ class SkeletonMetric:
         # Search black_holes
         radius = self.black_hole_radius
         pts = self.black_holes.query_ball_point(xyz, radius)
-        if print_nn:
-            dd, ii = self.black_holes.query([xyz], k=[1])
-            print("Nearest neighbor:", dd)
         if len(pts) > 0:
             return True
         else:
@@ -430,7 +427,6 @@ class SkeletonMetric:
         origin_label = pred_graph.nodes[nb]["pred_id"]
         hit_label = pred_graph.nodes[root]["pred_id"]
         parent = nb
-        depth = 0
 
         # Search
         queue = [root]
@@ -439,22 +435,20 @@ class SkeletonMetric:
             j = queue.pop(0)
             label_j = pred_graph.nodes[j]["pred_id"]
             visited.add(j)
-            depth += 1
             if label_j == origin_label:
                 # misalignment
                 pred_graph = gutils.upd_labels(
                     pred_graph, visited, origin_label
                 )
                 return dfs_edges, pred_graph
-            elif label_j == hit_label and depth < 16:
+            elif label_j == hit_label:
                 # continue search
                 nbs = list(target_graph.neighbors(j))
                 nbs.remove(parent)
                 if len(nbs) == 1:
-                    if utils.check_edge(dfs_edges, (j, nbs[0])):
-                        parent = j
-                        queue.append(nbs[0])
-                        dfs_edges = remove_edge(dfs_edges, (j, nbs[0]))
+                    parent = j
+                    queue.append(nbs[0])
+                    dfs_edges = remove_edge(dfs_edges, (j, nbs[0]))
                 else:
                     pred_graph = gutils.remove_edge(pred_graph, nb, root)
                     return dfs_edges, pred_graph
@@ -523,20 +517,16 @@ class SkeletonMetric:
                 pred_ids_2 = self.get_pred_ids(swc_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
                 for label in intersection:
-                    #merged_1 = self.label_to_node[swc_id_1][label]
-                    #merged_2 = self.label_to_node[swc_id_2][label]
-                    # too_small = min(len(merged_1), len(merged_2)) > 16
-                    if True:  # not too_small:
-                        sites, dist = self.localize(swc_id_1, swc_id_2, label)
-                        xyz = utils.get_midpoint(sites[0], sites[1])
-                        if dist > 20 and not self.near_bdd(xyz):
-                            # Write site to swc
-                            if self.write_to_swc:
-                                self.save_swc(sites[0], sites[1], "merge")
+                    sites, dist = self.localize(swc_id_1, swc_id_2, label)
+                    xyz = utils.get_midpoint(sites[0], sites[1])
+                    if True: #dist > 20 and not self.near_bdd(xyz):
+                        # Write site to swc
+                        if self.write_to_swc:
+                            self.save_swc(sites[0], sites[1], "merge")
 
-                            # Process merge
-                            self.process_merge(swc_id_1, label)
-                            self.process_merge(swc_id_2, label)
+                        # Process merge
+                        self.process_merge(swc_id_1, label)
+                        self.process_merge(swc_id_2, label)
 
                     # Remove label to avoid reprocessing
                     del self.label_to_node[swc_id_1][label]
@@ -660,6 +650,10 @@ class SkeletonMetric:
         # Summarize results
         swc_ids, results = self.generate_report()
         avg_results = dict([(k, np.mean(v)) for k, v in results.items()])
+
+        # Adjust certain stats
+        n_detected_neurons = np.sum(np.array(results["% omit edges"]) < 1)
+        avg_results["# splits"] = np.sum(results["# splits"]) / n_detected_neurons
         avg_results["# merges"] = avg_results["# merges"] / 2
 
         # Reformat full results
