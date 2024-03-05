@@ -754,7 +754,7 @@ class SkeletonMetric:
 
             path_length = gutils.compute_path_length(target_graph)
             run_lengths = gutils.compute_run_lengths(pred_graph)
-            wgt = run_lengths / np.sum(run_lengths)
+            wgt = run_lengths / max(np.sum(run_lengths), 1)
 
             self.erl[swc_id] = np.sum(wgt * run_lengths)
             self.normalized_erl[swc_id] = self.erl[swc_id] / path_length
