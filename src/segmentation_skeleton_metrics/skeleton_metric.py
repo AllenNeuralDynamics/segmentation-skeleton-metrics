@@ -483,7 +483,6 @@ class SkeletonMetric:
             self.split_cnts[swc_id] = n_splits
             self.omit_cnts[swc_id] = n_target_edges - n_pred_edges
             self.omit_percents[swc_id] = 1 - n_pred_edges / n_target_edges
-            print(swc_id, n_pred_edges / n_target_edges)
 
     def detect_merges(self):
         """
@@ -707,10 +706,12 @@ class SkeletonMetric:
 
     def avg_result(self, stats):
         result = []
+        wgts = []
         for swc_id, wgt in self.wgts.items():
             if self.omit_percents[swc_id] < 1:
-                result.append(wgt * stats[swc_id])
-        return np.sum(result)
+                result.append(stats[swc_id])
+                wgts.append(wgt)
+        return np.average(result, weights=wgts)
 
     def compute_edge_accuracy(self):
         """
