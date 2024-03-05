@@ -412,6 +412,8 @@ class SkeletonMetric:
                     if utils.check_edge(dfs_edges, (j, k)):
                         queue.append(k)
                         dfs_edges = remove_edge(dfs_edges, (j, k))
+                    elif k == nb:
+                        queue.append(k)
 
         # Upd zero nodes
         if len(collision_labels) == 1 and not black_hole:
@@ -426,16 +428,15 @@ class SkeletonMetric:
         # Initialize
         origin_label = pred_graph.nodes[nb]["pred_id"]
         hit_label = pred_graph.nodes[root]["pred_id"]
-        parent = nb
 
         # Search
-        queue = [root]
+        queue = [(nb, root)]
         visited = set([nb])
         while len(queue) > 0:
-            j = queue.pop(0)
+            parent, j = queue.pop(0)
             label_j = pred_graph.nodes[j]["pred_id"]
             visited.add(j)
-            if label_j == origin_label:
+            if label_j == origin_label and len(queue) == 0:
                 # misalignment
                 pred_graph = gutils.upd_labels(
                     pred_graph, visited, origin_label
@@ -444,19 +445,18 @@ class SkeletonMetric:
             elif label_j == hit_label:
                 # continue search
                 nbs = list(target_graph.neighbors(j))
-                nbs.remove(parent)
-                if len(nbs) == 1:
-                    parent = j
-                    queue.append(nbs[0])
-                    dfs_edges = remove_edge(dfs_edges, (j, nbs[0]))
-                else:
-                    pred_graph = gutils.remove_edge(pred_graph, nb, root)
-                    return dfs_edges, pred_graph
+                for k in [k for k in nbs if k not in visited]:
+                    queue.append((j, k))
+                    dfs_edges = remove_edge(dfs_edges, (j, k))
             else:
                 # left hit label
                 dfs_edges.insert(0, (parent, j))
                 pred_graph = gutils.remove_edge(pred_graph, nb, root)
                 return dfs_edges, pred_graph
+
+        # End of search
+        pred_graph = gutils.remove_edge(pred_graph, nb, root)
+        return dfs_edges, pred_graph
 
     def quantify_splits(self):
         """
@@ -483,6 +483,7 @@ class SkeletonMetric:
             self.split_cnts[swc_id] = n_splits
             self.omit_cnts[swc_id] = n_target_edges - n_pred_edges
             self.omit_percents[swc_id] = 1 - n_pred_edges / n_target_edges
+            print(swc_id, n_pred_edges / n_target_edges)
 
     def detect_merges(self):
         """
@@ -519,7 +520,7 @@ class SkeletonMetric:
                 for label in intersection:
                     sites, dist = self.localize(swc_id_1, swc_id_2, label)
                     xyz = utils.get_midpoint(sites[0], sites[1])
-                    if True: #dist > 20 and not self.near_bdd(xyz):
+                    if dist > 20 and not self.near_bdd(xyz):
                         # Write site to swc
                         if self.write_to_swc:
                             self.save_swc(sites[0], sites[1], "merge")
@@ -648,13 +649,8 @@ class SkeletonMetric:
         self.compute_erl()
 
         # Summarize results
-        swc_ids, results = self.generate_report()
-        avg_results = dict([(k, np.mean(v)) for k, v in results.items()])
-
-        # Adjust certain stats
-        n_detected_neurons = np.sum(np.array(results["% omit edges"]) < 1)
-        avg_results["# splits"] = np.sum(results["# splits"]) / n_detected_neurons
-        avg_results["# merges"] = avg_results["# merges"] / 2
+        swc_ids, results = self.generate_full_results()
+        avg_results = self.generate_avg_results()
 
         # Reformat full results
         full_results = dict()
@@ -665,7 +661,7 @@ class SkeletonMetric:
 
         return full_results, avg_results
 
-    def generate_report(self):
+    def generate_full_results(self):
         """
         Generates a report by creating a list of the results for each metric.
         Each item in this list corresponds to a graph in "self.pred_graphs"
@@ -689,13 +685,32 @@ class SkeletonMetric:
         stats = {
             "# splits": generate_result(swc_ids, self.split_cnts),
             "# merges": generate_result(swc_ids, self.merge_cnts),
-            "% omit edges": generate_result(swc_ids, self.omit_percents),
-            "% merged edges": generate_result(swc_ids, self.merged_percents),
+            "% omit": generate_result(swc_ids, self.omit_percents),
+            "% merged": generate_result(swc_ids, self.merged_percents),
             "edge accuracy": generate_result(swc_ids, self.edge_accuracy),
             "erl": generate_result(swc_ids, self.erl),
             "normalized erl": generate_result(swc_ids, self.normalized_erl),
         }
         return swc_ids, stats
+
+    def generate_avg_results(self):
+        avg_stats = {
+            "# splits": self.avg_result(self.split_cnts),
+            "# merges": self.avg_result(self.merge_cnts),
+            "% omit": self.avg_result(self.omit_percents),
+            "% merged": self.avg_result(self.merged_percents),
+            "edge accuracy": self.avg_result(self.edge_accuracy),
+            "erl": self.avg_result(self.erl),
+            "normalized erl": self.avg_result(self.normalized_erl),
+        }
+        return avg_stats
+
+    def avg_result(self, stats):
+        result = []
+        for swc_id, wgt in self.wgts.items():
+            if self.omit_percents[swc_id] < 1:
+                result.append(wgt * stats[swc_id])
+        return np.sum(result)
 
     def compute_edge_accuracy(self):
         """
@@ -731,16 +746,24 @@ class SkeletonMetric:
         """
         self.erl = dict()
         self.normalized_erl = dict()
+        self.wgts = dict()
+        total_path_length = 0
         for swc_id in self.target_graphs.keys():
             pred_graph = self.pred_graphs[swc_id]
             target_graph = self.target_graphs[swc_id]
 
             path_length = gutils.compute_path_length(target_graph)
-            path_lengths = gutils.compute_run_lengths(pred_graph)
-            wgts = path_lengths / max(np.sum(path_lengths), 1)
+            run_lengths = gutils.compute_run_lengths(pred_graph)
+            wgt = run_lengths / np.sum(run_lengths)
 
-            self.erl[swc_id] = np.sum(wgts * path_lengths)
+            self.erl[swc_id] = np.sum(wgt * run_lengths)
             self.normalized_erl[swc_id] = self.erl[swc_id] / path_length
+
+            self.wgts[swc_id] = path_length
+            total_path_length += path_length
+
+        for swc_id in self.target_graphs.keys():
+            self.wgts[swc_id] = self.wgts[swc_id] / total_path_length
 
     def list_metrics(self):
         """
@@ -759,8 +782,8 @@ class SkeletonMetric:
         metrics = [
             "# splits",
             "# merges",
-            "% omit edges",
-            "% merged edges",
+            "% omit",
+            "% merged",
             "edge accuracy",
             "erl",
             "normalized erl",
