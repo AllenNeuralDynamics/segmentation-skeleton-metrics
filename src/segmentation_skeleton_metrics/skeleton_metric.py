@@ -554,13 +554,11 @@ class SkeletonMetric:
                     xyz_pair = [xyz_1, xyz_2]
         return xyz_pair, min_dist
 
-    def near_bdd(self, xyz_pair):
+    def near_bdd(self, xyz):
         near_bdd_bool = False
         if self.ignore_boundary_mistakes:
-            merge_site = utils.get_midpoint(xyz_pair[0], xyz_pair[1])
-            dims = self.labels.shape
-            above = [merge_site[i] > dims[i] - 32 for i in range(3)]
-            below = [merge_site[i] < 32 for i in range(3)]
+            above = [xyz[i] >= self.labels.shape[i] - 32 for i in range(3)]
+            below = [xyz[i] < 32 for i in range(3)]
             near_bdd_bool = True if any(above) or any(below) else False
         return near_bdd_bool
 

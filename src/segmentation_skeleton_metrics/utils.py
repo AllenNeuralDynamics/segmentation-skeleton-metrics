@@ -186,7 +186,7 @@ def get_midpoint(xyz_1, xyz_2):
     xyz_2 : numpy.ndarray
         n-dimensional coordinate.
     """
-    return np.mean([xyz_1, xyz_2], axis=0)
+    return np.array([np.mean([xyz_1[i], xyz_2[i]]) for i in range(3)])
 
 
 def to_world(xyz, anisotropy):
