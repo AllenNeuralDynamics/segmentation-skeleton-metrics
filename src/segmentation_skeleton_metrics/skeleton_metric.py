@@ -17,6 +17,7 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
+from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics import utils
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
@@ -38,8 +39,9 @@ class SkeletonMetric:
 
     def __init__(
         self,
-        swc_paths,
-        labels,
+        pred_labels,
+        pred_swc_paths,
+        target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
         ignore_boundary_mistakes=False,
         black_holes_xyz_id=None,
@@ -55,7 +57,7 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        swc_paths : list[str]
+        target_swc_paths : list[str]
             List of paths to swc files such that each file corresponds to a
             neuron in the ground truth.
         labels : numpy.ndarray or tensorstore.TensorStore
@@ -79,7 +81,7 @@ class SkeletonMetric:
         """
         # Store label options
         self.valid_ids = valid_ids
-        self.labels = labels
+        self.labels = pred_labels
 
         self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
@@ -90,8 +92,34 @@ class SkeletonMetric:
         self.output_dir = output_dir
 
         # Build Graphs
-        self.init_target_graphs(swc_paths, anisotropy)
-        self.init_pred_graphs()
+        self.pred_graphs = self.init_graphs(pred_swc_paths, anisotropy)
+        self.target_graphs = self.init_graphs(target_swc_paths, anisotropy)
+        self.labeled_target_graphs = self.init_labeled_target_graphs()
+
+        # Build kdtree
+        self.init_xyz_to_swc_node()
+        self.init_kdtree()
+
+    def init_xyz_to_swc_node(self):
+        self.xyz_to_swc_node = dict()
+        for swc_id, graph in self.target_graphs.items():
+            for i in graph.nodes:
+                xyz = tuple(graph.nodes[i]["xyz"])
+                if xyz in self.xyz_to_swc_node.keys():
+                    self.xyz_to_swc_node[xyz][swc_id] = i
+                else:
+                    self.xyz_to_swc_node[xyz] = {swc_id: i} 
+
+    def init_kdtree(self):
+        xyz_list = []
+        for swc_id, graph in self.target_graphs.items():
+            for i in graph.nodes:
+                xyz_list.append(graph.nodes[i]["xyz"])
+        self.target_graphs_kdtree = KDTree(xyz_list)
+
+    def get_projection(self, xyz):
+        d, idx = self.target_graphs_kdtree.query(xyz, k=1)
+        return tuple(self.target_graphs_kdtree.data[idx]), d
 
     def init_black_holes(self, black_holes):
         if black_holes:
@@ -107,16 +135,15 @@ class SkeletonMetric:
         # Check whether black_holes exists
         if self.black_holes is None:
             return False
-
-        # Search black_holes
-        radius = self.black_hole_radius
-        pts = self.black_holes.query_ball_point(xyz, radius)
-        if len(pts) > 0:
-            return True
         else:
-            return False
+            radius = self.black_hole_radius
+            pts = self.black_holes.query_ball_point(xyz, radius)
+            if len(pts) > 0:
+                return True
+            else:
+                return False
 
-    def init_target_graphs(self, paths, anisotropy):
+    def init_graphs(self, paths, anisotropy):
         """
         Initializes "self.target_graphs" by iterating over "paths" which
         correspond to neurons in the ground truth.
@@ -135,14 +162,15 @@ class SkeletonMetric:
         None
 
         """
-        self.target_graphs = dict()
+        graphs = dict()
         for path in paths:
             swc_id = os.path.basename(path).replace(".swc", "")
-            self.target_graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
+            graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
+        return graphs
 
-    def init_pred_graphs(self):
+    def init_labeled_target_graphs(self):
         """
-        Initializes "self.pred_graphs" by copying each graph in
+        Initializes "self.labeled_target_graphs" by copying each graph in
         "self.target_graphs", then labels each node with the label in
         "self.labels" that coincides with it.
 
@@ -157,16 +185,17 @@ class SkeletonMetric:
         """
         print("Labelling Target Graphs...")
         t0 = time()
-        self.pred_graphs = dict()
+        labeled_target_graphs = dict()
         self.label_to_node = dict()
         for cnt, (swc_id, graph) in enumerate(self.target_graphs.items()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
             pred_graph, label_to_node = self.label_graph(graph)
-            self.pred_graphs[swc_id] = pred_graph
+            labeled_target_graphs[swc_id] = pred_graph
             self.label_to_node[swc_id] = label_to_node
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
+        return labeled_target_graphs
 
     def label_graph(self, target_graph):
         """
@@ -315,7 +344,7 @@ class SkeletonMetric:
     def detect_splits(self):
         """
         Detects splits in the predicted segmentation, then deletes node and
-        edges in "self.pred_graphs" that correspond to a split.
+        edges in "self.labeled_target_graphs" that correspond to a split.
 
         Parameters
         ----------
@@ -329,139 +358,26 @@ class SkeletonMetric:
         t0 = time()
         target_graphs = self.target_graphs.items()
         for cnt, (swc_id, target_graph) in enumerate(target_graphs):
-            # Initializations
+            # Detection
             utils.progress_bar(cnt + 1, len(self.target_graphs))
-            pred_graph = self.pred_graphs[swc_id]
-
-            # Run dfs
-            r = gutils.sample_leaf(target_graph)
-            dfs_edges = list(nx.dfs_edges(target_graph, source=r))
-            while len(dfs_edges) > 0:
-                # Visit edge
-                (i, j) = dfs_edges.pop(0)
-                label_i = pred_graph.nodes[i]["pred_id"]
-                label_j = pred_graph.nodes[j]["pred_id"]
-                if is_split(label_i, label_j):
-                    dfs_edges, pred_graph = self.is_nonzero_misalignment(
-                        target_graph, pred_graph, dfs_edges, i, j
-                    )
-                elif label_j == 0 or label_j == -1:
-                    dfs_edges, pred_graph = self.is_zero_misalignment(
-                        target_graph, pred_graph, dfs_edges, i, j
-                    )
+            labeled_graph = self.labeled_target_graphs[swc_id]
+            labeled_graph = split_detection.run(target_graph, labeled_graph)
 
             # Update predicted graph
-            pred_graph = gutils.delete_nodes(pred_graph, 0)
-            pred_graph = gutils.delete_nodes(pred_graph, -1)
-            label_to_node = gutils.store_labels(pred_graph)
-            self.pred_graphs[swc_id] = pred_graph
+            labeled_graph = gutils.delete_nodes(labeled_graph, 0)
+            labeled_graph = gutils.delete_nodes(labeled_graph, -1)
+            label_to_node = gutils.store_labels(labeled_graph)
+            self.labeled_target_graphs[swc_id] = labeled_graph
             self.label_to_node[swc_id] = label_to_node
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def is_zero_misalignment(
-        self, target_graph, pred_graph, dfs_edges, nb, root
-    ):
-        """
-        Determines whether zero-valued labels correspond to a split or
-        misalignment between "target_graph" and the predicted segmentation
-        mask.
-
-        Parameters
-        ----------
-        target_graph : networkx.Graph
-            ...
-        pred_graph : networkx.Graph
-            ...
-        dfs_edges : list[tuple]
-            List of edges to be processed for split detection.
-        nb : int
-            Neighbor of "root".
-        root : int
-            Node where possible split starts (i.e. zero-valued label).
-
-        Returns
-        -------
-        dfs_edges : list[tuple].
-            Updated "dfs_edges" with visited edges removed.
-        pred_graph : networkx.Graph
-            ...
-
-        """
-        # Search
-        black_hole = False
-        collision_labels = set()
-        queue = [root]
-        visited = set()
-        while len(queue) > 0:
-            j = queue.pop(0)
-            label_j = pred_graph.nodes[j]["pred_id"]
-            visited.add(j)
-            if label_j > 0:
-                collision_labels.add(label_j)
-            else:
-                # Check for black hole
-                if label_j == -1:
-                    black_hole = True
-
-                # Add nbs to queue
-                nbs = target_graph.neighbors(j)
-                for k in [k for k in nbs if k not in visited]:
-                    if utils.check_edge(dfs_edges, (j, k)):
-                        queue.append(k)
-                        dfs_edges = remove_edge(dfs_edges, (j, k))
-                    elif k == nb:
-                        queue.append(k)
-
-        # Upd zero nodes
-        if len(collision_labels) == 1 and not black_hole:
-            label = collision_labels.pop()
-            pred_graph = gutils.upd_labels(pred_graph, visited, label)
-
-        return dfs_edges, pred_graph
-
-    def is_nonzero_misalignment(
-        self, target_graph, pred_graph, dfs_edges, nb, root
-    ):
-        # Initialize
-        origin_label = pred_graph.nodes[nb]["pred_id"]
-        hit_label = pred_graph.nodes[root]["pred_id"]
-
-        # Search
-        queue = [(nb, root)]
-        visited = set([nb])
-        while len(queue) > 0:
-            parent, j = queue.pop(0)
-            label_j = pred_graph.nodes[j]["pred_id"]
-            visited.add(j)
-            if label_j == origin_label and len(queue) == 0:
-                # misalignment
-                pred_graph = gutils.upd_labels(
-                    pred_graph, visited, origin_label
-                )
-                return dfs_edges, pred_graph
-            elif label_j == hit_label:
-                # continue search
-                nbs = list(target_graph.neighbors(j))
-                for k in [k for k in nbs if k not in visited]:
-                    queue.append((j, k))
-                    dfs_edges = remove_edge(dfs_edges, (j, k))
-            else:
-                # left hit label
-                dfs_edges.insert(0, (parent, j))
-                pred_graph = gutils.remove_edge(pred_graph, nb, root)
-                return dfs_edges, pred_graph
-
-        # End of search
-        pred_graph = gutils.remove_edge(pred_graph, nb, root)
-        return dfs_edges, pred_graph
-
     def quantify_splits(self):
         """
         Counts the number of splits, number of omit edges, and percent of omit
-        edges for each graph in "self.pred_graphs".
+        edges for each graph in "self.labeled_target_graphs".
 
         Parameters
         ----------
@@ -476,8 +392,8 @@ class SkeletonMetric:
         self.omit_cnts = dict()
         self.omit_percents = dict()
         for swc_id in self.target_graphs.keys():
-            n_splits = gutils.count_splits(self.pred_graphs[swc_id])
-            n_pred_edges = self.pred_graphs[swc_id].number_of_edges()
+            n_splits = gutils.count_splits(self.labeled_target_graphs[swc_id])
+            n_pred_edges = self.labeled_target_graphs[swc_id].number_of_edges()
             n_target_edges = self.target_graphs[swc_id].number_of_edges()
 
             self.split_cnts[swc_id] = n_splits
@@ -487,7 +403,7 @@ class SkeletonMetric:
     def detect_merges(self):
         """
         Detects merges in the predicted segmentation, then deletes node and
-        edges in "self.pred_graphs" that correspond to a merge.
+        edges in "self.labeled_target_graphs" that correspond to a merge.
 
         Parameters
         ----------
@@ -499,43 +415,73 @@ class SkeletonMetric:
 
         """
         # Initilize counts
-        self.merge_cnts = self.init_merge_counter()
-        self.merged_cnts = self.init_merge_counter()
-        self.merged_percents = self.init_merge_counter()
+        self.merge_cnts = self.init_counter()
+        self.merged_cnts = self.init_counter()
+        self.merged_percents = self.init_counter()
 
         # Run detection
         t0 = time()
-        for cnt, swc_id_1 in enumerate(self.pred_graphs.keys()):
+        self.set_target_to_pred()
+        for cnt, target_id_1 in enumerate(self.labeled_target_graphs.keys()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
-            for swc_id_2 in self.pred_graphs.keys():
+            for target_id_2 in self.labeled_target_graphs.keys():
                 # Check if identical
-                if swc_id_1 == swc_id_2:
+                if target_id_1 == target_id_2:
                     continue
 
                 # Compare pred_ids contained in graph
-                pred_ids_1 = self.get_pred_ids(swc_id_1)
-                pred_ids_2 = self.get_pred_ids(swc_id_2)
+                pred_ids_1 = self.get_pred_ids(target_id_1)
+                pred_ids_2 = self.get_pred_ids(target_id_2)
                 intersection = pred_ids_1.intersection(pred_ids_2)
                 for label in intersection:
-                    sites, dist = self.localize(swc_id_1, swc_id_2, label)
-                    xyz = utils.get_midpoint(sites[0], sites[1])
-                    if dist > 20 and not self.near_bdd(xyz):
-                        # Write site to swc
-                        if self.write_to_swc:
+                    valid_1 = label in self.target_to_pred[target_id_1]
+                    valid_2 = label in self.target_to_pred[target_id_2]
+                    if valid_1 and valid_2:
+                        sites, d = self.localize(target_id_1, target_id_2, label)
+                        xyz = utils.get_midpoint(sites[0], sites[1])
+                        print("dist:", d)
+                        if d < 25 and self.write_to_swc:
+                            # Process merge
                             self.save_swc(sites[0], sites[1], "merge")
+                            self.process_merge(target_id_1, label)
+                            self.process_merge(target_id_2, label)
 
-                        # Process merge
-                        self.process_merge(swc_id_1, label)
-                        self.process_merge(swc_id_2, label)
-
-                    # Remove label to avoid reprocessing
-                    del self.label_to_node[swc_id_1][label]
-                    del self.label_to_node[swc_id_2][label]
+                            # Remove label to avoid reprocessing
+                            del self.label_to_node[target_id_1][label]
+                            del self.label_to_node[target_id_2][label]
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
+    def set_target_to_pred(self):
+        self.target_to_pred = self.init_tracker()
+        for pred_id, graph in self.pred_graphs.items():
+            # Compute intersections
+            hit_target_ids = dict()
+            hit_multilabels_xyz = set()
+            for i in graph.nodes:
+                xyz = tuple(graph.nodes[i]["xyz"])
+                hat_xyz, d = self.get_projection(xyz)
+                if d < 5:
+                    target_ids = list(self.xyz_to_swc_node[hat_xyz].keys())
+                    if len(target_ids) > 1:
+                        hit_multilabels_xyz.add(hat_xyz)
+                    else:
+                        target_id = target_ids[0]
+                        hat_i = self.xyz_to_swc_node[hat_xyz][target_id]
+                        hit_target_ids = utils.append_dict_value(
+                            hit_target_ids, target_id, hat_i
+                        )
+
+            # Process
+            hit_target_ids = utils.resolve_multilabels(
+                hit_multilabels_xyz, hit_target_ids, self.xyz_to_swc_node
+            )
+            for target_id, values in hit_target_ids.items():
+                if len(values) > 16:
+                    self.target_to_pred[target_id].add(int(pred_id))
+        
     def localize(self, swc_id_1, swc_id_2, label):
         # Get merged nodes
         merged_1 = self.label_to_node[swc_id_1][label]
@@ -562,7 +508,7 @@ class SkeletonMetric:
             near_bdd_bool = True if any(above) or any(below) else False
         return near_bdd_bool
 
-    def init_merge_counter(self):
+    def init_counter(self):
         """
         Initializes a dictionary that is used to count the number of merge
         type mistakes for each pred_graph.
@@ -577,7 +523,16 @@ class SkeletonMetric:
             Dictionary used to count number of merge type mistakes.
 
         """
-        return dict([(swc_id, 0) for swc_id in self.pred_graphs.keys()])
+        counter = dict()
+        for label in self.labeled_target_graphs.keys():
+            counter[label] = 0
+        return counter
+
+    def init_tracker(self):
+        tracker = dict()
+        for label in self.labeled_target_graphs.keys():
+            tracker[label] = set()
+        return tracker
 
     def process_merge(self, swc_id, label):
         """
@@ -597,9 +552,9 @@ class SkeletonMetric:
 
         """
         # Update graph
-        graph = self.pred_graphs[swc_id].copy()
+        graph = self.labeled_target_graphs[swc_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
-        self.pred_graphs[swc_id] = graph
+        self.labeled_target_graphs[swc_id] = graph
 
         # Update cnts
         self.merge_cnts[swc_id] += 1
@@ -661,7 +616,7 @@ class SkeletonMetric:
     def generate_full_results(self):
         """
         Generates a report by creating a list of the results for each metric.
-        Each item in this list corresponds to a graph in "self.pred_graphs"
+        Each item in this list corresponds to a graph in "self.labeled_target_graphs"
         and this list is ordered with respect to "swc_ids".
 
         Parameters
@@ -674,10 +629,10 @@ class SkeletonMetric:
             Specifies the ordering of results for each value in "stats".
         stats : dict
             Dictionary where the keys are metrics and values are the result of
-            computing that metric for each graph in "self.pred_graphs".
+            computing that metric for each graph in "self.labeled_target_graphs".
 
         """
-        swc_ids = list(self.pred_graphs.keys())
+        swc_ids = list(self.labeled_target_graphs.keys())
         swc_ids.sort()
         stats = {
             "# splits": generate_result(swc_ids, self.split_cnts),
@@ -748,7 +703,7 @@ class SkeletonMetric:
         self.wgts = dict()
         total_path_length = 0
         for swc_id in self.target_graphs.keys():
-            pred_graph = self.pred_graphs[swc_id]
+            pred_graph = self.labeled_target_graphs[swc_id]
             target_graph = self.target_graphs[swc_id]
 
             path_length = gutils.compute_path_length(target_graph)
@@ -793,10 +748,10 @@ class SkeletonMetric:
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
         if mistake_type == "split":
-            color = "1.0 0.0 0.0"
+            color = "0.0 1.0 0.0"
             cnt = 1 + np.sum(list(self.split_cnts.values())) // 2
         else:
-            color = "0.0 1.0 0.0"
+            color = "0.0 0.0 1.0"
             cnt = 1 + np.sum(list(self.merge_cnts.values())) // 2
 
         path = f"{self.output_dir}/{mistake_type}-{cnt}.swc"
@@ -804,51 +759,6 @@ class SkeletonMetric:
 
 
 # -- utils --
-def is_split(a, b):
-    """
-    Checks if "a" and "b" are positive and not equal.
-
-    Parameters
-    ----------
-    a : int
-        label at node i.
-    b : int
-        label at node j.
-
-    Returns
-    -------
-    bool
-        Indication of whether there is a split.
-
-    """
-    return (a > 0 and b > 0) and (a != b)
-
-
-def remove_edge(dfs_edges, edge):
-    """
-    Checks whether "edge" is in "dfs_edges" and removes it.
-
-    Parameters
-    ----------
-    dfs_edges : list or set
-        List or set of edges.
-    edge : tuple
-        Edge.
-
-    Returns
-    -------
-    edges : list or set
-        Updated list or set of edges with "dfs_edges" removed if it was
-        contained in "dfs_edges".
-
-    """
-    if edge in dfs_edges:
-        dfs_edges.remove(edge)
-    elif (edge[1], edge[0]) in dfs_edges:
-        dfs_edges.remove((edge[1], edge[0]))
-    return dfs_edges
-
-
 def generate_result(swc_ids, stats):
     """
     Reorders items in "stats" with respect to the order defined by "swc_ids".
@@ -856,7 +766,7 @@ def generate_result(swc_ids, stats):
     Parameters
     ----------
     swc_ids : list[str]
-        List of all swc_ids of graphs in "self.pred_graphs".
+        List of all swc_ids of graphs in "self.labeled_target_graphs".
     stats : dict
         Dictionary where the keys are swc_ids and values are the result of
         computing some metrics.
