@@ -263,3 +263,65 @@ def progress_bar(current, total, bar_length=50):
         f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
     )
     print(f"\r{bar}", end="", flush=True)
+
+
+def above_threshold(my_dict):
+    # Find keys to delete
+    delete_keys = list()
+    for key, value in my_dict.items():
+        if len(value) < 16:
+            delete_keys.append(key)
+
+    # Delete keys
+    while len(delete_keys) > 0:
+        key = delete_keys.pop()
+        del my_dict[key]
+
+    return my_dict
+
+
+def resolve_multilabels(multilabel_intersections, dists, xyz_to_swc_node):
+    for hat_xyz in multilabel_intersections:
+        keys = list(xyz_to_swc_node[hat_xyz].keys())
+        swc_id = find_best(dists, keys)
+        if swc_id:
+            node = xyz_to_swc_node[hat_xyz][swc_id]
+            dists = append_dict_value(dists, swc_id, node)
+    return dists
+
+
+def append_dict_value(my_dict, key, value):
+    """
+    Appends "value" to the list stored at "key".
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be queried.
+    key : hashable data type
+        Key to be query.
+    value : list item type
+        Value to append to list stored at "key".
+
+    Returns
+    -------
+    my_dict : dict
+        Updated dictionary.
+
+    """
+    if key in my_dict.keys():
+        my_dict[key].append(value)
+    else:
+        my_dict[key] = [value]
+    return my_dict
+
+def find_best(my_dict, keys):
+    best_key = None
+    best_vote_cnt = 0
+    if len(my_dict) > 0:
+        for key in keys:
+            vote_cnt = len(my_dict[key]) if key in my_dict.keys() else 0
+            if vote_cnt > best_vote_cnt:
+                best_key = key
+                best_vote_cnt = vote_cnt
+    return best_key
