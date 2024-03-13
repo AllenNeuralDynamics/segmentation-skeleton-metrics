@@ -17,7 +17,8 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import split_detection, utils
+from segmentation_skeleton_metrics import split_detection
+from segmentation_skeleton_metrics import utils
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
 
