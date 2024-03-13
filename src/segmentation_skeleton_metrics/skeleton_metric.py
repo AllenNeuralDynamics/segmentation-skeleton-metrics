@@ -17,8 +17,7 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import split_detection
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics import split_detection, utils
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
 
@@ -108,7 +107,7 @@ class SkeletonMetric:
                 if xyz in self.xyz_to_swc_node.keys():
                     self.xyz_to_swc_node[xyz][swc_id] = i
                 else:
-                    self.xyz_to_swc_node[xyz] = {swc_id: i} 
+                    self.xyz_to_swc_node[xyz] = {swc_id: i}
 
     def init_kdtree(self):
         xyz_list = []
@@ -437,8 +436,9 @@ class SkeletonMetric:
                     valid_1 = label in self.target_to_pred[target_id_1]
                     valid_2 = label in self.target_to_pred[target_id_2]
                     if valid_1 and valid_2:
-                        sites, d = self.localize(target_id_1, target_id_2, label)
-                        xyz = utils.get_midpoint(sites[0], sites[1])
+                        sites, d = self.localize(
+                            target_id_1, target_id_2, label
+                        )
                         if d < 30 and self.write_to_swc:
                             # Process merge
                             self.save_swc(sites[0], sites[1], "merge")
@@ -480,7 +480,7 @@ class SkeletonMetric:
             for target_id, values in hit_target_ids.items():
                 if len(values) > 16:
                     self.target_to_pred[target_id].add(int(pred_id))
-        
+
     def localize(self, swc_id_1, swc_id_2, label):
         # Get merged nodes
         merged_1 = self.label_to_node[swc_id_1][label]
@@ -615,7 +615,7 @@ class SkeletonMetric:
     def generate_full_results(self):
         """
         Generates a report by creating a list of the results for each metric.
-        Each item in this list corresponds to a graph in "self.labeled_target_graphs"
+        Each item in this list corresponds to a graph in labeled_target_graphs
         and this list is ordered with respect to "swc_ids".
 
         Parameters
@@ -628,7 +628,7 @@ class SkeletonMetric:
             Specifies the ordering of results for each value in "stats".
         stats : dict
             Dictionary where the keys are metrics and values are the result of
-            computing that metric for each graph in "self.labeled_target_graphs".
+            computing that metric for each graph in labeled_target_graphs.
 
         """
         swc_ids = list(self.labeled_target_graphs.keys())
