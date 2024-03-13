@@ -439,8 +439,7 @@ class SkeletonMetric:
                     if valid_1 and valid_2:
                         sites, d = self.localize(target_id_1, target_id_2, label)
                         xyz = utils.get_midpoint(sites[0], sites[1])
-                        print("dist:", d)
-                        if d < 25 and self.write_to_swc:
+                        if d < 30 and self.write_to_swc:
                             # Process merge
                             self.save_swc(sites[0], sites[1], "merge")
                             self.process_merge(target_id_1, label)
@@ -463,7 +462,7 @@ class SkeletonMetric:
             for i in graph.nodes:
                 xyz = tuple(graph.nodes[i]["xyz"])
                 hat_xyz, d = self.get_projection(xyz)
-                if d < 5:
+                if d < 3:
                     target_ids = list(self.xyz_to_swc_node[hat_xyz].keys())
                     if len(target_ids) > 1:
                         hit_multilabels_xyz.add(hat_xyz)
