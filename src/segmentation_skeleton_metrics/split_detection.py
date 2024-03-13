@@ -10,6 +10,7 @@ skeletons (i.e. target_graphs) to the predicted segmentation label mask.
 """
 
 import networkx as nx
+
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
 

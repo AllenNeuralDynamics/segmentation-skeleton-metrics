@@ -315,6 +315,7 @@ def append_dict_value(my_dict, key, value):
         my_dict[key] = [value]
     return my_dict
 
+
 def find_best(my_dict, keys):
     best_key = None
     best_vote_cnt = 0
