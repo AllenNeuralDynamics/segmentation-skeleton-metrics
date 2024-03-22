@@ -17,17 +17,20 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import split_detection
-from segmentation_skeleton_metrics import utils
-from segmentation_skeleton_metrics.swc_utils import save, to_graph, get_xyz_coords
+from segmentation_skeleton_metrics import split_detection, utils
+from segmentation_skeleton_metrics.swc_utils import (
+    get_xyz_coords,
+    save,
+    to_graph,
+)
 from segmentation_skeleton_metrics.utils import resolve
 
-
-INTERSECTION_THRESHOLD = 10
+INTERSECTION_THRESHOLD = 8
+MERGE_DIST_THRESHOLD = 40
 
 detected_sites = [
     [24253.677938, 12223.122055, 3517.545410],
-    #[24879.321500, 10933.487512, 2438.581299],
+    # [24879.321500, 10933.487512, 2438.581299],
     [24506.729844, 11969.226457, 3229.514648],
     [24086.304172, 13403.438297, 3334.542725],
     [23997.799117, 11885.819344, 3238.000000],
@@ -45,6 +48,7 @@ detected_sites = [
     [24621.188453, 13542.997273, 3707.002686],
     [24054.875023, 12161.695477, 3282.862305],
 ]
+
 
 class SkeletonMetric:
     """
@@ -169,7 +173,7 @@ class SkeletonMetric:
         print("Labelling Target Graphs...")
         t0 = time()
         labeled_target_graphs = dict()
-        self.id_to_label_nodes = dict() # {target_id: {label: nodes}}
+        self.id_to_label_nodes = dict()  # {target_id: {label: nodes}}
         for cnt, (target_id, graph) in enumerate(self.target_graphs.items()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
             labeled_target_graph, id_to_label_nodes = self.label_graph(graph)
@@ -183,8 +187,8 @@ class SkeletonMetric:
     def label_graph(self, target_graph):
         """
         Iterates over nodes in "target_graph" and stores the label in the
-        predicted segmentation mask (i.e. "self.label_mask") which coincides with
-        each node as a node-level attribute called "label".
+        predicted segmentation mask (i.e. "self.label_mask") which coincides
+        with each node as a node-level attribute called "label".
 
         Parameters
         ----------
@@ -309,7 +313,7 @@ class SkeletonMetric:
                     else:
                         hat_i = self.xyz_to_id_node[hat_xyz][hits[0]]
                         hit_target_ids = utils.append_dict_value(
-                          hit_target_ids, hits[0], hat_i
+                            hit_target_ids, hits[0], hat_i
                         )
             hit_target_ids = utils.resolve(
                 multi_hits, hit_target_ids, self.xyz_to_id_node
@@ -360,11 +364,8 @@ class SkeletonMetric:
         else:
             radius = self.black_hole_radius
             pts = self.black_holes.query_ball_point(xyz, radius)
-            if len(pts) > 0:
-                return True
-            else:
-                return False
-    
+            return True if len(pts) > 0 else False
+
     # -- Evaluation --
     def compute_metrics(self):
         """
@@ -398,7 +399,7 @@ class SkeletonMetric:
         for target_id in self.target_graphs.keys():
             labels = labels.union(self.get_labels(target_id))
         return labels
-            
+
     def get_labels(self, target_id):
         """
         Gets the predicted label ids that intersect with the target graph
@@ -468,8 +469,12 @@ class SkeletonMetric:
         self.omit_cnts = dict()
         self.omit_percents = dict()
         for target_id in self.target_graphs.keys():
-            n_splits = gutils.count_splits(self.labeled_target_graphs[target_id])
-            n_pred_edges = self.labeled_target_graphs[target_id].number_of_edges()
+            n_splits = gutils.count_splits(
+                self.labeled_target_graphs[target_id]
+            )
+            n_pred_edges = self.labeled_target_graphs[
+                target_id
+            ].number_of_edges()
             n_target_edges = self.target_graphs[target_id].number_of_edges()
 
             self.split_cnts[target_id] = n_splits
@@ -497,6 +502,7 @@ class SkeletonMetric:
 
         # Run detection
         t0 = time()
+        detected_merges = set()
         for cnt, target_id_1 in enumerate(self.labeled_target_graphs.keys()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
             for target_id_2 in self.labeled_target_graphs.keys():
@@ -509,22 +515,28 @@ class SkeletonMetric:
                 labels_2 = self.get_labels(target_id_2)
                 intersection = labels_1.intersection(labels_2)
                 for label in intersection:
-                    sites, d = self.localize(target_id_1, target_id_2, label)
-                    if d < 30 and self.write_to_swc:
-                        # Process merge
-                        self.save_swc(sites[0], sites[1], "merge")
-                        self.process_merge(target_id_1, label)
-                        self.process_merge(target_id_2, label)
+                    # Process merge
+                    merge = (frozenset((target_id_1, target_id_2)), label)
+                    if merge not in detected_merges:
+                        detected_merges.add(merge)
+                        site, d = self.locate(target_id_1, target_id_2, label)
+                        if d < MERGE_DIST_THRESHOLD:
+                            self.merge_cnts[target_id_1] += 1
+                            self.merge_cnts[target_id_2] += 1
+                            if self.write_to_swc:
+                                self.save_swc(site[0], site[1], "merge")
 
-                        # Remove label to avoid reprocessing
-                        del self.id_to_label_nodes[target_id_1][label]
-                        del self.id_to_label_nodes[target_id_2][label]
+        # Update graph
+        for (target_ids, label) in detected_merges:
+            target_id_1, target_id_2 = tuple(target_ids)
+            self.process_merge(target_id_1, label)
+            self.process_merge(target_id_2, label)
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def localize(self, target_id_1, target_id_2, label):
+    def locate(self, target_id_1, target_id_2, label):
         # Get merged nodes
         merged_1 = self.id_to_label_nodes[target_id_1][label]
         merged_2 = self.id_to_label_nodes[target_id_2][label]
@@ -536,16 +548,16 @@ class SkeletonMetric:
             for j in merged_2:
                 xyz_1 = self.target_graphs[target_id_1].nodes[i]["xyz"]
                 xyz_2 = self.target_graphs[target_id_2].nodes[j]["xyz"]
-                dist = utils.dist(xyz_1, xyz_2)
-                if dist < min_dist:
-                    min_dist = dist
+                if utils.dist(xyz_1, xyz_2) < min_dist:
+                    min_dist = utils.dist(xyz_1, xyz_2)
                     xyz_pair = [xyz_1, xyz_2]
         return xyz_pair, min_dist
 
     def near_bdd(self, xyz):
         near_bdd_bool = False
         if self.ignore_boundary_mistakes:
-            above = [xyz[i] >= self.label_mask.shape[i] - 32 for i in range(3)]
+            mask_shape = self.label_mask.shape
+            above = [xyz[i] >= mask_shape[i] - 32 for i in range(3)]
             below = [xyz[i] < 32 for i in range(3)]
             near_bdd_bool = True if any(above) or any(below) else False
         return near_bdd_bool
@@ -578,8 +590,9 @@ class SkeletonMetric:
 
     def process_merge(self, target_id, label):
         """
-        Once a merge has been detected that corresponds to "target_id", every node
-        in "self.labeled_target_graph[target_id]" with that "label" is deleted.
+        Once a merge has been detected that corresponds to "target_id", every
+        node in "self.labeled_target_graph[target_id]" with that "label" is
+        deleted.
 
         Parameters
         ----------
@@ -593,13 +606,9 @@ class SkeletonMetric:
         None
 
         """
-        # Update graph
         graph = self.labeled_target_graphs[target_id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
         self.labeled_target_graphs[target_id] = graph
-
-        # Update cnts
-        self.merge_cnts[target_id] += 1
         self.merged_cnts[target_id] += merged_cnt
 
     def quantify_merges(self):
@@ -632,8 +641,8 @@ class SkeletonMetric:
         Returns
         -------
         full_results : dict
-            Dictionary where the keys are target_ids and the values are the result
-            of computing each metric for the corresponding graphs.
+            Dictionary where the keys are target_ids and the values are the
+            result of computing each metric for the corresponding graphs.
         avg_result : dict
             Dictionary where the keys are names of metrics computed by this
             module and values are the averaged result over all target_ids.
@@ -691,7 +700,7 @@ class SkeletonMetric:
     def generate_avg_results(self):
         avg_stats = {
             "# splits": self.avg_result(self.split_cnts),
-            "# merges": self.avg_result(self.merge_cnts),
+            "# merges": self.avg_result(self.merge_cnts) / 2,
             "% omit": self.avg_result(self.omit_percents),
             "% merged": self.avg_result(self.merged_percents),
             "edge accuracy": self.avg_result(self.edge_accuracy),
@@ -790,7 +799,7 @@ class SkeletonMetric:
     def save_swc(self, xyz_1, xyz_2, mistake_type):
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
-        
+
         min_dist = np.inf
         hit_site = None
         for site in detected_sites:
