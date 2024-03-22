@@ -13,100 +13,31 @@ import numpy as np
 from segmentation_skeleton_metrics import utils
 
 
-def make_entry(node_id, parent_id, xyz):
+def read(path, cloud_read=False):
+    return read_from_cloud(path) if cloud_read else read_from_local(path)
+
+
+def read_from_cloud(path):
+    pass
+
+
+def read_from_local(path):
     """
-    Makes an entry to be written in an swc file.
+    Reads swc file stored at "path" on local machine.
 
     Parameters
     ----------
-    graph : networkx.Graph
-        Graph that "node_id" and "parent_id" belong to.
-    node_id : int
-        Node that entry corresponds to.
-    parent_id : int
-         Parent of node "node_id".
-    xyz : ...
-        xyz coordinate of "node_id".
-
-    Returns
-    -------
-    entry : str
-        Entry to be written in an swc file.
-
-    """
-    x, y, z = tuple(xyz)
-    entry = f"{node_id} 2 {x} {y} {z} 8 {parent_id}"
-    return entry
-
-
-def save(path, xyz_1, xyz_2, color=None):
-    """
-    Writes an swc file.
-
-    Parameters
-    ----------
-    path : str
-        Path on local machine that swc file will be written to.
-    entry_list : list[list]
-        List of entries that will be written to an swc file.
-    color : str, optional
-        Color of nodes. The default is None.
-
-    Returns
-    -------
-    None.
-
-    """
-    with open(path, "w") as f:
-        # Preamble
-        if color is not None:
-            f.write("# COLOR " + color)
-        else:
-            f.write("# id, type, z, y, x, r, pid")
-        f.write("\n")
-
-        # Entries
-        f.write(make_entry(1, -1, xyz_1))
-        f.write("\n")
-        f.write(make_entry(2, 1, xyz_2))
-
-
-def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Reads an swc file and builds an undirected graph from it.
-
-    Parameters
-    ----------
-    path : str
+    Path : str
         Path to swc file to be read.
-    anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files. The default is [1.0, 1.0, 1.0].
 
     Returns
     -------
-    networkx.Graph
-        Graph constructed from an swc file.
+    list
+        List such that each entry is a line from the swc file.
 
     """
-    graph = nx.Graph(swc_id=utils.get_swc_id(path))
-    with open(path, "r") as f:
-        offset = [0, 0, 0]
-        for line in f.readlines():
-            if line.startswith("# OFFSET"):
-                parts = line.split()
-                offset = read_xyz(parts[2:5])
-            if not line.startswith("#"):
-                parts = line.split()
-                child = int(parts[0])
-                parent = int(parts[-1])
-                xyz = read_xyz(
-                    parts[2:5], anisotropy=anisotropy, offset=offset
-                )
-                graph.add_node(child, xyz=xyz)
-                if parent != -1:
-                    graph.add_edge(parent, child)
-    return graph
+    with open(path, "r") as file:
+        return file.readlines()
 
 
 def get_xyz_coords(path, anisotropy=[1.0, 1.0, 1.0]):
@@ -167,3 +98,96 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     """
     xyz = [float(xyz[i]) + offset[i] for i in range(3)]
     return np.array([xyz[i] / anisotropy[i] for i in range(3)], dtype=int)
+
+
+def save(path, xyz_1, xyz_2, color=None):
+    """
+    Writes an swc file.
+
+    Parameters
+    ----------
+    path : str
+        Path on local machine that swc file will be written to.
+    entry_list : list[list]
+        List of entries that will be written to an swc file.
+    color : str, optional
+        Color of nodes. The default is None.
+
+    Returns
+    -------
+    None.
+
+    """
+    with open(path, "w") as f:
+        # Preamble
+        if color is not None:
+            f.write("# COLOR " + color)
+        else:
+            f.write("# id, type, z, y, x, r, pid")
+        f.write("\n")
+
+        # Entries
+        f.write(make_entry(1, -1, xyz_1))
+        f.write("\n")
+        f.write(make_entry(2, 1, xyz_2))
+
+
+def make_entry(node_id, parent_id, xyz):
+    """
+    Makes an entry to be written in an swc file.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph that "node_id" and "parent_id" belong to.
+    node_id : int
+        Node that entry corresponds to.
+    parent_id : int
+         Parent of node "node_id".
+    xyz : ...
+        xyz coordinate of "node_id".
+
+    Returns
+    -------
+    entry : str
+        Entry to be written in an swc file.
+
+    """
+    x, y, z = tuple(xyz)
+    entry = f"{node_id} 2 {x} {y} {z} 8 {parent_id}"
+    return entry
+
+
+def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
+    """
+    Reads an swc file and builds an undirected graph from it.
+
+    Parameters
+    ----------
+    path : str
+        Path to swc file to be read.
+    anisotropy : list[float], optional
+        Image to real-world coordinates scaling factors for (x, y, z) that is
+        applied to swc files. The default is [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    networkx.Graph
+        Graph built from an swc file.
+
+    """
+    graph = nx.Graph(swc_id=utils.get_swc_id(path))
+    offset = [0, 0, 0]    
+    for line in read(path):
+        if line.startswith("# OFFSET"):
+            parts = line.split()
+            offset = read_xyz(parts[2:5])
+        if not line.startswith("#"):
+            parts = line.split()
+            child = int(parts[0])
+            parent = int(parts[-1])
+            xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+            graph.add_node(child, xyz=xyz)
+            if parent != -1:
+                graph.add_edge(parent, child)
+    return graph

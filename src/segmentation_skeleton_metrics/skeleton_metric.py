@@ -18,6 +18,7 @@ from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, utils
+from segmentation_skeleton_metrics import swc_utils
 from segmentation_skeleton_metrics.swc_utils import (
     get_xyz_coords,
     save,
@@ -49,13 +50,14 @@ class SkeletonMetric:
         pred_swc_paths,
         target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
-        ignore_boundary_mistakes=False,
         black_holes_xyz_id=None,
         black_hole_radius=24,
         equivalent_ids=None,
-        valid_ids=None,
-        write_to_swc=False,
+        ignore_boundary_mistakes=False,
         output_dir=None,
+        pred_on_cloud=False,
+        valid_size_threshold=40.0,
+        write_to_swc=False,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -63,44 +65,59 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        target_swc_paths : list[str]
-            List of paths to swc files such that each file corresponds to a
-            neuron in the ground truth.
-        labels : numpy.ndarray or tensorstore.TensorStore
+        pred_labels : numpy.ndarray or tensorstore.TensorStore
             Predicted segmentation mask.
+        pred_swc_paths : list[str]
+            List of paths to swc files where each file corresponds to a
+            neuron in the prediction.
+        target_swc_paths : list[str]
+            List of paths to swc files where each file corresponds to a
+            neuron in the ground truth.
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files. The default is [1.0, 1.0, 1.0]
-        black_holes_xyz_id : list
+        black_holes_xyz_id : list, optional
             ...
-        black_hole_radius : float
+        black_hole_radius : float, optional
             ...
         equivalent_ids : ...
             ...
-        valid_ids : set
+        ignore_boundary_mistakes : bool, optional
+            Indication of whether to ignore mistakes near boundary of bounding
+            box. The default is False.
+        output_dir : str, optional
+            Path to directory that each mistake site is written to. The default
+            is None.
+        pred_on_cloud : bool, optional
+            Indication of whether predicted swc files in "pred_swc_paths" are
+            on the cloud in a GCS bucket. The default is False.
+        valid_size_threshold : float, optional
             ...
+        write_to_swc : bool, optional
+            Indication of whether to write mistake sites to an swc file. The
+            default is False.
 
         Returns
         -------
         None.
 
         """
-        # Store label options
-        self.valid_ids = valid_ids
-        self.label_mask = pred_labels
-
+        # Store options
         self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
+        self.output_dir = output_dir
+        self.write_to_swc = write_to_swc
+
         self.init_black_holes(black_holes_xyz_id)
         self.black_hole_radius = black_hole_radius
 
-        self.write_to_swc = write_to_swc
-        self.output_dir = output_dir
-
         # Build Graphs
+        self.label_mask = pred_labels
+        self.pred_swc_paths = pred_swc_paths
+        self.init_valid_labels(valid_size_threshold)
+
         self.target_graphs = self.init_graphs(target_swc_paths, anisotropy)
         self.labeled_target_graphs = self.init_labeled_target_graphs()
-        self.pred_swc_paths = pred_swc_paths
 
         # Build kdtree
         self.init_xyz_to_id_node()
@@ -108,6 +125,13 @@ class SkeletonMetric:
         self.rm_spurious_intersections()
 
     # -- Initialize and Label Graphs --
+    def init_valid_labels(self, valid_size_threshold):
+        self.valid_labels = set()
+        for path in self.pred_swc_paths:
+            contents = swc_utils.read(path)
+            if len(contents) > valid_size_threshold:
+                self.valid_labels.add(utils.get_swc_id(path))
+
     def init_graphs(self, paths, anisotropy):
         """
         Initializes "self.target_graphs" by iterating over "paths" which
@@ -247,7 +271,7 @@ class SkeletonMetric:
     def is_valid(self, label):
         """
         Validates label by checking whether it is contained in
-        "self.valid_ids".
+        "self.valid_labels".
 
         Parameters
         ----------
@@ -258,12 +282,12 @@ class SkeletonMetric:
         -------
         label : int
             There are two possibilities: (1) original label if either "label"
-            is contained in "self.valid_ids" or "self.valid_labels" is None,
-            or (2) 0 if "label" is not contained in self.valid_ids.
+            is contained in "self.valid_labels" or "self.valid_labels" is
+            None, or (2) 0 if "label" is not contained in self.valid_labels.
 
         """
-        if self.valid_ids:
-            if label not in self.valid_ids:
+        if self.valid_labels:
+            if label not in self.valid_labels:
                 return 0
         return label
 
