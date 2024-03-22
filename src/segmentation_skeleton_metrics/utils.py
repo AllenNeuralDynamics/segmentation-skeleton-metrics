@@ -280,8 +280,8 @@ def above_threshold(my_dict):
     return my_dict
 
 
-def resolve_multilabels(multilabel_intersections, dists, xyz_to_swc_node):
-    for hat_xyz in multilabel_intersections:
+def resolve(multi_hits, dists, xyz_to_swc_node):
+    for hat_xyz in multi_hits:
         keys = list(xyz_to_swc_node[hat_xyz].keys())
         swc_id = find_best(dists, keys)
         if swc_id:
@@ -326,3 +326,12 @@ def find_best(my_dict, keys):
                 best_key = key
                 best_vote_cnt = vote_cnt
     return best_key
+
+
+def get_swc_id(path):
+    """
+    Gets segment id of the swc file at "path".
+
+    """
+    filename = path.split("/")[-1]
+    return filename.split(".")[0]

@@ -37,16 +37,16 @@ def remove_edge(graph, i, j):
     return graph
 
 
-def delete_nodes(graph, delete_id, return_cnt=False):
+def delete_nodes(graph, delete_label, return_cnt=False):
     """
-    Deletes nodes in "graph" whose pred_id is identical to "delete_id".
+    Deletes nodes in "graph" whose label is identical to "delete_label".
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched and edited.
-    delete_id : int
-        pred_id to be removed from graph.
+    delete_label : int
+        Label to be removed from graph.
     return : bool, optional
         Indication of whether to return the number of nodes deleted from
         "graph". The default is False.
@@ -60,8 +60,8 @@ def delete_nodes(graph, delete_id, return_cnt=False):
     # Find nodes matching delete_marker
     delete_nodes = []
     for i in graph.nodes:
-        label = graph.nodes[i]["pred_id"]
-        if label == delete_id:
+        label = graph.nodes[i]["label"]
+        if label == delete_label:
             delete_nodes.append(i)
 
     # Count deleted edges (if applicable)
@@ -118,13 +118,13 @@ def upd_labels(graph, nodes, label):
 
     """
     for i in nodes:
-        graph.nodes[i].update({"pred_id": label})
+        graph.nodes[i].update({"label": label})
     return graph
 
 
 def store_labels(graph):
     """
-    Iterates over all nodes in "graph" and stores the pred_id and node id in
+    Iterates over all nodes in "graph" and stores the label and node id in
     a dictionary called "label_to_node".
 
     Parameters
@@ -135,12 +135,12 @@ def store_labels(graph):
     Returns
     -------
     label_to_node : dict
-        Dictionary that stores the pred_id and node id.
+        Dictionary that stores the label and node id.
 
     """
     label_to_node = dict()
     for i in graph.nodes:
-        label = graph.nodes[i]["pred_id"]
+        label = graph.nodes[i]["label"]
         if label in label_to_node.keys():
             label_to_node[label].add(i)
         else:
