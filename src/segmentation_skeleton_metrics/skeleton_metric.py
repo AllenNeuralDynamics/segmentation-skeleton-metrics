@@ -23,31 +23,9 @@ from segmentation_skeleton_metrics.swc_utils import (
     save,
     to_graph,
 )
-from segmentation_skeleton_metrics.utils import resolve
 
 INTERSECTION_THRESHOLD = 8
 MERGE_DIST_THRESHOLD = 40
-
-detected_sites = [
-    [24253.677938, 12223.122055, 3517.545410],
-    # [24879.321500, 10933.487512, 2438.581299],
-    [24506.729844, 11969.226457, 3229.514648],
-    [24086.304172, 13403.438297, 3334.542725],
-    [23997.799117, 11885.819344, 3238.000000],
-    [24581.471406, 13374.270680, 3865.545898],
-    [24331.614570, 12680.798711, 3771.828857],
-    [24699.763516, 13129.664453, 3527.499512],
-    [24699.763516, 13129.664453, 3527.499512],
-    [24733.008609, 13032.409844, 3771.502686],
-    [24808.936453, 13065.339375, 3771.418457],
-    [23816.039500, 12339.684414, 3611.450684],
-    [23975.565109, 12168.482262, 3328.587158],
-    [24435.447781, 13312.036203, 3716.725342],
-    [24487.278922, 12969.612906, 3768.517334],
-    [24134.228766, 13434.386797, 3776.521240],
-    [24621.188453, 13542.997273, 3707.002686],
-    [24054.875023, 12161.695477, 3282.862305],
-]
 
 
 class SkeletonMetric:
@@ -799,21 +777,6 @@ class SkeletonMetric:
     def save_swc(self, xyz_1, xyz_2, mistake_type):
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
-
-        min_dist = np.inf
-        hit_site = None
-        for site in detected_sites:
-            d = utils.dist(xyz_1, np.array(site))
-            if d < min_dist:
-                min_dist = d
-                hit_site = site
-
-        if min_dist < 10:
-            print("")
-            print("site:", hit_site)
-            print("nn dist:", min_dist)
-            print("")
-
         if mistake_type == "split":
             color = "0.0 1.0 0.0"
             cnt = 1 + np.sum(list(self.split_cnts.values())) // 2
