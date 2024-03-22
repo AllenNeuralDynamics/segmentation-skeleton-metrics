@@ -7,10 +7,10 @@ Created on Wed June 5 16:00:00 2023
 
 """
 
-import os
-
 import networkx as nx
 import numpy as np
+
+from segmentation_skeleton_metrics import utils
 
 
 def make_entry(node_id, parent_id, xyz):
@@ -20,14 +20,18 @@ def make_entry(node_id, parent_id, xyz):
     Parameters
     ----------
     graph : networkx.Graph
-        Graph that "i" and "parent" belong to.
-    i : int
+        Graph that "node_id" and "parent_id" belong to.
+    node_id : int
         Node that entry corresponds to.
-    parent : int
-         Parent of node "i".
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
+    parent_id : int
+         Parent of node "node_id".
+    xyz : ...
+        xyz coordinate of "node_id".
+
+    Returns
+    -------
+    entry : str
+        Entry to be written in an swc file.
 
     """
     x, y, z = tuple(xyz)
@@ -77,7 +81,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
         Path to swc file to be read.
     anisotropy : list[float], optional
         Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
+        applied to swc files. The default is [1.0, 1.0, 1.0].
 
     Returns
     -------
@@ -85,8 +89,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
         Graph constructed from an swc file.
 
     """
-    swc_id = os.path.basename(path).replace(".swc", "")
-    graph = nx.Graph(swc_id=swc_id)
+    graph = nx.Graph(swc_id=utils.get_swc_id(path))
     with open(path, "r") as f:
         offset = [0, 0, 0]
         for line in f.readlines():
@@ -107,7 +110,23 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
 
 
 def get_xyz_coords(path, anisotropy=[1.0, 1.0, 1.0]):
-    swc_id = os.path.basename(path).replace(".swc", "")
+    """
+    Gets the xyz coords from the swc file at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to swc file to be parsed.
+    anisotropy : list[float], optional
+        Scaling factors applied to xyz coordinates to account for anisotropy
+        of the microscope. The default is [1.0, 1.0, 1.0].
+
+    Returns
+    -------
+    numpy.ndarray
+        xyz coords from an swc file.
+
+    """
     xyz_list = []
     with open(path, "r") as f:
         offset = [0, 0, 0]
@@ -134,9 +153,10 @@ def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     xyz : str
         (x,y,z) coordinates.
     anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors applied to "xyz".
+        Image to real-world coordinates scaling factors applied to "xyz". The
+        default is [1.0, 1.0, 1.0].
     offset : list[int], optional
-        Offset of (x, y, z) coordinates in swc file.
+        Offset of (x, y, z) coordinates in swc file. The default is [0, 0, 0].
 
     Returns
     -------
