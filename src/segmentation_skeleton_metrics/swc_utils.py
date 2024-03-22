@@ -106,6 +106,24 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
     return graph
 
 
+def get_xyz_coords(path, anisotropy=[1.0, 1.0, 1.0]):
+    swc_id = os.path.basename(path).replace(".swc", "")
+    xyz_list = []
+    with open(path, "r") as f:
+        offset = [0, 0, 0]
+        for line in f.readlines():
+            if line.startswith("# OFFSET"):
+                parts = line.split()
+                offset = read_xyz(parts[2:5])
+            if not line.startswith("#"):
+                parts = line.split()
+                xyz = read_xyz(
+                    parts[2:5], anisotropy=anisotropy, offset=offset
+                )
+                xyz_list.append(xyz)
+    return np.array(xyz_list)
+
+
 def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
     """
     Reads the (x,y,z) coordinates from an swc file, then reverses and scales

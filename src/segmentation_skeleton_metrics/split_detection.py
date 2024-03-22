@@ -21,8 +21,8 @@ def run(target_graph, labeled_graph):
     while len(dfs_edges) > 0:
         # Visit edge
         (i, j) = dfs_edges.pop(0)
-        label_i = labeled_graph.nodes[i]["pred_id"]
-        label_j = labeled_graph.nodes[j]["pred_id"]
+        label_i = labeled_graph.nodes[i]["label"]
+        label_j = labeled_graph.nodes[j]["label"]
         if is_split(label_i, label_j):
             dfs_edges, labeled_graph = is_nonzero_misalignment(
                 target_graph, labeled_graph, dfs_edges, i, j
@@ -68,7 +68,7 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
     visited = set()
     while len(queue) > 0:
         j = queue.pop(0)
-        label_j = labeled_graph.nodes[j]["pred_id"]
+        label_j = labeled_graph.nodes[j]["label"]
         visited.add(j)
         if label_j > 0:
             collision_labels.add(label_j)
@@ -96,15 +96,15 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
 
 def is_nonzero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
     # Initialize
-    origin_label = labeled_graph.nodes[nb]["pred_id"]
-    hit_label = labeled_graph.nodes[root]["pred_id"]
+    origin_label = labeled_graph.nodes[nb]["label"]
+    hit_label = labeled_graph.nodes[root]["label"]
 
     # Search
     queue = [(nb, root)]
     visited = set([nb])
     while len(queue) > 0:
         parent, j = queue.pop(0)
-        label_j = labeled_graph.nodes[j]["pred_id"]
+        label_j = labeled_graph.nodes[j]["label"]
         visited.add(j)
         if label_j == origin_label and len(queue) == 0:
             # misalignment
