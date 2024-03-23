@@ -177,7 +177,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     graph = nx.Graph(swc_id=utils.get_swc_id(path))
-    offset = [0, 0, 0]    
+    offset = [0, 0, 0]
     for line in read(path):
         if line.startswith("# OFFSET"):
             parts = line.split()
