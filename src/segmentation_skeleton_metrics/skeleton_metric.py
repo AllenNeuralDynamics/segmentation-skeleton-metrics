@@ -17,8 +17,7 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import split_detection, utils
-from segmentation_skeleton_metrics import swc_utils
+from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 from segmentation_skeleton_metrics.swc_utils import (
     get_xyz_coords,
     save,
@@ -130,7 +129,7 @@ class SkeletonMetric:
         for path in self.pred_swc_paths:
             contents = swc_utils.read(path)
             if len(contents) > valid_size_threshold:
-                self.valid_labels.add(utils.get_swc_id(path))
+                self.valid_labels.add(int(utils.get_swc_id(path)))
 
     def init_graphs(self, paths, anisotropy):
         """
