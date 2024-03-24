@@ -18,11 +18,7 @@ from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
-from segmentation_skeleton_metrics.swc_utils import (
-    get_xyz_coords,
-    save,
-    to_graph,
-)
+from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
 INTERSECTION_THRESHOLD = 8
 MERGE_DIST_THRESHOLD = 40
@@ -54,8 +50,7 @@ class SkeletonMetric:
         equivalent_ids=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
-        pred_on_cloud=False,
-        valid_size_threshold=40.0,
+        valid_size_threshold=40,
         write_to_swc=False,
     ):
         """
@@ -66,15 +61,16 @@ class SkeletonMetric:
         ----------
         pred_labels : numpy.ndarray or tensorstore.TensorStore
             Predicted segmentation mask.
-        pred_swc_paths : list[str]
-            List of paths to swc files where each file corresponds to a
-            neuron in the prediction.
         target_swc_paths : list[str]
             List of paths to swc files where each file corresponds to a
             neuron in the ground truth.
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files. The default is [1.0, 1.0, 1.0]
+        pred_swc_paths : list[str] or dict
+            If swc files are on local machine, list of paths to swc files where
+            each file corresponds to a neuron in the prediction. If swc files
+            are on cloud, then dict with keys "bucket_name" and "path".
         black_holes_xyz_id : list, optional
             ...
         black_hole_radius : float, optional
@@ -87,11 +83,10 @@ class SkeletonMetric:
         output_dir : str, optional
             Path to directory that each mistake site is written to. The default
             is None.
-        pred_on_cloud : bool, optional
-            Indication of whether predicted swc files in "pred_swc_paths" are
-            on the cloud in a GCS bucket. The default is False.
-        valid_size_threshold : float, optional
-            ...
+        valid_size_threshold : int, optional
+            Threshold on the number of nodes contained in an swc file. Only swc
+            files with more than "valid_size_threshold" nodes are stored in
+            "self.valid_labels". The default is 40.
         write_to_swc : bool, optional
             Indication of whether to write mistake sites to an swc file. The
             default is False.
@@ -112,8 +107,9 @@ class SkeletonMetric:
 
         # Build Graphs
         self.label_mask = pred_labels
-        self.pred_swc_paths = pred_swc_paths
-        self.init_valid_labels(valid_size_threshold)
+        self.valid_labels = swc_utils.parse(
+            pred_swc_paths, valid_size_threshold, anisotropy=anisotropy
+        )
 
         self.target_graphs = self.init_graphs(target_swc_paths, anisotropy)
         self.labeled_target_graphs = self.init_labeled_target_graphs()
@@ -124,13 +120,6 @@ class SkeletonMetric:
         self.rm_spurious_intersections()
 
     # -- Initialize and Label Graphs --
-    def init_valid_labels(self, valid_size_threshold):
-        self.valid_labels = set()
-        for path in self.pred_swc_paths:
-            contents = swc_utils.read(path)
-            if len(contents) > valid_size_threshold:
-                self.valid_labels.add(int(utils.get_swc_id(path)))
-
     def init_graphs(self, paths, anisotropy):
         """
         Initializes "self.target_graphs" by iterating over "paths" which
@@ -236,12 +225,13 @@ class SkeletonMetric:
            Label of voxel at "img_coord".
 
         """
-        label = self.__read_label(img_coord)
+        # Read label
         if self.in_black_hole(img_coord):
             label = -1
-        return self.finalize_label(label, return_node)
+        else:
+            label = self.__read_label(img_coord)
 
-    def finalize_label(self, label, return_node):
+        # Validate label
         if return_node:
             return return_node, self.is_valid(label)
         else:
@@ -286,7 +276,7 @@ class SkeletonMetric:
 
         """
         if self.valid_labels:
-            if label not in self.valid_labels:
+            if label not in self.valid_labels.keys():
                 return 0
         return label
 
@@ -305,7 +295,7 @@ class SkeletonMetric:
             # Compute label intersect target_graphs
             hit_target_ids = dict()
             multi_hits = set()
-            for xyz in self.get_pred_xyz(label):
+            for xyz in self.get_pred_coords(label):
                 hat_xyz, d = self.get_projection(xyz)
                 if d < 5:
                     hits = list(self.xyz_to_id_node[hat_xyz].keys())
@@ -329,12 +319,11 @@ class SkeletonMetric:
                 elif label in self.id_to_label_nodes[target_id]:
                     self.zero_nodes(target_id, label)
 
-    def get_pred_xyz(self, label):
-        for path in self.pred_swc_paths:
-            swc_id = utils.get_swc_id(path)
-            if str(label) == swc_id:
-                return get_xyz_coords(path, anisotropy=self.anisotropy)
-        return []
+    def get_pred_coords(self, label):
+        if label in self.valid_labels.keys():
+            return self.valid_labels[label]
+        else:
+            return []
 
     # -- Final Constructor Routines --
     def init_kdtree(self):

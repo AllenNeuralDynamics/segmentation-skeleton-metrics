@@ -8,6 +8,9 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
+from io import BytesIO
+from time import time
+from zipfile import ZipFile
 
 import numpy as np
 import tensorstore as ts
@@ -131,6 +134,33 @@ def read_tensorstore(path):
     return dataset_ts[ts.d["channel"][0]]
 
 
+def read_from_gcs_zip(zip_file, path):
+    """
+    Reads the content of an swc file from a zip file in a GCS bucket.
+
+    """
+    with zip_file.open(path) as text_file:
+        return text_file.read().decode("utf-8").splitlines()
+
+
+def list_gcs_filenames(bucket, cloud_path, extension):
+    """
+    Lists all files in a GCS bucket with the given extension.
+
+    """
+    blobs = bucket.list_blobs(prefix=cloud_path)
+    return [blob.name for blob in blobs if extension in blob.name]
+
+
+def list_files_in_gcs_zip(zip_content):
+    """
+    Lists all files in a zip file stored in a GCS bucket.
+
+    """
+    with ZipFile(BytesIO(zip_content), "r") as zip_file:
+        return zip_file.namelist()
+
+
 # -- miscellaneous --
 def check_edge(edge_list, edge):
     """
@@ -210,61 +240,6 @@ def to_world(xyz, anisotropy):
     return [xyz[i] * anisotropy[i] for i in range(3)]
 
 
-def time_writer(t, unit="seconds"):
-    """
-    Converts runtime "t" to its proper unit.
-
-    Parameters
-    ----------
-    t : float
-        Runtime to be converted.
-    unit : str, optional
-        Unit of "t".
-
-    Returns
-    -------
-    t : float
-        Converted runtime.
-    unit : str
-        Unit of "t"
-
-    """
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
-
-
-def progress_bar(current, total, bar_length=50):
-    """
-    Reports the progress of completing some process.
-
-    Parameters
-    ----------
-    current : int
-        Current iteration of process.
-    total : int
-        Total number of iterations to be completed
-    bar_length : int, optional
-        Length of progress bar
-
-    Returns
-    -------
-    None
-
-    """
-    progress = int(current / total * bar_length)
-    bar = (
-        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
-    )
-    print(f"\r{bar}", end="", flush=True)
-
-
 def above_threshold(my_dict):
     # Find keys to delete
     delete_keys = list()
@@ -335,3 +310,63 @@ def get_swc_id(path):
     """
     filename = path.split("/")[-1]
     return filename.split(".")[0]
+
+
+# -- runtime --
+def time_writer(t, unit="seconds"):
+    """
+    Converts runtime "t" to its proper unit.
+
+    Parameters
+    ----------
+    t : float
+        Runtime to be converted.
+    unit : str, optional
+        Unit of "t".
+
+    Returns
+    -------
+    t : float
+        Converted runtime.
+    unit : str
+        Unit of "t"
+
+    """
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit
+
+
+def init_timers():
+    return time(), time()
+
+
+def progress_bar(current, total, bar_length=50):
+    """
+    Reports the progress of completing some process.
+
+    Parameters
+    ----------
+    current : int
+        Current iteration of process.
+    total : int
+        Total number of iterations to be completed
+    bar_length : int, optional
+        Length of progress bar
+
+    Returns
+    -------
+    None
+
+    """
+    progress = int(current / total * bar_length)
+    bar = (
+        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
+    )
+    print(f"\r{bar}", end="", flush=True)
