@@ -20,7 +20,7 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-INTERSECTION_THRESHOLD = 8
+INTERSECTION_THRESHOLD = 10
 MERGE_DIST_THRESHOLD = 40
 
 
@@ -50,8 +50,8 @@ class SkeletonMetric:
         equivalent_ids=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
-        valid_size_threshold=40,
-        write_to_swc=False,
+        valid_size_threshold=25,
+        save_swc=False,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -87,7 +87,7 @@ class SkeletonMetric:
             Threshold on the number of nodes contained in an swc file. Only swc
             files with more than "valid_size_threshold" nodes are stored in
             "self.valid_labels". The default is 40.
-        write_to_swc : bool, optional
+        save_swc : bool, optional
             Indication of whether to write mistake sites to an swc file. The
             default is False.
 
@@ -100,7 +100,7 @@ class SkeletonMetric:
         self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
-        self.write_to_swc = write_to_swc
+        self.save = save_swc
 
         self.init_black_holes(black_holes_xyz_id)
         self.black_hole_radius = black_hole_radius
@@ -372,11 +372,13 @@ class SkeletonMetric:
         """
         # Split evaluation
         print("Detecting Splits...")
+        self.saved_site_cnt = 0
         self.detect_splits()
         self.quantify_splits()
 
         # Merge evaluation
         print("Detecting Merges...")
+        self.saved_site_cnt = 0
         self.detect_merges()
         self.quantify_merges()
 
@@ -509,11 +511,9 @@ class SkeletonMetric:
                     merge = (frozenset((target_id_1, target_id_2)), label)
                     if merge not in detected_merges:
                         detected_merges.add(merge)
-                        site, d = self.locate(target_id_1, target_id_2, label)
-                        if d < MERGE_DIST_THRESHOLD:
-                            self.merge_cnts[target_id_1] += 1
-                            self.merge_cnts[target_id_2] += 1
-                            if self.write_to_swc:
+                        if self.save:
+                            site, d = self.locate(target_id_1, target_id_2, label)
+                            if d < MERGE_DIST_THRESHOLD:
                                 self.save_swc(site[0], site[1], "merge")
 
         # Update graph
@@ -521,6 +521,8 @@ class SkeletonMetric:
             target_id_1, target_id_2 = tuple(target_ids)
             self.process_merge(target_id_1, label)
             self.process_merge(target_id_2, label)
+            self.merge_cnts[target_id_1] += 1
+            self.merge_cnts[target_id_2] += 1
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
@@ -541,6 +543,8 @@ class SkeletonMetric:
                 if utils.dist(xyz_1, xyz_2) < min_dist:
                     min_dist = utils.dist(xyz_1, xyz_2)
                     xyz_pair = [xyz_1, xyz_2]
+                    if min_dist < MERGE_DIST_THRESHOLD:
+                        return xyz_pair, min_dist
         return xyz_pair, min_dist
 
     def near_bdd(self, xyz):
@@ -787,16 +791,11 @@ class SkeletonMetric:
         return metrics
 
     def save_swc(self, xyz_1, xyz_2, mistake_type):
+        self.saved_site_cnt += 1
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
-        if mistake_type == "split":
-            color = "0.0 1.0 0.0"
-            cnt = 1 + np.sum(list(self.split_cnts.values())) // 2
-        else:
-            color = "0.0 0.0 1.0"
-            cnt = 1 + np.sum(list(self.merge_cnts.values())) // 2
-
-        path = f"{self.output_dir}/{mistake_type}-{cnt}.swc"
+        color = "0.0 1.0 0.0" if mistake_type == "split" else "0.0 0.0 1.0"
+        path = f"{self.output_dir}/{mistake_type}-{self.saved_site_cnt}.swc"
         save(path, xyz_1, xyz_2, color=color)
 
 
