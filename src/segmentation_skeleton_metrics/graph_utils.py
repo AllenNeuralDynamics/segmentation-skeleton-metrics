@@ -233,3 +233,21 @@ def sample_leaf(graph):
     """
     leafs = [i for i in graph.nodes if graph.degree[i] == 1]
     return sample(leafs, 1)[0]
+
+
+def sample_node(graph):
+    """
+    Samples a node from "graph".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be sampled from.
+
+    Returns
+    -------
+    int
+        Node.
+
+    """
+    return sample(list(graph.nodes), 1)[0]

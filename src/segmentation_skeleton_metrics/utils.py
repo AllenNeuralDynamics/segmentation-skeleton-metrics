@@ -12,6 +12,7 @@ from io import BytesIO
 from time import time
 from zipfile import ZipFile
 
+import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import distance
@@ -141,6 +142,25 @@ def read_from_gcs_zip(zip_file, path):
     """
     with zip_file.open(path) as text_file:
         return text_file.read().decode("utf-8").splitlines()
+
+
+def read_txt(path):
+    """
+    Reads txt file stored at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path where txt file is stored.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+
+    """
+    with open(path, "r") as f:
+        return f.readlines()
 
 
 def list_gcs_filenames(bucket, cloud_path, extension):
@@ -307,9 +327,39 @@ def get_swc_id(path):
     """
     Gets segment id of the swc file at "path".
 
+    Parameters
+    ----------
+    path : str
+        Path to an swc file
+
+    Return
+    ------
+    Segment id of swc file.
+
     """
     filename = path.split("/")[-1]
     return filename.split(".")[0]
+
+
+def equiv_class_mappings(connections_path, labels):
+    label_to_class = {0: 0}
+    labels_graph = build_labels_graph(connections_path, labels)
+    for i, component in enumerate(nx.connected_components(labels_graph)):
+        i += 1
+        for label in component:
+            label_to_class[label] = i
+    return label_to_class
+
+
+def build_labels_graph(connections_path, labels):
+    labels_graph = nx.Graph()
+    labels_graph.add_nodes_from(list(labels.keys()))
+    for line in read_txt(connections_path):
+        ids = line.split(",")
+        id_1 = int(ids[0])
+        id_2 = int(ids[1])
+        labels_graph.add_edge(id_1, id_2)
+    return labels_graph
 
 
 # -- runtime --
@@ -344,6 +394,21 @@ def time_writer(t, unit="seconds"):
 
 
 def init_timers():
+    """
+    Initializes two timers.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    time.time
+        Timer.
+    time.time
+        Timer.
+
+    """
     return time(), time()
 
 

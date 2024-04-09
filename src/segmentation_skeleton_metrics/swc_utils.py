@@ -18,7 +18,7 @@ from google.cloud import storage
 from segmentation_skeleton_metrics import utils
 
 
-def parse(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
+def parse(swc_paths, min_size, anisotropy):
     """
     Reads swc files and extracts the xyz coordinates.
 
@@ -38,7 +38,9 @@ def parse(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
     Returns
     -------
     dict
-        ...
+        Dictionary where each item is an swc_id and an array of the xyz
+        coordinates read from cooresponding swc file.
+
     """
     if type(swc_paths) == list:
         return parse_local_paths(swc_paths, min_size, anisotropy)
@@ -48,9 +50,32 @@ def parse(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
         return None
 
 
-def parse_local_paths(pred_swc_paths, min_size, anisotropy):
+def parse_local_paths(swc_paths, min_size, anisotropy):
+    """
+    Reads swc files from local machine and extracts the xyz coordinates.
+
+    Paramters
+    ---------
+    swc_paths : list or dict
+        If swc files are on local machine, list of paths to swc files where
+        each file corresponds to a neuron in the prediction. If swc files are
+        on cloud, then dict with keys "bucket_name" and "path".
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
+    anisotropy : list[float]
+        Image to World scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
+
+    Returns
+    -------
+    valid_labels : dict
+        Dictionary where each item is an swc_id and an array of the xyz
+        coordinates read from cooresponding swc file.
+
+    """
     valid_labels = dict()
-    for path in pred_swc_paths:
+    for path in swc_paths:
         contents = read_from_local(path)
         if len(contents) > min_size:
             swc_id = int(utils.get_swc_id(path))
@@ -59,6 +84,27 @@ def parse_local_paths(pred_swc_paths, min_size, anisotropy):
 
 
 def parse_cloud_paths(cloud_dict, min_size, anisotropy):
+    """
+    Reads swc files from a GCS bucket and extracts the xyz coordinates.
+
+    Parameters
+    ----------
+    cloud_dict : dict
+        Dictionary where keys are "bucket_name" and "path".
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
+    anisotropy : list[float]
+        Image to World scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
+
+    Returns
+    -------
+    valid_labels : dict
+        Dictionary where each item is an swc_id and an array of the xyz
+        coordinates read from cooresponding swc file.
+
+    """
     # Initializations
     bucket = storage.Client().bucket(cloud_dict["bucket_name"])
     zip_paths = utils.list_gcs_filenames(bucket, cloud_dict["path"], ".zip")
@@ -82,6 +128,30 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
 
 
 def download(bucket, zip_path, min_size, anisotropy):
+    """
+    Downloads the contents from each swc file contained in the zip file at
+    "zip_path".
+
+    Parameters
+    ----------
+    bucket : str
+        Name of GCS bucket containing swc files to be read.
+    zip_path : str
+        Path to zip file contained in GCS bucket.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
+    anisotropy : list[float]
+        Image to World scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
+
+    Returns
+    -------
+    valid_labels : dict
+        Dictionary where each item is an swc_id and an array of the xyz
+        coordinates read from cooresponding swc file.
+
+    """
     zip_content = bucket.blob(zip_path).download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
@@ -102,6 +172,28 @@ def download(bucket, zip_path, min_size, anisotropy):
 
 
 def parse_gcs_zip(zip_file, path, min_size, anisotropy):
+    """
+    Reads swc file stored at "path" which points to a file in a GCS bucket.
+
+    Parameters
+    ----------
+    zip_file : ZipFile
+        Zip file containing swc file to be read.
+    path : str
+        Path to swc file to be read.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
+    anisotropy : list[float]
+        Image to World scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
+
+    Returns
+    -------
+    list
+        List such that each entry is a line from the swc file.
+
+    """
     contents = read_from_cloud(zip_file, path)
     if len(contents) > min_size:
         swc_id = int(utils.get_swc_id(path))
@@ -116,7 +208,7 @@ def read_from_local(path):
 
     Parameters
     ----------
-    Path : str
+    path : str
         Path to swc file to be read.
 
     Returns

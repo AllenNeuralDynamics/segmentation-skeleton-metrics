@@ -16,6 +16,23 @@ from segmentation_skeleton_metrics import utils
 
 
 def run(target_graph, labeled_graph):
+    """
+    Detected splits in a predicted segmentation.
+
+    Parameters
+    ----------
+    target_graph : networkx.Graph
+        Graph built from a ground truth swc file.
+    labeled_graph : networkx.Graph
+        Labeled graph built from a ground truth swc file, where each node has
+        an attribute called 'label'.
+
+    Returns
+    -------
+    labeled_graph : networkx.Graph
+        Labeled graph with omit and split edges removed.
+
+    """
     r = gutils.sample_leaf(target_graph)
     dfs_edges = list(nx.dfs_edges(target_graph, source=r))
     while len(dfs_edges) > 0:
@@ -43,9 +60,10 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
     Parameters
     ----------
     target_graph : networkx.Graph
-        ...
+        Graph built from a ground truth swc file.
     labeled_graph : networkx.Graph
-        ...
+        Labeled graph built from a ground truth swc file, where each node has
+        an attribute called 'label'.
     dfs_edges : list[tuple]
         List of edges to be processed for split detection.
     nb : int
