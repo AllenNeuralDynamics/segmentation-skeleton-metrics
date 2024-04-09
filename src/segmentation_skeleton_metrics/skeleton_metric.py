@@ -29,9 +29,9 @@ from segmentation_skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-CLOSE_DIST_THRESHOLD = 5
+CLOSE_DIST_THRESHOLD = 3.5
 INTERSECTION_THRESHOLD = 16
-MERGE_DIST_THRESHOLD = 30
+MERGE_DIST_THRESHOLD = 25
 
 
 class SkeletonMetric:
@@ -166,8 +166,8 @@ class SkeletonMetric:
         """
         graphs = dict()
         for path in paths:
-            swc_id = os.path.basename(path).replace(".swc", "")
-            graphs[swc_id] = to_graph(path, anisotropy=anisotropy)
+            id = utils.get_id(path)
+            graphs[id] = to_graph(path, anisotropy=anisotropy)
         return graphs
 
     def init_labeled_graphs(self):
@@ -188,51 +188,51 @@ class SkeletonMetric:
         print("Labelling Graphs...")
         t0 = time()
         self.labeled_graphs = dict()
-        self.id_to_label_nodes = dict()  # {graph_id: {label: nodes}}
-        for cnt, (graph_id, graph) in enumerate(self.graphs.items()):
+        self.id_to_label_nodes = dict()  # {id: {label: nodes}}
+        for cnt, (id, graph) in enumerate(self.graphs.items()):
             utils.progress_bar(cnt + 1, len(self.graphs))
             labeled_graph, id_to_label_nodes = self.label_graph(graph)
-            self.labeled_graphs[graph_id] = labeled_graph
-            self.id_to_label_nodes[graph_id] = id_to_label_nodes
+            self.labeled_graphs[id] = labeled_graph
+            self.id_to_label_nodes[id] = id_to_label_nodes
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def label_graph(self, target_graph):
+    def label_graph(self, graph):
         """
-        Iterates over nodes in "target_graph" and stores the label in the
+        Iterates over nodes in "graph" and stores the label in the
         predicted segmentation mask (i.e. "self.label_mask") which coincides
         with each node as a node-level attribute called "label".
 
         Parameters
         ----------
-        target_graph : networkx.Graph
+        graph : networkx.Graph
             Graph that represents a neuron from the ground truth.
 
         Returns
         -------
-        target_graph : networkx.Graph
+        graph : networkx.Graph
             Updated graph with node-level attributes called "label".
 
         """
-        labeled_target_graph = nx.Graph(target_graph)
+        labeled_graph = nx.Graph(graph)
         id_to_label_nodes = dict()
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
-            for i in labeled_target_graph.nodes:
-                img_coord = gutils.get_coord(labeled_target_graph, i)
+            for i in labeled_graph.nodes:
+                img_coord = gutils.get_coord(labeled_graph, i)
                 threads.append(executor.submit(self.get_label, img_coord, i))
 
             # Store results
             for thread in as_completed(threads):
                 i, label = thread.result()
-                labeled_target_graph.nodes[i].update({"label": label})
+                labeled_graph.nodes[i].update({"label": label})
                 if label in id_to_label_nodes.keys():
                     id_to_label_nodes[label].add(i)
                 else:
                     id_to_label_nodes[label] = set([i])
-        return labeled_target_graph, id_to_label_nodes
+        return labeled_graph, id_to_label_nodes
 
     def get_label(self, img_coord, return_node=False):
         """
@@ -285,6 +285,20 @@ class SkeletonMetric:
             return self.label_mask[coord]
 
     def equivalent_label(self, label):
+        """
+        Gets the equivalence class label corresponding to "label".
+
+        Parameters
+        ----------
+        label : int
+            Label to be checked.
+
+        Returns
+        -------
+        label
+            Equivalence class label.
+
+        """
         if self.equiv_labels_map:
             if label in self.equiv_labels_map.keys():
                 return self.equiv_labels_map[label]
@@ -318,13 +332,13 @@ class SkeletonMetric:
 
     def init_xyz_to_id_node(self):
         self.xyz_to_id_node = dict()
-        for graph_id, graph in self.graphs.items():
+        for id, graph in self.graphs.items():
             for i in graph.nodes:
                 xyz = tuple(graph.nodes[i]["xyz"])
                 if xyz in self.xyz_to_id_node.keys():
-                    self.xyz_to_id_node[xyz][graph_id] = i
+                    self.xyz_to_id_node[xyz][id] = i
                 else:
-                    self.xyz_to_id_node[xyz] = {graph_id: i}
+                    self.xyz_to_id_node[xyz] = {id: i}
 
     def get_pred_coords(self, label):
         if label in self.valid_labels.keys():
@@ -334,6 +348,19 @@ class SkeletonMetric:
 
     # -- Final Constructor Routines --
     def init_kdtree(self):
+        """
+        Builds a KD-Tree from the xyz coordinates from all nodes across all
+        graphs contained in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         xyz_list = []
         for _, graph in self.graphs.items():
             for i in graph.nodes:
@@ -341,6 +368,22 @@ class SkeletonMetric:
         self.graphs_kdtree = KDTree(xyz_list)
 
     def get_projection(self, xyz):
+        """
+        Gets the xyz coordinates of the nearest neighbor of "xyz".
+
+        Parameters
+        ----------
+        xyz : tuple
+            xyz coordinate to be queried.
+
+        Returns
+        -------
+        tuple
+            xyz coordinate of the nearest neighbor of "xyz".
+        d : float
+            Projection distance.
+
+        """
         d, idx = self.graphs_kdtree.query(xyz, k=1)
         return tuple(self.graphs_kdtree.data[idx]), d
 
@@ -394,31 +437,31 @@ class SkeletonMetric:
 
     def get_all_labels(self):
         labels = set()
-        for graph_id in self.graphs.keys():
-            labels = labels.union(self.get_labels(graph_id))
+        for id in self.graphs.keys():
+            labels = labels.union(self.get_labels(id))
         labels.discard(0)
         return labels
 
-    def get_labels(self, graph_id):
+    def get_labels(self, id):
         """
         Gets the predicted label ids that intersect with the target graph
-        corresponding to "graph_id".
+        corresponding to "id".
 
         Parameters
         ----------
-        graph_id : str
+        id : str
 
         """
-        return set(self.id_to_label_nodes[graph_id].keys())
+        return set(self.id_to_label_nodes[id].keys())
 
-    def zero_nodes(self, graph_id, label):
+    def zero_nodes(self, id, label):
         """
-        Zeros out nodes in "self.labeled_target_graph[graph_id" in the sense
-        the label of nodes with "label" is updated to zero.
+        Zeros out nodes in "self.labeled_graph[id]" in the sense that
+        nodes with "label" are updated to zero.
 
         Parameters
         ----------
-        graph_id : str
+        id : str
             ID of ground truth graph to be updated.
         label : int
             Label that identifies which nodes to have their label updated to
@@ -429,10 +472,10 @@ class SkeletonMetric:
         None
 
         """
-        if label in self.id_to_label_nodes[graph_id].keys():
-            for i in self.id_to_label_nodes[graph_id][label]:
-                self.labeled_graphs[graph_id].nodes[i]["label"] = 0
-            self.id_to_label_nodes[graph_id][label] = set()
+        if label in self.id_to_label_nodes[id].keys():
+            for i in self.id_to_label_nodes[id][label]:
+                self.labeled_graphs[id].nodes[i]["label"] = 0
+            self.id_to_label_nodes[id][label] = set()
 
     def detect_splits(self):
         """
@@ -449,18 +492,16 @@ class SkeletonMetric:
 
         """
         t0 = time()
-        for cnt, (graph_id, target_graph) in enumerate(self.graphs.items()):
+        for cnt, (id, graph) in enumerate(self.graphs.items()):
             # Detection
             utils.progress_bar(cnt + 1, len(self.graphs))
-            labeled_graph = self.labeled_graphs[graph_id]
-            labeled_graph = split_detection.run(target_graph, labeled_graph)
+            labeled_graph = self.labeled_graphs[id]
+            labeled_graph = split_detection.run(graph, labeled_graph)
 
             # Update predicted graph
             labeled_graph = gutils.delete_nodes(labeled_graph, 0)
-            labeled_graph = gutils.delete_nodes(labeled_graph, -1)
-            id_to_label_nodes = gutils.store_labels(labeled_graph)
-            self.labeled_graphs[graph_id] = labeled_graph
-            self.id_to_label_nodes[graph_id] = id_to_label_nodes
+            self.labeled_graphs[id] = gutils.delete_nodes(labeled_graph, -1)
+            self.id_to_label_nodes[id] = gutils.store_labels(labeled_graph)
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
@@ -483,14 +524,13 @@ class SkeletonMetric:
         self.split_cnts = dict()
         self.omit_cnts = dict()
         self.omit_percents = dict()
-        for graph_id in self.graphs.keys():
-            n_splits = gutils.count_splits(self.labeled_graphs[graph_id])
-            n_pred_edges = self.labeled_graphs[graph_id].number_of_edges()
-            n_target_edges = self.graphs[graph_id].number_of_edges()
+        for id in self.graphs.keys():
+            n_pred_edges = self.labeled_graphs[id].number_of_edges()
+            n_target_edges = self.graphs[id].number_of_edges()
 
-            self.split_cnts[graph_id] = n_splits
-            self.omit_cnts[graph_id] = n_target_edges - n_pred_edges
-            self.omit_percents[graph_id] = 1 - n_pred_edges / n_target_edges
+            self.split_cnts[id] = gutils.count_splits(self.labeled_graphs[id])
+            self.omit_cnts[id] = n_target_edges - n_pred_edges
+            self.omit_percents[id] = 1 - n_pred_edges / n_target_edges
 
     def detect_merges(self):
         """
@@ -538,6 +578,7 @@ class SkeletonMetric:
                 # Check site
                 merge_id, site, d = process.result()
                 if d < MERGE_DIST_THRESHOLD:
+                    print(merge_id, d)
                     detected_merges.add(merge_id)
                     if self.save:
                         self.save_swc(site[0], site[1], "merge")
@@ -569,14 +610,27 @@ class SkeletonMetric:
             )
 
             # Remove spurious intersections
-            for graph_id in self.graphs.keys():
-                if graph_id in hit_ids.keys():
-                    if len(hit_ids[graph_id]) < INTERSECTION_THRESHOLD:
-                        self.zero_nodes(graph_id, label)
-                elif label in self.id_to_label_nodes[graph_id]:
-                    self.zero_nodes(graph_id, label)
+            for id in self.graphs.keys():
+                if id in hit_ids.keys():
+                    if len(hit_ids[id]) < INTERSECTION_THRESHOLD:
+                        self.zero_nodes(id, label)
 
     def detect_potential_merges(self):
+        """
+        Detects merges between ground truth graphs which are considered to be
+        potential merge sites.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        set
+            Set of tuples containing a tuple of graph ids and common label
+            between the graphs.
+
+        """
         return merge_detection.detect_potentials(
             self.labeled_graphs, self.get_labels
         )
@@ -630,15 +684,15 @@ class SkeletonMetric:
             tracker[label] = set()
         return tracker
 
-    def process_merge(self, graph_id, label):
+    def process_merge(self, id, label):
         """
-        Once a merge has been detected that corresponds to "graph_id", every
-        node in "self.labeled_graph[graph_id]" with that "label" is
+        Once a merge has been detected that corresponds to "id", every
+        node in "self.labeled_graph[id]" with that "label" is
         deleted.
 
         Parameters
         ----------
-        graph_id : str
+        id : str
             Key associated with the labeled_graph to be searched.
         label : int
             Label in prediction that is assocatied with a merge.
@@ -648,14 +702,14 @@ class SkeletonMetric:
         None
 
         """
-        graph = self.labeled_graphs[graph_id].copy()
+        graph = self.labeled_graphs[id].copy()
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
-        self.labeled_graphs[graph_id] = graph
-        self.merged_cnts[graph_id] += merged_cnt
+        self.labeled_graphs[id] = graph
+        self.merged_cnts[id] += merged_cnt
 
     def quantify_merges(self):
         """
-        Computes the percentage of merged edges for each labeled_target_graph.
+        Computes the percentage of merged edges for each labeled_graph.
 
         Parameters
         ----------
@@ -667,10 +721,10 @@ class SkeletonMetric:
 
         """
         self.merged_percents = dict()
-        for graph_id in self.graphs.keys():
-            n_edges = self.graphs[graph_id].number_of_edges()
-            percent = self.merged_cnts[graph_id] / n_edges
-            self.merged_percents[graph_id] = percent
+        for id in self.graphs.keys():
+            n_edges = self.graphs[id].number_of_edges()
+            percent = self.merged_cnts[id] / n_edges
+            self.merged_percents[id] = percent
 
     def compile_results(self):
         """
@@ -683,11 +737,11 @@ class SkeletonMetric:
         Returns
         -------
         full_results : dict
-            Dictionary where the keys are graph_ids and the values are the
+            Dictionary where the keys are ids and the values are the
             result of computing each metric for the corresponding graphs.
         avg_result : dict
             Dictionary where the keys are names of metrics computed by this
-            module and values are the averaged result over all graph_ids.
+            module and values are the averaged result over all ids.
 
         """
         # Compute remaining metrics
@@ -695,14 +749,14 @@ class SkeletonMetric:
         self.compute_erl()
 
         # Summarize results
-        graph_ids, results = self.generate_full_results()
+        ids, results = self.generate_full_results()
         avg_results = self.generate_avg_results()
 
         # Reformat full results
         full_results = dict()
-        for i, graph_id in enumerate(graph_ids):
-            full_results[graph_id] = dict(
-                [(key, results[key][i]) for key in results.keys()]
+        for i, id in enumerate(ids):
+            full_results[id] = dict(
+            [(key, results[key][i]) for key in results.keys()]
             )
 
         return full_results, avg_results
@@ -711,7 +765,7 @@ class SkeletonMetric:
         """
         Generates a report by creating a list of the results for each metric.
         Each item in this list corresponds to a graph in labeled_graphs and
-        this list is ordered with respect to "graph_ids".
+        this list is ordered with respect to "ids".
 
         Parameters
         ----------
@@ -719,25 +773,25 @@ class SkeletonMetric:
 
         Results
         -------
-        graph_ids : list[str]
+        grids : list[str]
             Specifies the ordering of results for each value in "stats".
         stats : dict
             Dictionary where the keys are metrics and values are the result of
             computing that metric for each graph in labeled_graphs.
 
         """
-        graph_ids = list(self.labeled_graphs.keys())
-        graph_ids.sort()
+        ids = list(self.labeled_graphs.keys())
+        ids.sort()
         stats = {
-            "# splits": generate_result(graph_ids, self.split_cnts),
-            "# merges": generate_result(graph_ids, self.merge_cnts),
-            "% omit": generate_result(graph_ids, self.omit_percents),
-            "% merged": generate_result(graph_ids, self.merged_percents),
-            "edge accuracy": generate_result(graph_ids, self.edge_accuracy),
-            "erl": generate_result(graph_ids, self.erl),
-            "normalized erl": generate_result(graph_ids, self.normalized_erl),
+            "# splits": generate_result(ids, self.split_cnts),
+            "# merges": generate_result(ids, self.merge_cnts),
+            "% omit": generate_result(ids, self.omit_percents),
+            "% merged": generate_result(ids, self.merged_percents),
+            "edge accuracy": generate_result(ids, self.edge_accuracy),
+            "erl": generate_result(ids, self.erl),
+            "normalized erl": generate_result(ids, self.normalized_erl),
         }
-        return graph_ids, stats
+        return ids, stats
 
     def generate_avg_results(self):
         avg_stats = {
@@ -754,15 +808,15 @@ class SkeletonMetric:
     def avg_result(self, stats):
         result = []
         wgts = []
-        for graph_id, wgt in self.wgts.items():
-            if self.omit_percents[graph_id] < 1:
-                result.append(stats[graph_id])
+        for id, wgt in self.wgts.items():
+            if self.omit_percents[id] < 1:
+                result.append(stats[id])
                 wgts.append(wgt)
         return np.average(result, weights=wgts)
 
     def compute_edge_accuracy(self):
         """
-        Computes the edge accuracy of each labeled_target_graph.
+        Computes the edge accuracy of each self.labeled_graph.
 
         Parameters
         ----------
@@ -774,14 +828,14 @@ class SkeletonMetric:
 
         """
         self.edge_accuracy = dict()
-        for graph_id in self.graphs.keys():
-            omit_percent = self.omit_percents[graph_id]
-            merged_percent = self.merged_percents[graph_id]
-            self.edge_accuracy[graph_id] = 1 - omit_percent - merged_percent
+        for id in self.graphs.keys():
+            omit_percent = self.omit_percents[id]
+            merged_percent = self.merged_percents[id]
+            self.edge_accuracy[id] = 1 - omit_percent - merged_percent
 
     def compute_erl(self):
         """
-        Computes the expected run length (ERL) of each labeled_target_graph.
+        Computes the expected run length (ERL) of each labeled_graph.
 
         Parameters
         ----------
@@ -796,22 +850,20 @@ class SkeletonMetric:
         self.normalized_erl = dict()
         self.wgts = dict()
         total_path_length = 0
-        for graph_id in self.graphs.keys():
-            labeled_target_graph = self.labeled_graphs[graph_id]
-            target_graph = self.graphs[graph_id]
-
-            path_length = gutils.compute_path_length(target_graph)
-            run_lengths = gutils.compute_run_lengths(labeled_target_graph)
+        for id in self.graphs.keys():
+            labeled_graph = self.labeled_graphs[id]
+            path_length = gutils.compute_path_length(self.graphs[id])
+            run_lengths = gutils.compute_run_lengths(labeled_graph)
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
-            self.erl[graph_id] = np.sum(wgt * run_lengths)
-            self.normalized_erl[graph_id] = self.erl[graph_id] / path_length
+            self.erl[id] = np.sum(wgt * run_lengths)
+            self.normalized_erl[id] = self.erl[id] / path_length
 
-            self.wgts[graph_id] = path_length
+            self.wgts[id] = path_length
             total_path_length += path_length
 
-        for graph_id in self.graphs.keys():
-            self.wgts[graph_id] = self.wgts[graph_id] / total_path_length
+        for id in self.graphs.keys():
+            self.wgts[id] = self.wgts[id] / total_path_length
 
     def list_metrics(self):
         """
@@ -848,24 +900,23 @@ class SkeletonMetric:
 
 
 # -- utils --
-def generate_result(graph_ids, stats):
+def generate_result(ids, stats):
     """
-    Reorders items in "stats" with respect to the order defined by
-    "graph_ids".
+    Reorders items in "stats" with respect to the order defined by "ids".
 
     Parameters
     ----------
-    graph_ids : list[str]
-        List of all "graph_ids" of graphs in "self.labeled_graphs".
+    ids : list[str]
+        List of all "ids" of graphs in "self.labeled_graphs".
     stats : dict
-        Dictionary where the keys are "graph_ids" and values are the result
+        Dictionary where the keys are "ids" and values are the result
         of computing some metrics.
 
     Returns
     -------
     list
         Reorded items in "stats" with respect to the order defined by
-        "graph_ids".
+        "ids".
 
     """
-    return [stats[graph_id] for graph_id in graph_ids]
+    return [stats[id] for id in ids]

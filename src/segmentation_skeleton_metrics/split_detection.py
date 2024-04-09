@@ -76,7 +76,8 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
         dfs_edges : list[tuple].
             Updated "dfs_edges" with visited edges removed.
         labeled_graph : networkx.Graph
-            ...
+            Ground truth graph with nodes labeled with respect to
+            corresponding voxel in predicted segmentation.
 
     """
     # Search
@@ -113,6 +114,34 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
 
 
 def is_nonzero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
+    """
+    Determines whether nonzero-valued labels correspond to a split or
+    misalignment between "target_graph" and the predicted segmentation
+    mask.
+
+    Parameters
+    ----------
+    target_graph : networkx.Graph
+        Graph built from a ground truth swc file.
+    labeled_graph : networkx.Graph
+        Labeled graph built from a ground truth swc file, where each node has
+        an attribute called 'label'.
+    dfs_edges : list[tuple]
+        List of edges to be processed for split detection.
+    nb : int
+        Neighbor of "root".
+    root : int
+        Node where possible split starts (i.e. zero-valued label).
+
+    Returns
+    -------
+        dfs_edges : list[tuple].
+            Updated "dfs_edges" with visited edges removed.
+        labeled_graph : networkx.Graph
+            Ground truth graph with nodes labeled with respect to
+            corresponding voxel in predicted segmentation.
+
+    """
     # Initialize
     origin_label = labeled_graph.nodes[nb]["label"]
     hit_label = labeled_graph.nodes[root]["label"]

@@ -78,8 +78,8 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
     for path in swc_paths:
         contents = read_from_local(path)
         if len(contents) > min_size:
-            swc_id = int(utils.get_swc_id(path))
-            valid_labels[swc_id] = get_coords(contents, anisotropy)
+            id = int(utils.get_id(path))
+            valid_labels[id] = get_coords(contents, anisotropy)
     return valid_labels
 
 
@@ -363,7 +363,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
         Graph built from an swc file.
 
     """
-    graph = nx.Graph(swc_id=utils.get_swc_id(path))
+    graph = nx.Graph(swc_id=utils.get_id(path))
     offset = [0, 0, 0]
     for line in read_from_local(path):
         if line.startswith("# OFFSET"):

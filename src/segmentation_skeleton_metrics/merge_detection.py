@@ -103,13 +103,13 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
     xyz_pair = list()
     for i in merged_1:
         for j in merged_2:
-            xyz_1 = graph_1.nodes[i]["xyz"]
-            xyz_2 = graph_2.nodes[j]["xyz"]
-            if utils.dist(xyz_1, xyz_2) < min_dist:
-                min_dist = utils.dist(xyz_1, xyz_2)
-                xyz_pair = [xyz_1, xyz_2]
+            xyz_i = graph_1.nodes[i]["xyz"]
+            xyz_j = graph_2.nodes[j]["xyz"]
+            if utils.dist(xyz_i, xyz_j) < min_dist:
+                min_dist = utils.dist(xyz_i, xyz_j)
+                xyz_pair = [xyz_i, xyz_j]
                 if min_dist < dist_threshold:
-                    return xyz_pair, min_dist
+                    return merge_id, xyz_pair, min_dist
     return merge_id, xyz_pair, min_dist
 
 

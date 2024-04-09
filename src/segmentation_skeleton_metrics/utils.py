@@ -232,9 +232,15 @@ def get_midpoint(xyz_1, xyz_2):
     Parameters
     ----------
     xyz_1 : numpy.ndarray
-        n-dimensional coordinate.
+        xyz coordinate.
     xyz_2 : numpy.ndarray
-        n-dimensional coordinate.
+        xyz coordinate.
+
+    Returns
+    -------
+    numpy.ndarray
+        Midpoint between "xyz_1" and "xyz_2".
+
     """
     return np.array([np.mean([xyz_1[i], xyz_2[i]]) for i in range(3)])
 
@@ -275,13 +281,30 @@ def above_threshold(my_dict):
     return my_dict
 
 
-def resolve(multi_hits, dists, xyz_to_swc_node):
+def resolve(multi_hits, dists, xyz_to_id_node):
+    """
+    Resolves discrepancy when xyz coordinates project onto ground truth graphs
+    that contain nodes with same xyz coordinates.
+
+    Parameters
+    ----------
+    multi_hits : set
+        xyz coordinates that are common across multiple graphs.
+    dists : dict
+        Dictionary containing graph ids that predicted swc file has
+        intersected.
+    xyz_to_id_node : dict
+    
+
+    Return
+    ------
+    """
     for hat_xyz in multi_hits:
-        keys = list(xyz_to_swc_node[hat_xyz].keys())
-        swc_id = find_best(dists, keys)
-        if swc_id:
-            node = xyz_to_swc_node[hat_xyz][swc_id]
-            dists = append_dict_value(dists, swc_id, node)
+        keys = list(xyz_to_id_node[hat_xyz].keys())
+        id = find_best(dists, keys)
+        if id:
+            node = xyz_to_id_node[hat_xyz][id]
+            dists = append_dict_value(dists, id, node)
     return dists
 
 
@@ -323,7 +346,7 @@ def find_best(my_dict, keys):
     return best_key
 
 
-def get_swc_id(path):
+def get_id(path):
     """
     Gets segment id of the swc file at "path".
 
@@ -337,7 +360,7 @@ def get_swc_id(path):
     Segment id of swc file.
 
     """
-    filename = path.split("/")[-1]
+    filename = os.path.basename(path)
     return filename.split(".")[0]
 
 
