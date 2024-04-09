@@ -20,8 +20,9 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-INTERSECTION_THRESHOLD = 10
-MERGE_DIST_THRESHOLD = 40
+CLOSE_DIST_THRESHOLD = 5
+INTERSECTION_THRESHOLD = 16
+MERGE_DIST_THRESHOLD = 30
 
 
 class SkeletonMetric:
@@ -47,7 +48,7 @@ class SkeletonMetric:
         anisotropy=[1.0, 1.0, 1.0],
         black_holes_xyz_id=None,
         black_hole_radius=24,
-        equivalent_ids=None,
+        connections_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
         valid_size_threshold=25,
@@ -75,8 +76,9 @@ class SkeletonMetric:
             ...
         black_hole_radius : float, optional
             ...
-        equivalent_ids : ...
-            ...
+        connections_path : list[tuple]
+            Path to a txt file containing pairs of swc ids from the prediction
+            that were predicted to be connected.
         ignore_boundary_mistakes : bool, optional
             Indication of whether to ignore mistakes near boundary of bounding
             box. The default is False.
@@ -105,21 +107,35 @@ class SkeletonMetric:
         self.init_black_holes(black_holes_xyz_id)
         self.black_hole_radius = black_hole_radius
 
-        # Build Graphs
+        # Labels
         self.label_mask = pred_labels
         self.valid_labels = swc_utils.parse(
-            pred_swc_paths, valid_size_threshold, anisotropy=anisotropy
+            pred_swc_paths, valid_size_threshold, anisotropy
         )
+        self.init_equiv_labels(connections_path)
 
+        # Build Graphs
         self.target_graphs = self.init_graphs(target_swc_paths, anisotropy)
-        self.labeled_target_graphs = self.init_labeled_target_graphs()
+        self.init_labeled_target_graphs()
 
         # Build kdtree
         self.init_xyz_to_id_node()
         self.init_kdtree()
-        self.rm_spurious_intersections()
 
     # -- Initialize and Label Graphs --
+    def init_equiv_labels(self, path):
+        if path:
+            self.equiv_labels_map = utils.equiv_class_mappings(
+                path, self.valid_labels
+            )
+            valid_labels = dict()
+            for label, values in self.valid_labels.items():
+                equiv_label = self.equiv_labels_map[label]
+                valid_labels[equiv_label] = values
+            self.valid_labels = valid_labels
+        else:
+            self.equiv_labels_map = None
+
     def init_graphs(self, paths, anisotropy):
         """
         Initializes "self.target_graphs" by iterating over "paths" which
@@ -162,17 +178,16 @@ class SkeletonMetric:
         """
         print("Labelling Target Graphs...")
         t0 = time()
-        labeled_target_graphs = dict()
+        self.labeled_target_graphs = dict()
         self.id_to_label_nodes = dict()  # {target_id: {label: nodes}}
         for cnt, (target_id, graph) in enumerate(self.target_graphs.items()):
             utils.progress_bar(cnt + 1, len(self.target_graphs))
             labeled_target_graph, id_to_label_nodes = self.label_graph(graph)
-            labeled_target_graphs[target_id] = labeled_target_graph
+            self.labeled_target_graphs[target_id] = labeled_target_graph
             self.id_to_label_nodes[target_id] = id_to_label_nodes
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
-        return labeled_target_graphs
 
     def label_graph(self, target_graph):
         """
@@ -229,15 +244,17 @@ class SkeletonMetric:
         if self.in_black_hole(img_coord):
             label = -1
         else:
-            label = self.__read_label(img_coord)
+            label = self.read_label(img_coord)
 
-        # Validate label
+        # Adjust label
+        label = self.equivalent_label(label)
+        label = self.validate(label)
         if return_node:
-            return return_node, self.is_valid(label)
+            return return_node, label
         else:
-            return self.is_valid(label)
+            return label
 
-    def __read_label(self, coord):
+    def read_label(self, coord):
         """
         Gets label at image coordinates "xyz".
 
@@ -252,12 +269,23 @@ class SkeletonMetric:
            Label at image coordinates "xyz".
 
         """
+        # Read image label
         if type(self.label_mask) == ts.TensorStore:
             return int(self.label_mask[coord].read().result())
         else:
             return self.label_mask[coord]
 
-    def is_valid(self, label):
+    def equivalent_label(self, label):
+        # Equivalent label
+        if self.equiv_labels_map:
+            if label in self.equiv_labels_map.keys():
+                return self.equiv_labels_map[label]
+            else:
+                return 0
+        else:
+            return label
+
+    def validate(self, label):
         """
         Validates label by checking whether it is contained in
         "self.valid_labels".
@@ -290,35 +318,6 @@ class SkeletonMetric:
                 else:
                     self.xyz_to_id_node[xyz] = {target_id: i}
 
-    def rm_spurious_intersections(self):
-        for label in [label for label in self.get_all_labels() if label > 0]:
-            # Compute label intersect target_graphs
-            hit_target_ids = dict()
-            multi_hits = set()
-            for xyz in self.get_pred_coords(label):
-                hat_xyz, d = self.get_projection(xyz)
-                if d < 5:
-                    hits = list(self.xyz_to_id_node[hat_xyz].keys())
-                    if len(hits) > 1:
-                        multi_hits.add(hat_xyz)
-                    else:
-                        hat_i = self.xyz_to_id_node[hat_xyz][hits[0]]
-                        hit_target_ids = utils.append_dict_value(
-                            hit_target_ids, hits[0], hat_i
-                        )
-            hit_target_ids = utils.resolve(
-                multi_hits, hit_target_ids, self.xyz_to_id_node
-            )
-
-            # Remove spurious intersections
-            for target_id in self.target_graphs.keys():
-                if target_id in hit_target_ids.keys():
-                    n_hits = len(hit_target_ids[target_id])
-                    if n_hits < INTERSECTION_THRESHOLD:
-                        self.zero_nodes(target_id, label)
-                elif label in self.id_to_label_nodes[target_id]:
-                    self.zero_nodes(target_id, label)
-
     def get_pred_coords(self, label):
         if label in self.valid_labels.keys():
             return self.valid_labels[label]
@@ -347,14 +346,13 @@ class SkeletonMetric:
             self.black_holes = None
             self.black_hole_labels = set()
 
-    def in_black_hole(self, xyz, print_nn=False):
-        # Check whether black_holes exists
-        if self.black_holes is None:
-            return False
-        else:
+    def in_black_hole(self, xyz):
+        if self.black_holes:
             radius = self.black_hole_radius
             pts = self.black_holes.query_ball_point(xyz, radius)
             return True if len(pts) > 0 else False
+        else:
+            return False
 
     # -- Evaluation --
     def compute_metrics(self):
@@ -487,10 +485,11 @@ class SkeletonMetric:
         None
 
         """
-        # Initilize counts
+        # Initilizations
         self.merge_cnts = self.init_counter()
         self.merged_cnts = self.init_counter()
         self.merged_percents = self.init_counter()
+        # self.rm_spurious_intersections()
 
         # Run detection
         t0 = time()
@@ -512,7 +511,9 @@ class SkeletonMetric:
                     if merge not in detected_merges:
                         detected_merges.add(merge)
                         if self.save:
-                            site, d = self.locate(target_id_1, target_id_2, label)
+                            site, d = self.localize_site(
+                                target_id_1, target_id_2, label
+                            )
                             if d < MERGE_DIST_THRESHOLD:
                                 self.save_swc(site[0], site[1], "merge")
 
@@ -528,7 +529,36 @@ class SkeletonMetric:
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def locate(self, target_id_1, target_id_2, label):
+    def rm_spurious_intersections(self):
+        for label in [label for label in self.get_all_labels() if label > 0]:
+            # Compute label intersect target_graphs
+            hit_target_ids = dict()
+            multi_hits = set()
+            for xyz in self.self.get_pred_coords(label):
+                hat_xyz, d = self.get_projection(xyz)
+                if d < CLOSE_DIST_THRESHOLD:
+                    hits = list(self.xyz_to_id_node[hat_xyz].keys())
+                    if len(hits) > 1:
+                        multi_hits.add(hat_xyz)
+                    else:
+                        hat_i = self.xyz_to_id_node[hat_xyz][hits[0]]
+                        hit_target_ids = utils.append_dict_value(
+                            hit_target_ids, hits[0], hat_i
+                        )
+            hit_target_ids = utils.resolve(
+                multi_hits, hit_target_ids, self.xyz_to_id_node
+            )
+
+            # Remove spurious intersections
+            for target_id in self.target_graphs.keys():
+                if target_id in hit_target_ids.keys():
+                    n_hits = len(hit_target_ids[target_id])
+                    if n_hits < INTERSECTION_THRESHOLD:
+                        self.zero_nodes(target_id, label)
+                elif label in self.id_to_label_nodes[target_id]:
+                    self.zero_nodes(target_id, label)
+
+    def localize_site(self, target_id_1, target_id_2, label):
         # Get merged nodes
         merged_1 = self.id_to_label_nodes[target_id_1][label]
         merged_2 = self.id_to_label_nodes[target_id_2][label]
@@ -548,6 +578,20 @@ class SkeletonMetric:
         return xyz_pair, min_dist
 
     def near_bdd(self, xyz):
+        """
+        Determines whether "xyz" is near the boundary of the image.
+
+        Parameters
+        ----------
+        xyz : numpy.ndarray
+            xyz coordinate to be checked
+
+        Returns
+        -------
+        near_bdd_bool : bool
+            Indication of whether "xyz" is near the boundary of the image.
+
+        """
         near_bdd_bool = False
         if self.ignore_boundary_mistakes:
             mask_shape = self.label_mask.shape
