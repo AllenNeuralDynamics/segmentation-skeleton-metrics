@@ -294,10 +294,14 @@ def resolve(multi_hits, dists, xyz_to_id_node):
         Dictionary containing graph ids that predicted swc file has
         intersected.
     xyz_to_id_node : dict
-    
+        Dictionary where the keys are xyz coordinates that correspond to nodes
+        in ground truth graphs and values are the graph ids and nodes.
 
     Return
     ------
+    dists : dict
+        Updated dictionary with discrepancies resolved.
+
     """
     for hat_xyz in multi_hits:
         keys = list(xyz_to_id_node[hat_xyz].keys())

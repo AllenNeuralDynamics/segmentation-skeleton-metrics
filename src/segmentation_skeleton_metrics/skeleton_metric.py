@@ -7,7 +7,6 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -31,7 +30,7 @@ from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
 CLOSE_DIST_THRESHOLD = 3.5
 INTERSECTION_THRESHOLD = 16
-MERGE_DIST_THRESHOLD = 25
+MERGE_DIST_THRESHOLD = 20
 
 
 class SkeletonMetric:
@@ -124,12 +123,13 @@ class SkeletonMetric:
         self.init_equiv_labels(connections_path)
 
         # Build Graphs
-        self.graphs = self.init_graphs(target_swc_paths, anisotropy)
+        self.graphs = self.init_graphs(target_swc_paths, [1.0, 1.0, 1.0])
         self.init_labeled_graphs()
 
         # Build kdtree
         self.init_xyz_to_id_node()
         self.init_kdtree()
+        self.rm_spurious_intersections()
 
     # -- Initialize and Label Graphs --
     def init_equiv_labels(self, path):
@@ -405,6 +405,26 @@ class SkeletonMetric:
         else:
             return False
 
+    def rm_spurious_intersections(self):
+        # Compute intersections
+        for label in self.get_all_labels():
+            hit_ids = merge_detection.intersections(
+                self.get_projection,
+                self.get_pred_coords(label),
+                self.xyz_to_id_node,
+                CLOSE_DIST_THRESHOLD,
+            )
+
+            # Remove spurious intersections
+            for id in self.graphs.keys():
+                if id in hit_ids.keys():
+                    if len(hit_ids[id]) < INTERSECTION_THRESHOLD:
+                        self.zero_nodes(id, label)
+                elif label in self.id_to_label_nodes[id].keys():
+                    n_hits = len(self.id_to_label_nodes[id][label])
+                    if n_hits < INTERSECTION_THRESHOLD:
+                        self.zero_nodes(id, label)
+
     # -- Evaluation --
     def compute_metrics(self):
         """
@@ -475,7 +495,10 @@ class SkeletonMetric:
         if label in self.id_to_label_nodes[id].keys():
             for i in self.id_to_label_nodes[id][label]:
                 self.labeled_graphs[id].nodes[i]["label"] = 0
-            self.id_to_label_nodes[id][label] = set()
+
+                xyz = tuple(self.graphs[id].nodes[i]["xyz"])
+                self.xyz_to_id_node[xyz][id] = 0
+            del self.id_to_label_nodes[id][label]
 
     def detect_splits(self):
         """
@@ -495,8 +518,7 @@ class SkeletonMetric:
         for cnt, (id, graph) in enumerate(self.graphs.items()):
             # Detection
             utils.progress_bar(cnt + 1, len(self.graphs))
-            labeled_graph = self.labeled_graphs[id]
-            labeled_graph = split_detection.run(graph, labeled_graph)
+            labeled_graph = split_detection.run(graph, self.labeled_graphs[id])
 
             # Update predicted graph
             labeled_graph = gutils.delete_nodes(labeled_graph, 0)
@@ -550,7 +572,6 @@ class SkeletonMetric:
         self.merge_cnts = self.init_counter()
         self.merged_cnts = self.init_counter()
         self.merged_percents = self.init_counter()
-        self.rm_spurious_intersections()
 
         # Check potential merge sites
         t0 = time()
@@ -578,42 +599,24 @@ class SkeletonMetric:
                 # Check site
                 merge_id, site, d = process.result()
                 if d < MERGE_DIST_THRESHOLD:
-                    print(merge_id, d)
+                    # print(merge_id, d)
                     detected_merges.add(merge_id)
                     if self.save:
                         self.save_swc(site[0], site[1], "merge")
 
                 # Report process
                 if i > cnt * chunk_size:
-                    utils.progress_bar(i + 1, len(processes))
+                    # utils.progress_bar(i + 1, len(processes))
                     cnt += 1
 
         # Update graph
         for (id_1, id_2), label in detected_merges:
             self.process_merge(id_1, label)
             self.process_merge(id_2, label)
-            self.merge_cnts[id_1] += 1
-            self.merge_cnts[id_2] += 1
 
         # Report Runtime
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
-
-    def rm_spurious_intersections(self):
-        for label in self.get_all_labels():
-            # Compute intersections
-            hit_ids = merge_detection.label_intersections(
-                self.get_projection,
-                self.get_pred_coords(label),
-                self.xyz_to_id_node,
-                CLOSE_DIST_THRESHOLD,
-            )
-
-            # Remove spurious intersections
-            for id in self.graphs.keys():
-                if id in hit_ids.keys():
-                    if len(hit_ids[id]) < INTERSECTION_THRESHOLD:
-                        self.zero_nodes(id, label)
 
     def detect_potential_merges(self):
         """
@@ -706,6 +709,7 @@ class SkeletonMetric:
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
         self.labeled_graphs[id] = graph
         self.merged_cnts[id] += merged_cnt
+        self.merge_cnts[id] += 1
 
     def quantify_merges(self):
         """
@@ -756,7 +760,7 @@ class SkeletonMetric:
         full_results = dict()
         for i, id in enumerate(ids):
             full_results[id] = dict(
-            [(key, results[key][i]) for key in results.keys()]
+                [(key, results[key][i]) for key in results.keys()]
             )
 
         return full_results, avg_results
