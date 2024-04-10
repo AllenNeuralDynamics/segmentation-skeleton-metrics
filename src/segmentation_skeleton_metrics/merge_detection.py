@@ -9,6 +9,7 @@ Created on Wed April 8 20:30:00 2024
 """
 
 import numpy as np
+
 from segmentation_skeleton_metrics import utils
 
 
@@ -39,36 +40,10 @@ def detect_potentials(labeled_graphs, get_labels):
             ids = frozenset((id_1, id_2))
             if id_1 != id_2 and ids not in visited:
                 visited.add(ids)
-                for label in label_intersection(get_labels, id_1, id_2):
-                    merge = (ids, label)
-                    merge_ids.add(merge)
+                intersection = get_labels(id_1).intersection(get_labels(id_2))
+                for label in intersection:
+                    merge_ids.add((ids, label))
     return merge_ids
-
-
-def label_intersection(get_labels, id_1, id_2):
-    """
-    Computes the intersections between labels contained in graphs
-    corresponding to "id_1" and "id_2".
-
-    Parameters
-    ----------
-    get_labels : func
-        Gets labels corresponding to a graph id.
-    id_1 : int
-        Graph id.
-    id_2 : int
-        Graph id.
-
-    Returns
-    -------
-    set
-        Intersections between labels contained in graphs corresponding to
-        "id_1" and "id_2".
-
-    """
-    labels_1 = get_labels(id_1)
-    labels_2 = get_labels(id_2)
-    return labels_1.intersection(labels_2)
 
 
 def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
@@ -99,6 +74,11 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
         Distance between xyz coordinates in "xyz_pair".
 
     """
+    # Check whether merge is spurious
+    if len(merged_1) < 16 and len(merged_2) < 16:
+        return merge_id, None, np.inf
+
+    # Compute pairwise distances
     min_dist = np.inf
     xyz_pair = list()
     for i in merged_1:
@@ -113,7 +93,7 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
     return merge_id, xyz_pair, min_dist
 
 
-def label_intersections(get_projection, xyz_list, xyz_to_id, dist_threshold):
+def intersections(get_projection, xyz_list, xyz_to_id, close_dist_threshold):
     """
     Projects coordinates in "xyz_list" onto ground truth graphs, then stores
     the correspond label in "hit_ids" if the projection distance is less than
@@ -129,7 +109,7 @@ def label_intersections(get_projection, xyz_list, xyz_to_id, dist_threshold):
         Dictionary where keys are xyz coordinates in the ground truth graphs
         and values are a dictionary that stores the corresonding label and
         node ids.
-    dist_threshold : float
+    close_dist_threshold : float
         Threshold that defines whether a projection distance is small enough
         to be considered a valid intersection.
 
@@ -143,7 +123,7 @@ def label_intersections(get_projection, xyz_list, xyz_to_id, dist_threshold):
     multi_hits = set()
     for xyz in xyz_list:
         hat_xyz, d = get_projection(xyz)
-        if d < dist_threshold:
+        if d < close_dist_threshold:
             hits = list(xyz_to_id[hat_xyz].keys())
             if len(hits) > 1:
                 multi_hits.add(hat_xyz)
