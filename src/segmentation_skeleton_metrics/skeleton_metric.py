@@ -606,7 +606,7 @@ class SkeletonMetric:
 
                 # Report process
                 if i > cnt * chunk_size:
-                    # utils.progress_bar(i + 1, len(processes))
+                    utils.progress_bar(i + 1, len(processes))
                     cnt += 1
 
         # Update graph

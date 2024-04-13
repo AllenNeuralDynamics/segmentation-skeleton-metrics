@@ -196,7 +196,7 @@ def parse_gcs_zip(zip_file, path, min_size, anisotropy):
     """
     contents = read_from_cloud(zip_file, path)
     if len(contents) > min_size:
-        swc_id = int(utils.get_swc_id(path))
+        swc_id = int(utils.get_id(path))
         return {swc_id: get_coords(contents, anisotropy)}
     else:
         return dict()
