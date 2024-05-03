@@ -118,9 +118,9 @@ class SkeletonMetric:
         # Labels
         self.label_mask = pred_labels
         self.valid_labels = None
-        #swc_utils.parse(
+        # swc_utils.parse(
         #      pred_swc_paths, valid_size_threshold, anisotropy
-        #)
+        # )
         self.init_equiv_labels(connections_path)
 
         # Build Graphs
@@ -348,7 +348,6 @@ class SkeletonMetric:
             if label in self.valid_labels.keys():
                 return self.valid_labels[label]
         return []
-            
 
     # -- Final Constructor Routines --
     def init_kdtree(self):
