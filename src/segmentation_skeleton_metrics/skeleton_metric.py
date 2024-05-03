@@ -59,7 +59,7 @@ class SkeletonMetric:
         connections_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
-        valid_size_threshold=25,
+        valid_size_threshold=40,
         save_swc=False,
     ):
         """
@@ -117,13 +117,14 @@ class SkeletonMetric:
 
         # Labels
         self.label_mask = pred_labels
-        self.valid_labels = swc_utils.parse(
-            pred_swc_paths, valid_size_threshold, anisotropy
-        )
+        self.valid_labels = None
+        # swc_utils.parse(
+        #      pred_swc_paths, valid_size_threshold, anisotropy
+        # )
         self.init_equiv_labels(connections_path)
 
         # Build Graphs
-        self.graphs = self.init_graphs(target_swc_paths, [1.0, 1.0, 1.0])
+        self.graphs = self.init_graphs(target_swc_paths, anisotropy)
         self.init_labeled_graphs()
 
         # Build kdtree
@@ -134,6 +135,7 @@ class SkeletonMetric:
     # -- Initialize and Label Graphs --
     def init_equiv_labels(self, path):
         if path:
+            assert self.valid_labels is not None, "Must provide valid labels!"
             self.equiv_labels_map = utils.equiv_class_mappings(
                 path, self.valid_labels
             )
@@ -166,6 +168,7 @@ class SkeletonMetric:
         """
         graphs = dict()
         for path in paths:
+            print(path)
             id = utils.get_id(path)
             graphs[id] = to_graph(path, anisotropy=anisotropy)
         return graphs
@@ -341,10 +344,10 @@ class SkeletonMetric:
                     self.xyz_to_id_node[xyz] = {id: i}
 
     def get_pred_coords(self, label):
-        if label in self.valid_labels.keys():
-            return self.valid_labels[label]
-        else:
-            return []
+        if self.valid_labels:
+            if label in self.valid_labels.keys():
+                return self.valid_labels[label]
+        return []
 
     # -- Final Constructor Routines --
     def init_kdtree(self):
@@ -579,6 +582,7 @@ class SkeletonMetric:
             processes = []
             for ids, label in self.detect_potential_merges():
                 id_1, id_2 = tuple(ids)
+                continue
                 processes.append(
                     executor.submit(
                         merge_detection.localize,
@@ -606,7 +610,7 @@ class SkeletonMetric:
 
                 # Report process
                 if i > cnt * chunk_size:
-                    # utils.progress_bar(i + 1, len(processes))
+                    utils.progress_bar(i + 1, len(processes))
                     cnt += 1
 
         # Update graph
