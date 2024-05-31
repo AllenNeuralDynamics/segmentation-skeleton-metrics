@@ -120,7 +120,6 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
         if i > cnt * chunk_size:
             utils.progress_bar(i + 1, len(zip_paths))
             cnt += 1
-        break
 
     # Report Results
     print("\n#Valid Labels:", len(valid_labels))

@@ -117,10 +117,9 @@ class SkeletonMetric:
 
         # Labels
         self.label_mask = pred_labels
-        self.valid_labels = None
-        # swc_utils.parse(
-        #      pred_swc_paths, valid_size_threshold, anisotropy
-        # )
+        self.valid_labels = swc_utils.parse(
+            pred_swc_paths, valid_size_threshold, anisotropy
+        )
         self.init_equiv_labels(connections_path)
 
         # Build Graphs
