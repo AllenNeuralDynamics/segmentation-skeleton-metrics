@@ -213,7 +213,7 @@ class SkeletonMetric:
 
         Returns
         -------
-        graph : networkx.Graph
+        networkx.Graph
             Updated graph with node-level attributes called "label".
 
         """
@@ -321,7 +321,7 @@ class SkeletonMetric:
 
         Returns
         -------
-        label : int
+        int
             There are two possibilities: (1) original label if either "label"
             is contained in "self.valid_labels" or "self.valid_labels" is
             None, or (2) 0 if "label" is not contained in self.valid_labels.
@@ -382,7 +382,7 @@ class SkeletonMetric:
         -------
         tuple
             xyz coordinate of the nearest neighbor of "xyz".
-        d : float
+        float
             Projection distance.
 
         """
@@ -458,6 +458,20 @@ class SkeletonMetric:
         return full_results, avg_results
 
     def get_all_labels(self):
+        """
+        Gets the set of all labels belonging to nodes across all graphs in
+        "self.graphs", except the label 0 is discarded.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        set
+            Labels belonging to nodes across all graphs in "self.graphs"
+        
+        """
         labels = set()
         for id in self.graphs.keys():
             labels = labels.union(self.get_labels(id))
@@ -466,13 +480,17 @@ class SkeletonMetric:
 
     def get_labels(self, id):
         """
-        Gets the predicted label ids that intersect with the target graph
+        Gets the predicted labels that intersect with the target graph
         corresponding to "id".
 
         Parameters
         ----------
         id : str
 
+        Returns
+        -------
+        set
+            Labels that intersect with the target graph corresponding to "id".
         """
         return set(self.id_to_label_nodes[id].keys())
 
@@ -652,7 +670,7 @@ class SkeletonMetric:
 
         Returns
         -------
-        near_bdd_bool : bool
+        bool
             Indication of whether "xyz" is near the boundary of the image.
 
         """
@@ -698,9 +716,9 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        id : str
+        str
             Key associated with the labeled_graph to be searched.
-        label : int
+        int
             Label in prediction that is assocatied with a merge.
 
         Returns
@@ -743,10 +761,10 @@ class SkeletonMetric:
 
         Returns
         -------
-        full_results : dict
+        dict
             Dictionary where the keys are ids and the values are the
             result of computing each metric for the corresponding graphs.
-        avg_result : dict
+        dict
             Dictionary where the keys are names of metrics computed by this
             module and values are the averaged result over all ids.
 
@@ -780,9 +798,9 @@ class SkeletonMetric:
 
         Results
         -------
-        grids : list[str]
+        list[str]
             Specifies the ordering of results for each value in "stats".
-        stats : dict
+        dict
             Dictionary where the keys are metrics and values are the result of
             computing that metric for each graph in labeled_graphs.
 
@@ -882,8 +900,8 @@ class SkeletonMetric:
 
         Returns
         -------
-        metrics : list[str]
-            List of metrics computed by this module.
+        list[str]
+            Metrics computed by this module.
 
         """
         metrics = [
