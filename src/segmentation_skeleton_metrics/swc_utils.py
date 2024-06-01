@@ -7,7 +7,7 @@ Created on Wed June 5 16:00:00 2023
 
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from io import BytesIO
 from zipfile import ZipFile
 
@@ -108,15 +108,24 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     # Initializations
     bucket = storage.Client().bucket(cloud_dict["bucket_name"])
     zip_paths = utils.list_gcs_filenames(bucket, cloud_dict["path"], ".zip")
-    chunk_size = int(len(zip_paths) * 0.02)
-
-    # Parse
-    cnt = 1
-    valid_labels = dict()
     print("Downloading predicted swc files from cloud...")
     print("# zip files:", len(zip_paths))
-    for i, path in enumerate(zip_paths):
-        valid_labels.update(download(bucket, path, min_size, anisotropy))
+    with ProcessPoolExecutor() as executor:
+        processes = []
+        for path in zip_paths:
+            zip_content = bucket.blob(path).download_as_bytes()
+            processes.append(
+                executor.submit(download, zip_content, anisotropy, min_size)
+            )
+    print("Processes Assigned!\n")
+
+    # Store results
+    chunk_size = int(len(zip_paths) * 0.02)
+    cnt = 1
+    valid_labels = dict()
+    t0, t1 = utils.init_timers()
+    for i, process in enumerate(as_completed(processes)):
+        valid_labels.update(process.result())
         if i > cnt * chunk_size:
             utils.progress_bar(i + 1, len(zip_paths))
             cnt += 1
@@ -127,23 +136,21 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     return valid_labels
 
 
-def download(bucket, zip_path, min_size, anisotropy):
+def download(zip_content, anisotropy, min_size):
     """
     Downloads the contents from each swc file contained in the zip file at
     "zip_path".
 
     Parameters
     ----------
-    bucket : str
-        Name of GCS bucket containing swc files to be read.
-    zip_path : str
-        Path to zip file contained in GCS bucket.
-    min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+    zip_content : ...
+        Contents of a zip file.
     anisotropy : list[float]
         Image to World scaling factors applied to xyz coordinates to account
         for anisotropy of the microscope.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
 
     Returns
     -------
@@ -152,26 +159,25 @@ def download(bucket, zip_path, min_size, anisotropy):
         coordinates read from cooresponding swc file.
 
     """
-    zip_content = bucket.blob(zip_path).download_as_bytes()
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = []
-            for path in utils.list_files_in_gcs_zip(zip_content):
-                threads.append(
-                    executor.submit(
-                        parse_gcs_zip, zip_file, path, min_size, anisotropy
-                    )
+            paths = utils.list_files_in_gcs_zip(zip_content)
+            threads = [
+                executor.submit(
+                    parse_gcs_zip, zip_file, path, anisotropy, min_size
                 )
+                for path in paths
+            ]
 
-            # Process results
-            valid_labels = dict()
-            for thread in as_completed(threads):
-                valid_labels.update(thread.result())
+    # Process results
+    valid_labels = dict()
+    for thread in as_completed(threads):
+        valid_labels.update(thread.result())
     return valid_labels
 
 
-def parse_gcs_zip(zip_file, path, min_size, anisotropy):
+def parse_gcs_zip(zip_file, path, anisotropy, min_size):
     """
     Reads swc file stored at "path" which points to a file in a GCS bucket.
 
@@ -181,17 +187,17 @@ def parse_gcs_zip(zip_file, path, min_size, anisotropy):
         Zip file containing swc file to be read.
     path : str
         Path to swc file to be read.
-    min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
     anisotropy : list[float]
         Image to World scaling factors applied to xyz coordinates to account
         for anisotropy of the microscope.
+    min_size : int
+        Threshold on the number of nodes contained in an swc file. Only swc
+        files with more than "min_size" nodes are stored in "valid_labels".
 
     Returns
     -------
     list
-        List such that each entry is a line from the swc file.
+        Entries of an swc file.
 
     """
     contents = read_from_cloud(zip_file, path)
@@ -226,8 +232,8 @@ def read_from_cloud(zip_file, path):
     Reads the content of an swc file from a zip file in a GCS bucket.
 
     """
-    with zip_file.open(path) as text_file:
-        return text_file.read().decode("utf-8").splitlines()
+    with zip_file.open(path) as f:
+        return f.read().decode("utf-8").splitlines()
 
 
 def get_coords(contents, anisotropy):
