@@ -110,29 +110,28 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     zip_paths = utils.list_gcs_filenames(bucket, cloud_dict["path"], ".zip")
     print("Downloading predicted swc files from cloud...")
     print("# zip files:", len(zip_paths))
+
+    # Assign processes
+    chunk_size = int(len(zip_paths) * 0.02)
+    cnt = 1
+    t0, t1 = utils.init_timers()
     with ProcessPoolExecutor() as executor:
         processes = []
-        for path in zip_paths:
+        for i, path in enumerate(zip_paths):
             zip_content = bucket.blob(path).download_as_bytes()
             processes.append(
                 executor.submit(download, zip_content, anisotropy, min_size)
             )
-    print("Processes Assigned!\n")
+            if i > cnt * chunk_size:
+                cnt, t1 = utils.report_progress(
+                    i, len(zip_paths), chunk_size, cnt, t0, t1
+                )
 
     # Store results
-    chunk_size = int(len(zip_paths) * 0.02)
-    cnt = 1
     valid_labels = dict()
-    t0, t1 = utils.init_timers()
     for i, process in enumerate(as_completed(processes)):
         valid_labels.update(process.result())
-        if i > cnt * chunk_size:
-            utils.progress_bar(i + 1, len(zip_paths))
-            cnt += 1
-
-    # Report Results
     print("\n#Valid Labels:", len(valid_labels))
-    print("")
     return valid_labels
 
 
