@@ -49,7 +49,7 @@ def listdir(directory, ext=None):
 
 def list_paths(directory, ext=None):
     """
-    Lists all paths within "directory".
+    Lists all paths within "directory" with extension "ext" if provided.
 
     Parameters
     ----------
@@ -62,7 +62,7 @@ def list_paths(directory, ext=None):
     Returns
     -------
     list[str]
-        List of all paths within "directory".
+        List of all paths within "directory" with extension "ext" if provided.
 
     """
     paths = []
@@ -385,6 +385,8 @@ def build_labels_graph(connections_path, labels):
         ids = line.split(",")
         id_1 = int(ids[0])
         id_2 = int(ids[1])
+        assert id_1 in labels_graph.nodes
+        assert id_2 in labels_graph.nodes
         labels_graph.add_edge(id_1, id_2)
     return labels_graph
 
