@@ -28,7 +28,7 @@ from segmentation_skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-CLOSE_DIST_THRESHOLD = 3.5
+CLOSE_DIST_THRESHOLD = 4
 INTERSECTION_THRESHOLD = 16
 MERGE_DIST_THRESHOLD = 20
 
@@ -54,8 +54,6 @@ class SkeletonMetric:
         pred_swc_paths,
         target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
-        black_holes_xyz_id=None,
-        black_hole_radius=24,
         connections_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
@@ -80,10 +78,6 @@ class SkeletonMetric:
             If swc files are on local machine, list of paths to swc files where
             each file corresponds to a neuron in the prediction. If swc files
             are on cloud, then dict with keys "bucket_name" and "path".
-        black_holes_xyz_id : list, optional
-            ...
-        black_hole_radius : float, optional
-            ...
         connections_path : list[tuple]
             Path to a txt file containing pairs of swc ids from the prediction
             that were predicted to be connected.
@@ -111,9 +105,6 @@ class SkeletonMetric:
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
         self.save = save_swc
-
-        self.init_black_holes(black_holes_xyz_id)
-        self.black_hole_radius = black_hole_radius
 
         # Labels
         self.label_mask = pred_labels
@@ -223,8 +214,8 @@ class SkeletonMetric:
             # Assign threads
             threads = []
             for i in labeled_graph.nodes:
-                img_coord = gutils.get_coord(labeled_graph, i)
-                threads.append(executor.submit(self.get_label, img_coord, i))
+                coord = gutils.get_coord(labeled_graph, i)
+                threads.append(executor.submit(self.get_label, coord, i))
 
             # Store results
             for thread in as_completed(threads):
@@ -236,34 +227,26 @@ class SkeletonMetric:
                     id_to_label_nodes[label] = set([i])
         return labeled_graph, id_to_label_nodes
 
-    def get_label(self, img_coord, return_node=False):
+    def get_label(self, coord, return_node=False):
         """
-        Gets label of voxel at "img_coord".
+        Gets label of voxel at "coord".
 
         Parameters
         ----------
-        img_coord : numpy.ndarray
+        coord : numpy.ndarray
             Image coordinate of voxel to be read.
 
         Returns
         -------
         int
-           Label of voxel at "img_coord".
+           Label of voxel at "coord".
 
         """
-        # Read label
-        if self.in_black_hole(img_coord):
-            label = -1
-        else:
-            label = self.read_label(img_coord)
-
-        # Adjust label
-        label = self.equivalent_label(label)
-        label = self.validate(label)
+        label = self.read_label(coord)
         if return_node:
-            return return_node, label
+            return return_node, self.validate(label)
         else:
-            return label
+            return self.validate(label)
 
     def read_label(self, coord):
         """
@@ -286,29 +269,6 @@ class SkeletonMetric:
         else:
             return self.label_mask[coord]
 
-    def equivalent_label(self, label):
-        """
-        Gets the equivalence class label corresponding to "label".
-
-        Parameters
-        ----------
-        label : int
-            Label to be checked.
-
-        Returns
-        -------
-        label
-            Equivalence class label.
-
-        """
-        if self.equiv_labels_map:
-            if label in self.equiv_labels_map.keys():
-                return self.equiv_labels_map[label]
-            else:
-                return 0
-        else:
-            return label
-
     def validate(self, label):
         """
         Validates label by checking whether it is contained in
@@ -327,10 +287,32 @@ class SkeletonMetric:
             None, or (2) 0 if "label" is not contained in self.valid_labels.
 
         """
-        if self.valid_labels:
+        if self.equiv_labels_map:
+            return self.equivalent_label(label)
+        elif self.valid_labels:
             return 0 if label not in self.valid_labels.keys() else label
         else:
             return label
+
+    def equivalent_label(self, label):
+        """
+        Gets the equivalence class label corresponding to "label".
+
+        Parameters
+        ----------
+        label : int
+            Label to be checked.
+
+        Returns
+        -------
+        label
+            Equivalence class label.
+
+        """
+        if label in self.equiv_labels_map.keys():
+            return self.equiv_labels_map[label]
+        else:
+            return 0
 
     def init_xyz_to_id_node(self):
         self.xyz_to_id_node = dict()
@@ -388,24 +370,6 @@ class SkeletonMetric:
         """
         d, idx = self.graphs_kdtree.query(xyz, k=1)
         return tuple(self.graphs_kdtree.data[idx]), d
-
-    def init_black_holes(self, black_holes):
-        if black_holes:
-            black_holes_xyz = [bh_dict["xyz"] for bh_dict in black_holes]
-            black_holes_id = [bh_dict["swc_id"] for bh_dict in black_holes]
-            self.black_holes = KDTree(black_holes_xyz)
-            self.black_hole_labels = set(black_holes_id)
-        else:
-            self.black_holes = None
-            self.black_hole_labels = set()
-
-    def in_black_hole(self, xyz):
-        if self.black_holes:
-            radius = self.black_hole_radius
-            pts = self.black_holes.query_ball_point(xyz, radius)
-            return True if len(pts) > 0 else False
-        else:
-            return False
 
     def rm_spurious_intersections(self):
         # Compute intersections
@@ -620,7 +584,6 @@ class SkeletonMetric:
                 # Check site
                 merge_id, site, d = process.result()
                 if d < MERGE_DIST_THRESHOLD:
-                    # print(merge_id, d)
                     detected_merges.add(merge_id)
                     if self.save:
                         self.save_swc(site[0], site[1], "merge")
