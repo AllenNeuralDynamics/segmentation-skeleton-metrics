@@ -51,12 +51,12 @@ class SkeletonMetric:
     def __init__(
         self,
         pred_labels,
-        pred_swc_paths,
         target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
         connections_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
+        valid_labels=None,
         valid_size_threshold=40,
         save_swc=False,
     ):
@@ -74,10 +74,6 @@ class SkeletonMetric:
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files. The default is [1.0, 1.0, 1.0]
-        pred_swc_paths : list[str] or dict
-            If swc files are on local machine, list of paths to swc files where
-            each file corresponds to a neuron in the prediction. If swc files
-            are on cloud, then dict with keys "bucket_name" and "path".
         connections_path : list[tuple]
             Path to a txt file containing pairs of swc ids from the prediction
             that were predicted to be connected.
@@ -107,11 +103,10 @@ class SkeletonMetric:
         self.save = save_swc
 
         # Labels
+        assert type(valid_labels) is set if valid_labels != None else True
         self.label_mask = pred_labels
-        self.valid_labels = swc_utils.parse(
-            pred_swc_paths, valid_size_threshold, anisotropy
-        )
-        self.init_equiv_labels(connections_path)
+        self.valid_labels = valid_labels
+        self.init_label_map(connections_path)
 
         # Build Graphs
         self.graphs = self.init_graphs(target_swc_paths, anisotropy)
@@ -120,22 +115,14 @@ class SkeletonMetric:
         # Build kdtree
         self.init_xyz_to_id_node()
         self.init_kdtree()
-        self.rm_spurious_intersections()
 
-    # -- Initialize and Label Graphs --
-    def init_equiv_labels(self, path):
+    # -- Initialize and Label Graphs --        
+    def init_label_map(self, path):
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
-            self.equiv_labels_map = utils.equiv_class_mappings(
-                path, self.valid_labels
-            )
-            valid_labels = dict()
-            for label, values in self.valid_labels.items():
-                equiv_label = self.equiv_labels_map[label]
-                valid_labels[equiv_label] = values
-            self.valid_labels = valid_labels
+            self.label_map = utils.init_label_map(path, self.valid_labels)
         else:
-            self.equiv_labels_map = None
+            self.label_map = None
 
     def init_graphs(self, paths, anisotropy):
         """
@@ -287,10 +274,10 @@ class SkeletonMetric:
             None, or (2) 0 if "label" is not contained in self.valid_labels.
 
         """
-        if self.equiv_labels_map:
+        if self.label_map:
             return self.equivalent_label(label)
         elif self.valid_labels:
-            return 0 if label not in self.valid_labels.keys() else label
+            return 0 if label not in self.valid_labels else label
         else:
             return label
 
@@ -309,8 +296,8 @@ class SkeletonMetric:
             Equivalence class label.
 
         """
-        if label in self.equiv_labels_map.keys():
-            return self.equiv_labels_map[label]
+        if label in self.label_map.keys():
+            return self.label_map[label]
         else:
             return 0
 
@@ -323,12 +310,6 @@ class SkeletonMetric:
                     self.xyz_to_id_node[xyz][id] = i
                 else:
                     self.xyz_to_id_node[xyz] = {id: i}
-
-    def get_pred_coords(self, label):
-        if self.valid_labels:
-            if label in self.valid_labels.keys():
-                return self.valid_labels[label]
-        return []
 
     # -- Final Constructor Routines --
     def init_kdtree(self):
@@ -370,26 +351,6 @@ class SkeletonMetric:
         """
         d, idx = self.graphs_kdtree.query(xyz, k=1)
         return tuple(self.graphs_kdtree.data[idx]), d
-
-    def rm_spurious_intersections(self):
-        # Compute intersections
-        for label in self.get_all_labels():
-            hit_ids = merge_detection.intersections(
-                self.get_projection,
-                self.get_pred_coords(label),
-                self.xyz_to_id_node,
-                CLOSE_DIST_THRESHOLD,
-            )
-
-            # Remove spurious intersections
-            for id in self.graphs.keys():
-                if id in hit_ids.keys():
-                    if len(hit_ids[id]) < INTERSECTION_THRESHOLD:
-                        self.zero_nodes(id, label)
-                elif label in self.id_to_label_nodes[id].keys():
-                    n_hits = len(self.id_to_label_nodes[id][label])
-                    if n_hits < INTERSECTION_THRESHOLD:
-                        self.zero_nodes(id, label)
 
     # -- Evaluation --
     def compute_metrics(self):
@@ -505,8 +466,7 @@ class SkeletonMetric:
             labeled_graph = split_detection.run(graph, self.labeled_graphs[id])
 
             # Update predicted graph
-            labeled_graph = gutils.delete_nodes(labeled_graph, 0)
-            self.labeled_graphs[id] = gutils.delete_nodes(labeled_graph, -1)
+            self.labeled_graphs[id] = gutils.delete_nodes(labeled_graph, 0)
             self.id_to_label_nodes[id] = gutils.store_labels(labeled_graph)
 
         # Report runtime

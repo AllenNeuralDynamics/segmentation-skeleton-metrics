@@ -368,7 +368,7 @@ def get_id(path):
     return filename.split(".")[0]
 
 
-def equiv_class_mappings(connections_path, labels):
+def init_label_map(connections_path, labels):
     label_to_class = {0: 0}
     labels_graph = build_labels_graph(connections_path, labels)
     for i, component in enumerate(nx.connected_components(labels_graph)):
@@ -379,15 +379,26 @@ def equiv_class_mappings(connections_path, labels):
 
 
 def build_labels_graph(connections_path, labels):
+    # Initializations
     labels_graph = nx.Graph()
-    labels_graph.add_nodes_from(list(labels.keys()))
+    labels_graph.add_nodes_from(labels)
+    n_components = nx.number_connected_components(labels_graph)
+
+    # Main
+    print("Building label graph...")
+    print("# connected components - before adding edges:", n_components)
     for line in read_txt(connections_path):
         ids = line.split(",")
         id_1 = int(ids[0])
         id_2 = int(ids[1])
+        print(id_1, id_2)
+        stop
         assert id_1 in labels_graph.nodes
         assert id_2 in labels_graph.nodes
         labels_graph.add_edge(id_1, id_2)
+    n_components = nx.number_connected_components(labels_graph)
+    print("# connected components - after adding edges:", n_components)
+    print("")
     return labels_graph
 
 
