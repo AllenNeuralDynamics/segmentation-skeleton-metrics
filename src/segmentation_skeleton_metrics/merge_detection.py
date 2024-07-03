@@ -92,9 +92,8 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
                     return merge_id, xyz_pair, min_dist
     return merge_id, xyz_pair, min_dist
 
-
+"""
 def intersections(get_projection, xyz_list, xyz_to_id, close_dist_threshold):
-    """
     Projects coordinates in "xyz_list" onto ground truth graphs, then stores
     the correspond label in "hit_ids" if the projection distance is less than
     "dist_threshold".
@@ -118,7 +117,6 @@ def intersections(get_projection, xyz_list, xyz_to_id, close_dist_threshold):
     hit_ids : dict
         Dictionary where deys are labels and values are node ids.
 
-    """
     hit_ids = dict()
     multi_hits = set()
     for xyz in xyz_list:
@@ -131,3 +129,4 @@ def intersections(get_projection, xyz_list, xyz_to_id, close_dist_threshold):
                 hat_i = xyz_to_id[hat_xyz][hits[0]]
                 hit_ids = utils.append_dict_value(hit_ids, hits[0], hat_i)
     return utils.resolve(multi_hits, hit_ids, xyz_to_id)
+"""

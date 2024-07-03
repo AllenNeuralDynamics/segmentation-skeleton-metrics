@@ -44,7 +44,7 @@ def run(target_graph, labeled_graph):
             dfs_edges, labeled_graph = is_nonzero_misalignment(
                 target_graph, labeled_graph, dfs_edges, i, j
             )
-        elif label_j == 0 or label_j == -1:
+        elif label_j == 0:
             dfs_edges, labeled_graph = is_zero_misalignment(
                 target_graph, labeled_graph, dfs_edges, i, j
             )
@@ -81,7 +81,6 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
 
     """
     # Search
-    black_hole = False
     collision_labels = set()
     queue = [root]
     visited = set()
@@ -92,10 +91,6 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
         if label_j > 0:
             collision_labels.add(label_j)
         else:
-            # Check for black hole
-            if label_j == -1:
-                black_hole = True
-
             # Add nbs to queue
             nbs = target_graph.neighbors(j)
             for k in [k for k in nbs if k not in visited]:
@@ -106,7 +101,7 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
                     queue.append(k)
 
     # Upd zero nodes
-    if len(collision_labels) == 1 and not black_hole:
+    if len(collision_labels) == 1:
         label = collision_labels.pop()
         labeled_graph = gutils.upd_labels(labeled_graph, visited, label)
 
