@@ -28,9 +28,7 @@ from segmentation_skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-CLOSE_DIST_THRESHOLD = 4
-INTERSECTION_THRESHOLD = 16
-MERGE_DIST_THRESHOLD = 20
+MERGE_DIST_THRESHOLD = 25
 
 
 class SkeletonMetric:
@@ -57,8 +55,7 @@ class SkeletonMetric:
         ignore_boundary_mistakes=False,
         output_dir=None,
         valid_labels=None,
-        valid_size_threshold=40,
-        save_swc=False,
+        write_sites=False,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -83,11 +80,9 @@ class SkeletonMetric:
         output_dir : str, optional
             Path to directory that each mistake site is written to. The default
             is None.
-        valid_size_threshold : int, optional
-            Threshold on the number of nodes contained in an swc file. Only swc
-            files with more than "valid_size_threshold" nodes are stored in
-            "self.valid_labels". The default is 40.
-        save_swc : bool, optional
+        valid_labels : set
+            ...
+        write_sites, : bool, optional
             Indication of whether to write mistake sites to an swc file. The
             default is False.
 
@@ -100,7 +95,7 @@ class SkeletonMetric:
         self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
-        self.save = save_swc
+        self.write_sites = write_sites
 
         # Labels
         assert type(valid_labels) is set if valid_labels != None else True
@@ -145,7 +140,6 @@ class SkeletonMetric:
         """
         graphs = dict()
         for path in paths:
-            print(path)
             id = utils.get_id(path)
             graphs[id] = to_graph(path, anisotropy=anisotropy)
         return graphs
@@ -545,11 +539,11 @@ class SkeletonMetric:
                 merge_id, site, d = process.result()
                 if d < MERGE_DIST_THRESHOLD:
                     detected_merges.add(merge_id)
-                    if self.save:
-                        self.save_swc(site[0], site[1], "merge")
+                    if self.write_sites:
+                        self.save_merge_sites(site[0], site[1], "merge")
 
                 # Report process
-                if i > cnt * chunk_size:
+                if i >= cnt * chunk_size:
                     utils.progress_bar(i + 1, len(processes))
                     cnt += 1
 
@@ -578,7 +572,7 @@ class SkeletonMetric:
             between the graphs.
 
         """
-        return merge_detection.detect_potentials(
+        return merge_detection.find_sites(
             self.labeled_graphs, self.get_labels
         )
 
@@ -838,7 +832,7 @@ class SkeletonMetric:
         ]
         return metrics
 
-    def save_swc(self, xyz_1, xyz_2, mistake_type):
+    def save_merge_sites(self, xyz_1, xyz_2, mistake_type):
         self.saved_site_cnt += 1
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
