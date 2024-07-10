@@ -158,16 +158,25 @@ class SkeletonMetric:
         None
 
         """
-        print("Labelling Graphs...")
+        # Assign processes
         t0 = time()
-        self.labeled_graphs = dict()
-        self.id_to_label_nodes = dict()  # {id: {label: nodes}}
-        for cnt, (id, graph) in enumerate(self.graphs.items()):
-            utils.progress_bar(cnt + 1, len(self.graphs))
-            labeled_graph, id_to_label_nodes = self.label_graph(graph)
-            self.labeled_graphs[id] = labeled_graph
-            self.id_to_label_nodes[id] = id_to_label_nodes
+        print("Labelling Graphs...")
+        with ProcessPoolExecutor() as executor:
+            processes = list()
+            for id, graph in self.graphs.items():
+                
+            
+            
+            for cnt, (id, graph) in enumerate(self.graphs.items()):
+                utils.progress_bar(cnt + 1, len(self.graphs))
+                labeled_graph, id_to_label_nodes = self.label_graph(graph)
+                self.labeled_graphs[id] = labeled_graph
+                self.id_to_label_nodes[id] = id_to_label_nodes
 
+                
+                self.labeled_graphs = dict()
+        self.id_to_label_nodes = dict()  # {id: {label: nodes}}
+        
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
