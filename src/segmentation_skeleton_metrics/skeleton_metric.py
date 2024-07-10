@@ -145,9 +145,7 @@ class SkeletonMetric:
         """
         graphs = dict()
         for path in paths:
-            print(path)
-            id = utils.get_id(path)
-            graphs[id] = to_graph(path, anisotropy=anisotropy)
+            graphs[utils.get_id(path)] = to_graph(path, anisotropy=anisotropy)
         return graphs
 
     def init_labeled_graphs(self):
