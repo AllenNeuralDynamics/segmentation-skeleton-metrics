@@ -18,7 +18,7 @@ from google.cloud import storage
 from segmentation_skeleton_metrics import utils
 
 
-def parse(swc_paths, min_size, anisotropy):
+def init_valid_labels(swc_paths, min_size, anisotropy):
     """
     Reads swc files and extracts the xyz coordinates.
 
@@ -112,7 +112,6 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     print("# zip files:", len(zip_paths))
 
     # Assign processes
-    chunk_size = int(len(zip_paths) * 0.02)
     cnt = 1
     t0, t1 = utils.init_timers()
     with ProcessPoolExecutor() as executor:
@@ -122,7 +121,7 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
             processes.append(
                 executor.submit(download, zip_content, anisotropy, min_size)
             )
-            if i > cnt * chunk_size:
+            if i >= cnt * len(zip_paths) * 0.02:
                 cnt, t1 = utils.report_progress(
                     i, len(zip_paths), chunk_size, cnt, t0, t1
                 )
@@ -170,9 +169,11 @@ def download(zip_content, anisotropy, min_size):
             ]
 
     # Process results
-    valid_labels = dict()
+    valid_labels = set()
     for thread in as_completed(threads):
-        valid_labels.update(thread.result())
+        label = thread.result()
+        if label > 0:
+            valid_labels.add(label)
     return valid_labels
 
 
@@ -195,16 +196,12 @@ def parse_gcs_zip(zip_file, path, anisotropy, min_size):
 
     Returns
     -------
-    list
-        Entries of an swc file.
+    int
+        ...
 
     """
     contents = read_from_cloud(zip_file, path)
-    if len(contents) > min_size:
-        swc_id = int(utils.get_id(path))
-        return {swc_id: get_coords(contents, anisotropy)}
-    else:
-        return dict()
+    return int(utils.get_id(path)) if len(contents) >= min_size else -1
 
 
 def read_from_local(path):

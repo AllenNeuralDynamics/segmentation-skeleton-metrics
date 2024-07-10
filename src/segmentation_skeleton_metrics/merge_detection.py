@@ -13,7 +13,7 @@ import numpy as np
 from segmentation_skeleton_metrics import utils
 
 
-def detect_potentials(labeled_graphs, get_labels):
+def find_sites(labeled_graphs, get_labels):
     """
     Detects merges between ground truth graphs which are considered to be
     potential merge sites.
@@ -91,42 +91,3 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
                 if min_dist < dist_threshold:
                     return merge_id, xyz_pair, min_dist
     return merge_id, xyz_pair, min_dist
-
-"""
-def intersections(get_projection, xyz_list, xyz_to_id, close_dist_threshold):
-    Projects coordinates in "xyz_list" onto ground truth graphs, then stores
-    the correspond label in "hit_ids" if the projection distance is less than
-    "dist_threshold".
-
-    Parameters
-    ----------
-    get_projection : func
-        Computes projections onto ground truth graphs.
-    xyz_list : list
-        List of xyz coordinates to be projected.
-    xyz_to_id : dict
-        Dictionary where keys are xyz coordinates in the ground truth graphs
-        and values are a dictionary that stores the corresonding label and
-        node ids.
-    close_dist_threshold : float
-        Threshold that defines whether a projection distance is small enough
-        to be considered a valid intersection.
-
-    Returns
-    -------
-    hit_ids : dict
-        Dictionary where deys are labels and values are node ids.
-
-    hit_ids = dict()
-    multi_hits = set()
-    for xyz in xyz_list:
-        hat_xyz, d = get_projection(xyz)
-        if d < close_dist_threshold:
-            hits = list(xyz_to_id[hat_xyz].keys())
-            if len(hits) > 1:
-                multi_hits.add(hat_xyz)
-            else:
-                hat_i = xyz_to_id[hat_xyz][hits[0]]
-                hit_ids = utils.append_dict_value(hit_ids, hits[0], hat_i)
-    return utils.resolve(multi_hits, hit_ids, xyz_to_id)
-"""
