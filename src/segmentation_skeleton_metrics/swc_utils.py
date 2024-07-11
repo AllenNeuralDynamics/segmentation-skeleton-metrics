@@ -122,9 +122,9 @@ def parse_cloud_paths(cloud_dict, min_size):
                 )
 
     # Store results
-    valid_labels = dict()
+    valid_labels = set()
     for i, process in enumerate(as_completed(processes)):
-        valid_labels.update(process.result())
+        valid_labels = valid_labels.union(process.result())
     print("\n#Valid Labels:", len(valid_labels))
     return valid_labels
 
