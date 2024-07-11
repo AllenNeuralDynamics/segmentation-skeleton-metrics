@@ -14,16 +14,13 @@ from concurrent.futures import (
 )
 from time import time
 
-import networkx as nx
 import numpy as np
 import tensorstore as ts
-from scipy.spatial import KDTree
 
+from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import (
-    graph_utils as gutils,
     merge_detection,
     split_detection,
-    swc_utils,
     utils,
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
@@ -98,7 +95,7 @@ class SkeletonMetric:
         self.write_sites = write_sites
 
         # Labels
-        assert type(valid_labels) is set if valid_labels != None else True
+        assert type(valid_labels) is set if valid_labels is not None else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
@@ -107,7 +104,7 @@ class SkeletonMetric:
         self.graphs = self.init_graphs(target_swc_paths, anisotropy)
         self.init_node_labels()
 
-    # -- Initialize and Label Graphs --   
+    # -- Initialize and Label Graphs --
     def init_label_map(self, path):
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
@@ -537,7 +534,7 @@ class SkeletonMetric:
             tracker[key] = set()
         return tracker
 
-    def process_merge(self, id, label):
+    def process_merge(self, key, label):
         """
         Once a merge has been detected that corresponds to "id", every
         node in "self.graphs[key]" with that "label" is

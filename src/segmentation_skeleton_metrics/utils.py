@@ -266,21 +266,6 @@ def to_world(xyz, anisotropy):
     return [xyz[i] * anisotropy[i] for i in range(3)]
 
 
-def above_threshold(my_dict):
-    # Find keys to delete
-    delete_keys = list()
-    for key, value in my_dict.items():
-        if len(value) < 16:
-            delete_keys.append(key)
-
-    # Delete keys
-    while len(delete_keys) > 0:
-        key = delete_keys.pop()
-        del my_dict[key]
-
-    return my_dict
-
-
 def resolve(multi_hits, dists, xyz_to_id_node):
     """
     Resolves discrepancy when xyz coordinates project onto ground truth graphs
@@ -305,10 +290,10 @@ def resolve(multi_hits, dists, xyz_to_id_node):
     """
     for hat_xyz in multi_hits:
         keys = list(xyz_to_id_node[hat_xyz].keys())
-        id = find_best(dists, keys)
-        if id:
-            node = xyz_to_id_node[hat_xyz][id]
-            dists = append_dict_value(dists, id, node)
+        key = find_best(dists, keys)
+        if key:
+            node = xyz_to_id_node[hat_xyz][key]
+            dists = append_dict_value(dists, key, node)
     return dists
 
 
@@ -391,8 +376,6 @@ def build_labels_graph(connections_path, labels):
         ids = line.split(",")
         id_1 = int(ids[0])
         id_2 = int(ids[1])
-        print(id_1, id_2)
-        stop
         assert id_1 in labels_graph.nodes
         assert id_2 in labels_graph.nodes
         labels_graph.add_edge(id_1, id_2)
@@ -498,6 +481,7 @@ def progress_bar(current, total, bar_length=50):
         f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
     )
     print(f"\r{bar}", end="", flush=True)
+
 
 def progress_bar2(current, total, bar_length=50, eta=None, runtime=None):
     progress = int(current / total * bar_length)
