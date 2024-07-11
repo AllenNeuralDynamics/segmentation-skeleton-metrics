@@ -155,16 +155,16 @@ class SkeletonMetric:
         None
 
         """
-        print("Labelling Graphs...")
+        # Assign processes
         t0 = time()
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key, graph in self.graphs.items():
-            self.key_to_label_to_nodes[key] = self.label_nodes(graph, key)
+            self.key_to_label_to_nodes[key] = self.label_nodes(graph)
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def label_nodes(self, graph, key):
+    def label_nodes(self, graph):
         """
         Iterates over nodes in "graph" and stores the label in the predicted
         segmentation mask (i.e. "self.label_mask") which coincides with each
@@ -197,7 +197,7 @@ class SkeletonMetric:
                     key_to_label_to_nodes[label].add(i)
                 else:
                     key_to_label_to_nodes[label] = set([i])
-        return key_to_label_to_nodes, key
+        return key_to_label_to_nodes
 
     def get_label(self, coord, return_node=False):
         """
