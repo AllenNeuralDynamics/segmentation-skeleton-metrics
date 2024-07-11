@@ -13,7 +13,7 @@ import numpy as np
 from scipy.spatial.distance import euclidean as dist
 
 
-# -- edit graph --
+# --- Update graph structure ---
 def remove_edge(graph, i, j):
     """
     Remove the edge "(i,j)" from "graph".
@@ -33,7 +33,7 @@ def remove_edge(graph, i, j):
         Graph with edge removed.
 
     """
-    graph.remove_edges_from([(i, j)])
+    graph.remove_edge(i, j)
     return graph
 
 
@@ -77,10 +77,30 @@ def delete_nodes(graph, delete_label, return_cnt=False):
         return graph
 
 
-# -- attribute utils --
+# -- Labeling Nodes --
+def init_node_labels(graph):
+    id_to_labeled_nodes = dict()
+    with ThreadPoolExecutor() as executor:
+        # Assign threads
+        threads = []
+        for i in labeled_graph.nodes:
+            coord = gutils.get_coord(labeled_graph, i)
+            threads.append(executor.submit(self.get_label, coord, i))
+
+            # Store results
+            for thread in as_completed(threads):
+                i, label = thread.result()
+                labeled_graph.nodes[i].update({"label": label})
+                if label in id_to_label_nodes.keys():
+                    id_to_label_nodes[label].add(i)
+                else:
+                    id_to_label_nodes[label] = set([i])
+        return labeled_graph, id_to_label_nodes
+
+
 def get_coord(graph, i):
     """
-    Gets (x,y,z) image coordinates of node "i".
+    Gets xyz image coordinates of node "i".
 
     Parameters
     ----------
@@ -92,7 +112,7 @@ def get_coord(graph, i):
     Returns
     -------
     tuple
-        The (x,y,z) image coordinates of node "i".
+        The xyz image coordinates of node "i".
 
     """
     return tuple(graph.nodes[i]["xyz"])
@@ -186,13 +206,13 @@ def compute_run_lengths(graph):
     if graph.number_of_nodes():
         for nodes in nx.connected_components(graph):
             subgraph = graph.subgraph(nodes)
-            run_lengths.append(compute_path_length(subgraph))
+            run_lengths.append(compute_run_length(subgraph))
     else:
         run_lengths.append(0)
     return np.array(run_lengths)
 
 
-def compute_path_length(graph):
+def compute_run_length(graph):
     """
     Computes path length of graph.
 
