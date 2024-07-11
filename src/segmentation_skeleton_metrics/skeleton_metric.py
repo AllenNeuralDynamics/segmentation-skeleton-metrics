@@ -152,7 +152,7 @@ class SkeletonMetric:
         None
 
         """
-        # Assign processes
+        print("\nLabeling Graphs...")
         t0 = time()
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key, graph in self.graphs.items():
