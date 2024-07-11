@@ -113,6 +113,7 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
 
     # Assign processes
     cnt = 1
+    chunk_size = len(zip_paths) * 0.02
     t0, t1 = utils.init_timers()
     with ProcessPoolExecutor() as executor:
         processes = []
@@ -121,15 +122,15 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
             processes.append(
                 executor.submit(download, zip_content, anisotropy, min_size)
             )
-            if i >= cnt * len(zip_paths) * 0.02:
+            if i >= cnt * chunk_size:
                 cnt, t1 = utils.report_progress(
                     i, len(zip_paths), chunk_size, cnt, t0, t1
                 )
 
     # Store results
-    valid_labels = dict()
+    valid_labels = set()
     for i, process in enumerate(as_completed(processes)):
-        valid_labels.update(process.result())
+        valid_labels = valid_labels.union(process.result())
     print("\n#Valid Labels:", len(valid_labels))
     return valid_labels
 
