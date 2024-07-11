@@ -443,7 +443,7 @@ class SkeletonMetric:
 
             # Compile results
             cnt = 1
-            chunk_size = int(len(processes) * 0.02)
+            chunk_size = len(processes) * 0.02
             detected_merges = set()
             for i, process in enumerate(as_completed(processes)):
                 # Check site

@@ -13,18 +13,17 @@ import numpy as np
 from segmentation_skeleton_metrics import utils
 
 
-def find_sites(labeled_graphs, get_labels):
+def find_sites(graphs, get_labels):
     """
     Detects merges between ground truth graphs which are considered to be
     potential merge sites.
 
     Parameters
     ----------
-    labeled_graphs : dict
-        Dictionary where the keys are graph ids and the values are the
-        corresponding graphs.
+    graphs : dict
+        Dictionary where the keys are graph ids and values are graphs.
     get_labels : func
-        Gets the label of a node in "labeled_graphs".
+        Gets the label of a node in "graphs".
 
     Returns
     -------
@@ -35,14 +34,14 @@ def find_sites(labeled_graphs, get_labels):
     """
     merge_ids = set()
     visited = set()
-    for id_1 in labeled_graphs.keys():
-        for id_2 in labeled_graphs.keys():
-            ids = frozenset((id_1, id_2))
-            if id_1 != id_2 and ids not in visited:
-                visited.add(ids)
-                intersection = get_labels(id_1).intersection(get_labels(id_2))
+    for key_1 in graphs.keys():
+        for key_2 in graphs.keys():
+            keys = frozenset((key_1, key_2))
+            if key_1 != key_2 and keys not in visited:
+                visited.add(keys)
+                intersection = get_labels(key_1).intersection(get_labels(key_2))
                 for label in intersection:
-                    merge_ids.add((ids, label))
+                    merge_ids.add((keys, label))
     return merge_ids
 
 
@@ -63,7 +62,7 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
     dist_threshold : float
         Distance that determines whether two graphs contain a merge site.
     merge_id : tuple
-        Tuple containing ids corresponding to "graph_1" and "graph_2" along
+        Tuple containing keys corresponding to "graph_1" and "graph_2" along
         the common label between them.
 
     Returns
@@ -75,7 +74,7 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
 
     """
     # Check whether merge is spurious
-    if len(merged_1) < 16 and len(merged_2) < 16:
+    if len(merged_1) < 10 and len(merged_2) < 10:
         return merge_id, None, np.inf
 
     # Compute pairwise distances
@@ -89,5 +88,6 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
                 min_dist = utils.dist(xyz_i, xyz_j)
                 xyz_pair = [xyz_i, xyz_j]
                 if min_dist < dist_threshold:
+                    print("Merge Detected:", merge_id, xyz_pair, min_dist)
                     return merge_id, xyz_pair, min_dist
     return merge_id, xyz_pair, min_dist
