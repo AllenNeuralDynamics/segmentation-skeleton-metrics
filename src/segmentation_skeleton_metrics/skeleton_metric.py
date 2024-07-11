@@ -106,7 +106,6 @@ class SkeletonMetric:
         # Build Graphs
         self.graphs = self.init_graphs(target_swc_paths, anisotropy)
         self.init_node_labels()
-        self.init_node_labels_upd()
 
     # -- Initialize and Label Graphs --   
     def init_label_map(self, path):
@@ -160,49 +159,12 @@ class SkeletonMetric:
         t0 = time()
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key, graph in self.graphs.items():
-            self.key_to_label_to_nodes[key] = self.label_nodes(graph)
+            self.key_to_label_to_nodes[key] = self.label_nodes(graph, key)
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def init_node_labels_upd(self):
-        """
-        Initializes "self.graphs" by copying each graph in
-        "self.graphs", then labels each node with the label in
-        "self.label_mask" that coincides with it.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        # Assign processes
-        print("Update -- Labelling Graphs...")
-        t0 = time()
-        self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
-        with ProcessPoolExecutor() as executor:
-            processes = list()
-            for key, graph in self.graphs.items():
-                print(key)
-                processes.append(
-                    executor.submit(self.label_nodes, graph, key)
-                )
-
-        # Parse results
-        self.key_to_label_to_nodes = dict()  # {key: {label: nodes}}
-        for cnt, process in enumerate(as_completed(processes)):
-            utils.progress_bar(cnt + 1, len(self.graphs))
-            key, key_to_label_to_nodes = process.result()
-            self.key_to_label_to_nodes[key] = key_to_label_to_nodes
-
-        t, unit = utils.time_writer(time() - t0)
-        print(f"\nRuntime: {round(t, 2)} {unit}\n")
-
-    def label_nodes(self, graph):
+    def label_nodes(self, graph, key):
         """
         Iterates over nodes in "graph" and stores the label in the predicted
         segmentation mask (i.e. "self.label_mask") which coincides with each
@@ -235,7 +197,7 @@ class SkeletonMetric:
                     key_to_label_to_nodes[label].add(i)
                 else:
                     key_to_label_to_nodes[label] = set([i])
-        return key_to_label_to_nodes
+        return key_to_label_to_nodes, key
 
     def get_label(self, coord, return_node=False):
         """
