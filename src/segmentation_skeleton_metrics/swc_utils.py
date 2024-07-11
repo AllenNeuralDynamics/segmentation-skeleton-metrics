@@ -15,10 +15,10 @@ import networkx as nx
 import numpy as np
 from google.cloud import storage
 
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics import graph_utils as gutils, utils
 
 
-def init_valid_labels(swc_paths, min_size, anisotropy):
+def init_valid_labels(swc_paths, min_size):
     """
     Reads swc files and extracts the xyz coordinates.
 
@@ -31,9 +31,6 @@ def init_valid_labels(swc_paths, min_size, anisotropy):
     min_size : int
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "valid_labels".
-    anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
 
     Returns
     -------
@@ -43,14 +40,14 @@ def init_valid_labels(swc_paths, min_size, anisotropy):
 
     """
     if type(swc_paths) == list:
-        return parse_local_paths(swc_paths, min_size, anisotropy)
+        return parse_local_paths(swc_paths, min_size)
     elif type(swc_paths) == dict:
-        return parse_cloud_paths(swc_paths, min_size, anisotropy)
+        return parse_cloud_paths(swc_paths, min_size)
     else:
         return None
 
 
-def parse_local_paths(swc_paths, min_size, anisotropy):
+def parse_local_paths(swc_paths, min_size):
     """
     Reads swc files from local machine and extracts the xyz coordinates.
 
@@ -63,9 +60,6 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
     min_size : int
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "valid_labels".
-    anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
 
     Returns
     -------
@@ -79,11 +73,11 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
         contents = read_from_local(path)
         if len(contents) > min_size:
             id = int(utils.get_id(path))
-            valid_labels[id] = get_coords(contents, anisotropy)
+            valid_labels[id] = get_coords(contents)
     return valid_labels
 
 
-def parse_cloud_paths(cloud_dict, min_size, anisotropy):
+def parse_cloud_paths(cloud_dict, min_size):
     """
     Reads swc files from a GCS bucket and extracts the xyz coordinates.
 
@@ -94,9 +88,6 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     min_size : int
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "valid_labels".
-    anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
 
     Returns
     -------
@@ -113,15 +104,14 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
 
     # Assign processes
     cnt = 1
+    chunk_size = len(zip_paths) * 0.02
     t0, t1 = utils.init_timers()
     with ProcessPoolExecutor() as executor:
         processes = []
         for i, path in enumerate(zip_paths):
             zip_content = bucket.blob(path).download_as_bytes()
-            processes.append(
-                executor.submit(download, zip_content, anisotropy, min_size)
-            )
-            if i >= cnt * len(zip_paths) * 0.02:
+            processes.append(executor.submit(download, zip_content, min_size))
+            if i >= cnt * chunk_size:
                 cnt, t1 = utils.report_progress(
                     i, len(zip_paths), chunk_size, cnt, t0, t1
                 )
@@ -134,7 +124,7 @@ def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     return valid_labels
 
 
-def download(zip_content, anisotropy, min_size):
+def download(zip_content, min_size):
     """
     Downloads the contents from each swc file contained in the zip file at
     "zip_path".
@@ -143,9 +133,6 @@ def download(zip_content, anisotropy, min_size):
     ----------
     zip_content : ...
         Contents of a zip file.
-    anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
     min_size : int
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "valid_labels".
@@ -162,9 +149,7 @@ def download(zip_content, anisotropy, min_size):
             # Assign threads
             paths = utils.list_files_in_gcs_zip(zip_content)
             threads = [
-                executor.submit(
-                    parse_gcs_zip, zip_file, path, anisotropy, min_size
-                )
+                executor.submit(parse_gcs_zip, zip_file, path, min_size)
                 for path in paths
             ]
 
@@ -177,7 +162,7 @@ def download(zip_content, anisotropy, min_size):
     return valid_labels
 
 
-def parse_gcs_zip(zip_file, path, anisotropy, min_size):
+def parse_gcs_zip(zip_file, path, min_size):
     """
     Reads swc file stored at "path" which points to a file in a GCS bucket.
 
@@ -187,9 +172,6 @@ def parse_gcs_zip(zip_file, path, anisotropy, min_size):
         Zip file containing swc file to be read.
     path : str
         Path to swc file to be read.
-    anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
     min_size : int
         Threshold on the number of nodes contained in an swc file. Only swc
         files with more than "min_size" nodes are stored in "valid_labels".
@@ -365,6 +347,7 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
         Graph built from an swc file.
 
     """
+    # Build Gaph
     graph = nx.Graph(swc_id=utils.get_id(path))
     offset = [0, 0, 0]
     for line in read_from_local(path):
@@ -379,4 +362,8 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
             graph.add_node(child, xyz=xyz)
             if parent != -1:
                 graph.add_edge(parent, child)
+
+    # Set graph-level attributes
+    graph.graph["initial_number_of_edges"] = graph.number_of_edges()
+    graph.graph["initial_run_length"] = gutils.compute_run_length(graph)
     return graph
