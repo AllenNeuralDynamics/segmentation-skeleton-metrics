@@ -7,7 +7,11 @@ Created on Wed June 5 16:00:00 2023
 
 """
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from io import BytesIO
 from zipfile import ZipFile
 
@@ -15,7 +19,8 @@ import networkx as nx
 import numpy as np
 from google.cloud import storage
 
-from segmentation_skeleton_metrics import graph_utils as gutils, utils
+from segmentation_skeleton_metrics import graph_utils as gutils
+from segmentation_skeleton_metrics import utils
 
 
 def init_valid_labels(swc_paths, min_size):

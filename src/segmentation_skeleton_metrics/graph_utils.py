@@ -78,26 +78,6 @@ def delete_nodes(graph, delete_label, return_cnt=False):
 
 
 # -- Labeling Nodes --
-def init_node_labels(graph):
-    id_to_labeled_nodes = dict()
-    with ThreadPoolExecutor() as executor:
-        # Assign threads
-        threads = []
-        for i in labeled_graph.nodes:
-            coord = gutils.get_coord(labeled_graph, i)
-            threads.append(executor.submit(self.get_label, coord, i))
-
-            # Store results
-            for thread in as_completed(threads):
-                i, label = thread.result()
-                labeled_graph.nodes[i].update({"label": label})
-                if label in id_to_label_nodes.keys():
-                    id_to_label_nodes[label].add(i)
-                else:
-                    id_to_label_nodes[label] = set([i])
-        return labeled_graph, id_to_label_nodes
-
-
 def get_coord(graph, i):
     """
     Gets xyz image coordinates of node "i".
