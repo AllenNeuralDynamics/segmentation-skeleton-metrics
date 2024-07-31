@@ -25,7 +25,7 @@ from segmentation_skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
 
-MERGE_DIST_THRESHOLD = 25
+MERGE_DIST_THRESHOLD = 20
 
 
 class SkeletonMetric:
@@ -67,20 +67,22 @@ class SkeletonMetric:
             neuron in the ground truth.
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
-            files. The default is [1.0, 1.0, 1.0]
+            files at "target_swc_paths". The default is [1.0, 1.0, 1.0].
         connections_path : list[tuple]
-            Path to a txt file containing pairs of swc keys from the prediction
-            that were predicted to be connected.
+            Path to a txt file containing pairs of segment ids of segments
+            that were merged into a single segment.
         ignore_boundary_mistakes : bool, optional
             Indication of whether to ignore mistakes near boundary of bounding
             box. The default is False.
         output_dir : str, optional
-            Path to directory that each mistake site is written to. The default
+            Path to directory that mistake sites are written to. The default
             is None.
-        valid_labels : set
-            ...
+        valid_labels : set[int], optional
+            Segment ids (i.e. labels) that are present in the segmentation.
+            The purpose of this argument is to account for segments that were
+            removed due to thresholding by path length. The default is None.
         write_sites, : bool, optional
-            Indication of whether to write mistake sites to an swc file. The
+            Indication of whether to write merge sites to an swc file. The
             default is False.
 
         Returns
@@ -95,7 +97,7 @@ class SkeletonMetric:
         self.write_sites = write_sites
 
         # Labels
-        assert type(valid_labels) is set if valid_labels is not None else True
+        assert type(valid_labels) is set if valid_labels else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
@@ -106,6 +108,21 @@ class SkeletonMetric:
 
     # -- Initialize and Label Graphs --
     def init_label_map(self, path):
+        """
+        Initializes a dictionary that maps a label to its equivalent label in
+        the case where "connections_path" is provided.
+
+        Parameters
+        ----------
+        path : str
+            Path to a txt file containing pairs of segment ids of segments
+            that were merged into a single segment.
+
+        Returns
+        -------
+        None
+
+        """
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
             self.label_map = utils.init_label_map(path, self.valid_labels)
@@ -293,7 +310,8 @@ class SkeletonMetric:
 
         Returns
         -------
-        ...
+        tuple
+            ...
 
         """
         # Split evaluation
@@ -423,49 +441,16 @@ class SkeletonMetric:
         self.merged_cnts = self.init_counter()
         self.merged_percents = self.init_counter()
 
-        # Check potential merge sites
-        t0 = time()
-        with ProcessPoolExecutor() as executor:
-            processes = []
-            for keys, label in self.detect_potential_merges():
-                key_1, key_2 = tuple(keys)
-                processes.append(
-                    executor.submit(
-                        merge_detection.localize,
-                        self.graphs[key_1],
-                        self.graphs[key_2],
-                        self.key_to_label_to_nodes[key_1][label],
-                        self.key_to_label_to_nodes[key_2][label],
-                        MERGE_DIST_THRESHOLD,
-                        (keys, label),
-                    )
-                )
+        # Main
+        detected_merges = []
+        for (key_1, key_2), label in self.detect_potential_merges():
+            if self.is_valid_merge(key_1, key_2, label):
+                self.process_merge(key_1, label)
+                self.process_merge(key_2, label)
+                detected_merges.append(((key_1, key_2), label))
 
-            # Compile results
-            cnt = 1
-            chunk_size = len(processes) * 0.02
-            detected_merges = set()
-            for i, process in enumerate(as_completed(processes)):
-                # Check site
-                merge_id, site, d = process.result()
-                if d < MERGE_DIST_THRESHOLD:
-                    detected_merges.add(merge_id)
-                    if self.write_sites:
-                        self.save_merge_sites(site[0], site[1], "merge")
-
-                # Report process
-                if i >= cnt * chunk_size:
-                    utils.progress_bar(i + 1, len(processes))
-                    cnt += 1
-
-        # Update graph
-        for (key_1, key_2), label in detected_merges:
-            self.process_merge(key_1, label)
-            self.process_merge(key_2, label)
-
-        # Report Runtime
-        t, unit = utils.time_writer(time() - t0)
-        print(f"\nRuntime: {round(t, 2)} {unit}\n")
+        if self.write_sites:
+            self.localize_merges(detected_merges)
 
     def detect_potential_merges(self):
         """
@@ -484,6 +469,70 @@ class SkeletonMetric:
 
         """
         return merge_detection.find_sites(self.graphs, self.get_labels)
+
+    def is_valid_merge(self):
+        """
+        Checks whether merge is valid (i.e. not a few nodes with merged
+        label).
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            Indication of whether merge is valid.
+
+        """
+        n_merged_nodes_1 = len(self.key_to_label_to_nodes[key_1][label])
+        n_merged_nodes_2 = len(self.key_to_label_to_nodes[key_2][label])
+        is_valid = n_merged_nodes_1 < 20 and n_merged_nodes_2 < 20
+        return True if is_valid else False
+    
+    def localize_merges(self, detected_merges):
+        """
+        Searches for exact site where a merge occurs.
+
+        Parameters
+        ----------
+        detected_merges : list[tuple[str, str, int]]
+            Merge sites indicated by a pair of keys and label.
+
+        Returns
+        -------
+        None
+
+        """
+        t0 = time()
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = []
+            for (key_1, key_2), label in detected_merges:
+                processes.append(
+                    executor.submit(
+                        merge_detection.localize,
+                        self.graphs[key_1],
+                        self.graphs[key_2],
+                        self.key_to_label_to_nodes[key_1][label],
+                        self.key_to_label_to_nodes[key_2][label],
+                        MERGE_DIST_THRESHOLD,
+                        (keys, label),
+                    )
+                )
+
+            # Compile results
+            cnt = 1
+            for i, process in enumerate(as_completed(processes)):
+                # Check site
+                site, d = process.result()
+                if d < MERGE_DIST_THRESHOLD:
+                    self.save_merge_sites(site[0], site[1])
+
+                # Report process
+                if i >= cnt * len(processes) * 0.02:
+                    utils.progress_bar(i + 1, len(processes))
+                    cnt += 1
 
     def near_bdd(self, xyz):
         """
@@ -529,6 +578,21 @@ class SkeletonMetric:
         return counter
 
     def init_tracker(self):
+        """
+        Initializes a dictionary whose keys are "self.graphs.keys()" and
+        values are an emtpy set.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Dicionary whose keys are "self.graphs.keys()" and values are an
+            emtpy set.
+
+        """
         tracker = dict()
         for key in self.graphs.keys():
             tracker[key] = set()
@@ -645,6 +709,19 @@ class SkeletonMetric:
         return keys, stats
 
     def generate_avg_results(self):
+        """
+        Averages value of each metric across all graphs from "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Average value of each metric across "self.graphs".
+
+        """
         avg_stats = {
             "# splits": self.avg_result(self.split_cnts),
             "# merges": self.avg_result(self.merge_cnts) / 2,
@@ -657,6 +734,22 @@ class SkeletonMetric:
         return avg_stats
 
     def avg_result(self, stats):
+        """
+        Averages the values computed across "self.graphs" for
+        a given metric stored in "stats".
+
+        Parameters
+        ----------
+        stats : dict
+            Values computed across all graphs from "self.graphs" for a given
+         metric stored in "stats".
+
+        Returns
+        -------
+        float
+            Average value of metric computed across self.graphs".
+
+        """
         result = []
         wgts = []
         for key, wgt in self.wgts.items():
@@ -740,12 +833,28 @@ class SkeletonMetric:
         ]
         return metrics
 
-    def save_merge_sites(self, xyz_1, xyz_2, mistake_type):
+    def save_merge_sites(self, xyz_1, xyz_2):
+        """
+        Saves the site where a merge is located by writing the xyz coordiantes
+        to an swc file.
+
+        Parameters
+        ----------
+        xyz_1 : numpy.ndarray
+            xyz coordinate of merge site.
+        xyz_2 : numpy.ndarray
+            xyz coordinate of merge site.
+
+        Returns
+        -------
+        None
+
+        """
         self.saved_site_cnt += 1
         xyz_1 = utils.to_world(xyz_1, self.anisotropy)
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
         color = "0.0 1.0 0.0" if mistake_type == "split" else "0.0 0.0 1.0"
-        path = f"{self.output_dir}/{mistake_type}-{self.saved_site_cnt}.swc"
+        path = f"{self.output_dir}/merge-{self.saved_site_cnt}.swc"
         save(path, xyz_1, xyz_2, color=color)
 
 

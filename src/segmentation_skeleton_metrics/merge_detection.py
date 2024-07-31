@@ -73,11 +73,6 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
         Distance between xyz coordinates in "xyz_pair".
 
     """
-    # Check whether merge is spurious
-    if len(merged_1) < 10 and len(merged_2) < 10:
-        return merge_id, None, np.inf
-
-    # Compute pairwise distances
     min_dist = np.inf
     xyz_pair = list()
     for i in merged_1:
@@ -90,4 +85,4 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
                 if min_dist < dist_threshold:
                     print("Merge Detected:", merge_id, xyz_pair, min_dist)
                     return merge_id, xyz_pair, min_dist
-    return merge_id, xyz_pair, min_dist
+    return xyz_pair, min_dist
