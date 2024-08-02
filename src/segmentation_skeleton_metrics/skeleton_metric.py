@@ -7,6 +7,7 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
+import multiprocessing
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -16,11 +17,13 @@ from time import time
 
 import numpy as np
 import tensorstore as ts
+from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import (
     merge_detection,
     split_detection,
+    swc_utils,
     utils,
 )
 from segmentation_skeleton_metrics.swc_utils import save, to_graph
@@ -51,8 +54,10 @@ class SkeletonMetric:
         connections_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
+        pred_swc_paths=None,
         valid_labels=None,
-        write_sites=False,
+        save_projections=False,
+        save_sites=False,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -77,11 +82,18 @@ class SkeletonMetric:
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
+        pred_swc_paths : str, optional
+            List of paths to swc files where each file corresponds to a
+            neuron from the prediction. If provided, these fragments are used
+            to compute the 'projected run length' (see merge_detection.py for
+            details). The default is None.
         valid_labels : set[int], optional
             Segment ids (i.e. labels) that are present in the segmentation.
             The purpose of this argument is to account for segments that were
             removed due to thresholding by path length. The default is None.
-        write_sites, : bool, optional
+        save_projections: bool, optional
+            ...
+        save_sites, : bool, optional
             Indication of whether to write merge sites to an swc file. The
             default is False.
 
@@ -90,11 +102,12 @@ class SkeletonMetric:
         None.
 
         """
-        # Store options
+        # Options
         self.anisotropy = anisotropy
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
-        self.write_sites = write_sites
+        self.pred_swc_paths = pred_swc_paths
+        self.save_sites = save_sites
 
         # Labels
         assert type(valid_labels) is set if valid_labels else True
@@ -103,8 +116,7 @@ class SkeletonMetric:
         self.init_label_map(connections_path)
 
         # Build Graphs
-        self.graphs = self.init_graphs(target_swc_paths, anisotropy)
-        self.init_node_labels()
+        self.init_graphs(target_swc_paths, anisotropy)
 
     # -- Initialize and Label Graphs --
     def init_label_map(self, path):
@@ -148,13 +160,13 @@ class SkeletonMetric:
         None
 
         """
-        graphs = dict()
+        self.graphs = dict()
         for path in paths:
             key = utils.get_id(path)
-            graphs[key] = to_graph(path, anisotropy=anisotropy)
-        return graphs
+            self.graphs[key] = to_graph(path, anisotropy=anisotropy)
+        self.init_key_label_nodes()
 
-    def init_node_labels(self):
+    def init_key_label_nodes(self):
         """
         Initializes "self.graphs" by copying each graph in
         "self.graphs", then labels each node with the label in
@@ -173,12 +185,12 @@ class SkeletonMetric:
         t0 = time()
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key, graph in self.graphs.items():
-            self.key_to_label_to_nodes[key] = self.label_nodes(graph)
+            self.key_to_label_to_nodes[key] = self.set_labels(graph)
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def label_nodes(self, graph):
+    def set_labels(self, graph):
         """
         Iterates over nodes in "graph" and stores the label in the predicted
         segmentation mask (i.e. "self.label_mask") which coincides with each
@@ -213,6 +225,26 @@ class SkeletonMetric:
                     key_to_label_to_nodes[label] = set([i])
         return key_to_label_to_nodes
 
+    def read_label(self, coord):
+        """
+        Gets label at image coordinates "coord".
+
+        Parameters
+        ----------
+        coord : tuple[int]
+            Coordinates that indexes into "self.label_mask".
+
+        Returns
+        -------
+        int
+           Label at image coordinates "coord".
+
+        """
+        if type(self.label_mask) == ts.TensorStore:
+            return int(self.label_mask[coord].read().result())
+        else:
+            return self.label_mask[coord]
+
     def get_label(self, coord, return_node=False):
         """
         Gets label of voxel at "coord".
@@ -234,25 +266,20 @@ class SkeletonMetric:
         else:
             return self.validate(label)
 
-    def read_label(self, coord):
+    def get_labels(self, key):
         """
-        Gets label at image coordinates "coord".
+        Gets the set of labels contained in the graph corresponding to "key".
 
         Parameters
         ----------
-        coord : tuple[int]
-            Coordinates that indexes into "self.label_mask".
+        key : str
 
         Returns
         -------
-        int
-           Label at image coordinates "coord".
-
+        set
+            Labels contained in the graph corresponding to "key".
         """
-        if type(self.label_mask) == ts.TensorStore:
-            return int(self.label_mask[coord].read().result())
-        else:
-            return self.label_mask[coord]
+        return set(self.key_to_label_to_nodes[key].keys())
 
     def validate(self, label):
         """
@@ -299,53 +326,6 @@ class SkeletonMetric:
         else:
             return 0
 
-    # -- Evaluation --
-    def compute_metrics(self):
-        """
-        Computes skeleton-based metrics.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        tuple
-            ...
-
-        """
-        # Split evaluation
-        print("Detecting Splits...")
-        self.saved_site_cnt = 0
-        self.detect_splits()
-        self.quantify_splits()
-
-        # Merge evaluation
-        print("Detecting Merges...")
-        self.saved_site_cnt = 0
-        self.detect_merges()
-        self.quantify_merges()
-
-        # Compute metrics
-        full_results, avg_results = self.compile_results()
-        return full_results, avg_results
-
-    def get_labels(self, key):
-        """
-        Gets the predicted labels that intersect with the target graph
-        corresponding to "id".
-
-        Parameters
-        ----------
-        key : str
-
-        Returns
-        -------
-        set
-            Labels that intersect with the target graph corresponding to "id".
-        """
-        return set(self.key_to_label_to_nodes[key].keys())
-
     def zero_nodes(self, key, label):
         """
         Zeros out nodes in "self.graph[key]" in the sense that nodes with label
@@ -369,6 +349,96 @@ class SkeletonMetric:
                 self.graphs[key].nodes[i]["label"] = 0
             del self.key_to_label_to_nodes[key][label]
 
+    # -- Main Routine --
+    def compute_metrics(self):
+        """
+        Computes skeleton-based metrics.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tuple
+            ...
+
+        """
+        # Projected run lengths
+        if self.pred_swc_paths:
+            print("Computing Projected Run Lengths...")
+            self.compute_projected_run_lengths()
+
+        # Split evaluation
+        print("Detecting Splits...")
+        self.saved_site_cnt = 0
+        self.detect_splits()
+        self.quantify_splits()
+
+        # Merge evaluation
+        print("Detecting Merges...")
+        self.saved_site_cnt = 0
+        self.detect_merges()
+        self.quantify_merges()
+
+        # Compute metrics
+        full_results, avg_results = self.compile_results()
+        return full_results, avg_results
+
+    # -- Projected Run Lengths --
+    def compute_projected_run_lengths(self):
+        # Initializations
+        kdtrees = self.init_kdtrees()
+        coords = swc_utils.parse_local_zip(self.pred_swc_paths, 0, [1, 1, 1])
+        manager = multiprocessing.Manager()
+        shared_coords = manager.dict(coords)
+        del coords
+
+        # Main
+        processes = []
+        queue = multiprocessing.Queue()
+        for key, kdtree in kdtrees.items():
+            process = multiprocessing.Process(
+                target=query_kdtree, args=(kdtree, key, shared_coords, queue)
+            )
+            processes.append(process)
+            process.start()
+
+        for process in processes:
+            process.join()
+
+        results = [queue.get() for _ in kdtrees]
+        print(results)
+        # Finish
+        # --> save projections if applicable
+        # --> compute run lengths
+
+    def init_kdtrees(self):
+        """
+        Builds kd-trees from xyz coordiantes stored as a node-level attribute
+        in each graph from "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict[KDTree]
+            KD-Trees built from xyz coordinates stored in each graph from
+            "self.graphs".
+
+        """
+        kdtrees = dict()
+        for key, graph in self.graphs.items():
+            coords = [graph.nodes[i]["xyz"] for i in graph.nodes]
+            coords = np.array(coords, dtype=float)
+            coords[:, 0] *= 0.748  # hard coded
+            coords[:, 1] *= 0.748  # hard coded
+            kdtrees[key] = KDTree(coords)
+        return kdtrees
+
+    # -- Split Detection --
     def detect_splits(self):
         """
         Detects splits in the predicted segmentation, then deletes node and
@@ -422,6 +492,7 @@ class SkeletonMetric:
             self.omit_cnts[key] = n_target_edges - n_pred_edges
             self.omit_percents[key] = 1 - n_pred_edges / n_target_edges
 
+    # -- Merge Detection --
     def detect_merges(self):
         """
         Detects merges in the predicted segmentation, then deletes node and
@@ -449,7 +520,7 @@ class SkeletonMetric:
                 self.process_merge(key_2, label)
                 detected_merges.append(((key_1, key_2), label))
 
-        if self.write_sites:
+        if self.save_sites:
             self.localize_merges(detected_merges)
 
     def detect_potential_merges(self):
@@ -470,7 +541,7 @@ class SkeletonMetric:
         """
         return merge_detection.find_sites(self.graphs, self.get_labels)
 
-    def is_valid_merge(self):
+    def is_valid_merge(self, key_1, key_2, label):
         """
         Checks whether merge is valid (i.e. not a few nodes with merged
         label).
@@ -489,7 +560,7 @@ class SkeletonMetric:
         n_merged_nodes_2 = len(self.key_to_label_to_nodes[key_2][label])
         is_valid = n_merged_nodes_1 < 20 and n_merged_nodes_2 < 20
         return True if is_valid else False
-    
+
     def localize_merges(self, detected_merges):
         """
         Searches for exact site where a merge occurs.
@@ -504,7 +575,6 @@ class SkeletonMetric:
         None
 
         """
-        t0 = time()
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = []
@@ -517,7 +587,7 @@ class SkeletonMetric:
                         self.key_to_label_to_nodes[key_1][label],
                         self.key_to_label_to_nodes[key_2][label],
                         MERGE_DIST_THRESHOLD,
-                        (keys, label),
+                        ((key_1, key_2), label),
                     )
                 )
 
@@ -527,80 +597,40 @@ class SkeletonMetric:
                 # Check site
                 site, d = process.result()
                 if d < MERGE_DIST_THRESHOLD:
-                    self.save_merge_sites(site[0], site[1])
+                    self.save_merge_site(site[0], site[1])
 
                 # Report process
                 if i >= cnt * len(processes) * 0.02:
                     utils.progress_bar(i + 1, len(processes))
                     cnt += 1
 
-    def near_bdd(self, xyz):
+    def save_merge_site(self, xyz_1, xyz_2):
         """
-        Determines whether "xyz" is near the boundary of the image.
+        Saves the site where a merge is located by writing the xyz coordinates
+        to an swc file.
 
         Parameters
         ----------
-        xyz : numpy.ndarray
-            xyz coordinate to be checked
+        xyz_1 : numpy.ndarray
+            xyz coordinate of merge site.
+        xyz_2 : numpy.ndarray
+            xyz coordinate of merge site.
 
         Returns
         -------
-        bool
-            Indication of whether "xyz" is near the boundary of the image.
-
-        """
-        near_bdd_bool = False
-        if self.ignore_boundary_mistakes:
-            mask_shape = self.label_mask.shape
-            above = [xyz[i] >= mask_shape[i] - 32 for i in range(3)]
-            below = [xyz[i] < 32 for i in range(3)]
-            near_bdd_bool = True if any(above) or any(below) else False
-        return near_bdd_bool
-
-    def init_counter(self):
-        """
-        Initializes a dictionary that is used to count the number of merge
-        type mistakes for each pred_graph.
-
-        Parameters
-        ----------
         None
 
-        Returns
-        -------
-        dict
-            Dictionary used to count number of merge type mistakes.
-
         """
-        counter = dict()
-        for key in self.graphs.keys():
-            counter[key] = 0
-        return counter
-
-    def init_tracker(self):
-        """
-        Initializes a dictionary whose keys are "self.graphs.keys()" and
-        values are an emtpy set.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict
-            Dicionary whose keys are "self.graphs.keys()" and values are an
-            emtpy set.
-
-        """
-        tracker = dict()
-        for key in self.graphs.keys():
-            tracker[key] = set()
-        return tracker
+        self.saved_site_cnt += 1
+        xyz_1 = utils.to_world(xyz_1, self.anisotropy)
+        xyz_2 = utils.to_world(xyz_2, self.anisotropy)
+        color = "1.0 0.0 0.0"
+        path = f"{self.output_dir}/merge-{self.saved_site_cnt}.swc"
+        save(path, xyz_1, xyz_2, color=color)
 
     def process_merge(self, key, label):
         """
-        Once a merge has been detected that corresponds to "id", every
+        Once a merge has been detected that corresponds to "key", every
         node in "self.graphs[key]" with that "label" is
         deleted.
 
@@ -641,6 +671,7 @@ class SkeletonMetric:
             percent = self.merged_cnts[key] / n_edges
             self.merged_percents[key] = percent
 
+    # -- Compute Metrics --
     def compile_results(self):
         """
         Compiles a dictionary containing the metrics computed by this module.
@@ -670,10 +701,7 @@ class SkeletonMetric:
         # Reformat full results
         full_results = dict()
         for i, key in enumerate(keys):
-            full_results[key] = dict(
-                [(key, results[key][i]) for key in results.keys()]
-            )
-
+            full_results[key] = {key: val[i] for key, val in results.items()}
         return full_results, avg_results
 
     def generate_full_results(self):
@@ -833,29 +861,67 @@ class SkeletonMetric:
         ]
         return metrics
 
-    def save_merge_sites(self, xyz_1, xyz_2):
+    # -- Utils --
+    def near_bdd(self, xyz):
         """
-        Saves the site where a merge is located by writing the xyz coordiantes
-        to an swc file.
+        Determines whether "xyz" is near the boundary of the image.
 
         Parameters
         ----------
-        xyz_1 : numpy.ndarray
-            xyz coordinate of merge site.
-        xyz_2 : numpy.ndarray
-            xyz coordinate of merge site.
+        xyz : numpy.ndarray
+            xyz coordinate to be checked
 
         Returns
         -------
-        None
+        bool
+            Indication of whether "xyz" is near the boundary of the image.
 
         """
-        self.saved_site_cnt += 1
-        xyz_1 = utils.to_world(xyz_1, self.anisotropy)
-        xyz_2 = utils.to_world(xyz_2, self.anisotropy)
-        color = "0.0 1.0 0.0" if mistake_type == "split" else "0.0 0.0 1.0"
-        path = f"{self.output_dir}/merge-{self.saved_site_cnt}.swc"
-        save(path, xyz_1, xyz_2, color=color)
+        near_bdd_bool = False
+        if self.ignore_boundary_mistakes:
+            mask_shape = self.label_mask.shape
+            above = [xyz[i] >= mask_shape[i] - 32 for i in range(3)]
+            below = [xyz[i] < 32 for i in range(3)]
+            near_bdd_bool = True if any(above) or any(below) else False
+        return near_bdd_bool
+
+    def init_counter(self):
+        """
+        Initializes a dictionary that is used to count some type of mistake
+        for each graph in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Dictionary used to count some type of mistake for each graph.
+
+        """
+        counter = dict()
+        for key in self.graphs.keys():
+            counter[key] = 0
+        return counter
+
+    def init_tracker(self):
+        """
+        Initializes a dictionary whose keys are "self.graphs.keys()" and
+        values are an emtpy set.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        dict
+            Dicionary whose keys are "self.graphs.keys()" and values are an
+            emtpy set.
+
+        """
+        return {key: set() for key in self.graphs.keys()}
 
 
 # -- utils --
@@ -879,3 +945,16 @@ def generate_result(keys, stats):
 
     """
     return [stats[key] for key in keys]
+
+
+def query_kdtree(kdtree, process_id, coords, queue):
+    hits = set()
+    for key, arr in coords.items():
+        cnt = 0
+        for xyz in arr:
+            d, _ = kdtree.query(xyz, k=1)
+            cnt += 1 if d < 3 else 0
+            if cnt > 30:
+                hits.add(key)
+                break
+    queue.put({process_id: hits})

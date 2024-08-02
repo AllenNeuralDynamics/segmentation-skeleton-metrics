@@ -39,7 +39,9 @@ def find_sites(graphs, get_labels):
             keys = frozenset((key_1, key_2))
             if key_1 != key_2 and keys not in visited:
                 visited.add(keys)
-                intersection = get_labels(key_1).intersection(get_labels(key_2))
+                intersection = get_labels(key_1).intersection(
+                    get_labels(key_2)
+                )
                 for label in intersection:
                     merge_ids.add((keys, label))
     return merge_ids
