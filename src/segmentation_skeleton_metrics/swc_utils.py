@@ -23,7 +23,7 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
 
 
-def init_valid_labels(swc_paths, min_size):
+def init_valid_labels(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads swc files and extracts the xyz coordinates.
 
@@ -34,8 +34,11 @@ def init_valid_labels(swc_paths, min_size):
         each file corresponds to a neuron in the prediction. If swc files are
         on cloud, then dict with keys "bucket_name" and "path".
     min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+   anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
 
     Returns
     -------
@@ -44,15 +47,15 @@ def init_valid_labels(swc_paths, min_size):
         coordinates read from cooresponding swc file.
 
     """
-    if type(swc_paths) == list:
-        return parse_local_paths(swc_paths, min_size)
-    elif type(swc_paths) == dict:
-        return parse_cloud_paths(swc_paths, min_size)
+    if type(swc_paths) is list:
+        return set(parse_local_paths(swc_paths, min_size, anisotropy).keys())
+    elif type(swc_paths) is dict:
+        return set(parse_cloud_paths(swc_paths, min_size, anisotropy).keys())
     else:
         return None
 
 
-def parse_local_paths(swc_paths, min_size):
+def parse_local_paths(swc_paths, min_size, anisotropy):
     """
     Reads swc files from local machine and extracts the xyz coordinates.
 
@@ -63,26 +66,66 @@ def parse_local_paths(swc_paths, min_size):
         each file corresponds to a neuron in the prediction. If swc files are
         on cloud, then dict with keys "bucket_name" and "path".
     min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+   anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
 
     Returns
     -------
-    valid_labels : dict
-        Dictionary where each item is an swc_id and an array of the xyz
-        coordinates read from cooresponding swc file.
+    dict
+        Dictionary that maps an swc_id to the the xyz coordinates read from
+        that swc file.
 
     """
-    valid_labels = dict()
+    swc_coords = dict()
     for path in swc_paths:
-        contents = read_from_local(path)
-        if len(contents) > min_size:
-            id = int(utils.get_id(path))
-            valid_labels[id] = get_coords(contents)
-    return valid_labels
+        content = read_from_local(path)
+        if len(content) > min_size:
+            key = int(utils.get_id(path))
+            swc_coords[key] = get_coords(content, anisotropy)
+    return swc_coords
 
 
-def parse_cloud_paths(cloud_dict, min_size):
+def parse_local_zip(zip_path, min_size, anisotropy):
+    """
+    Reads swc files from a zip stored on the local machine and extracts the
+    xyz coordinates.
+
+    Paramters
+    ---------
+    swc_paths : list or dict
+        If swc files are on local machine, list of paths to swc files where
+        each file corresponds to a neuron in the prediction. If swc files are
+        on cloud, then dict with keys "bucket_name" and "path".
+    min_size : int
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+   anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps an swc_id to the the xyz coordinates read from
+        that swc file.
+
+    """
+    swc_coords = dict()
+    with ZipFile(zip_path, "r") as zip_file:
+        files = zip_file.namelist()
+        for swc_file in [f for f in files if f.endswith(".swc")]:
+            with zip_file.open(swc_file) as file:
+                content = file.read().decode("utf-8").splitlines()
+                if len(content) > min_size:
+                    key = int(utils.get_id(swc_file))
+                    swc_coords[key] = get_coords(content, anisotropy)
+    return swc_coords
+
+
+def parse_cloud_paths(cloud_dict, min_size, anisotropy):
     """
     Reads swc files from a GCS bucket and extracts the xyz coordinates.
 
@@ -91,14 +134,17 @@ def parse_cloud_paths(cloud_dict, min_size):
     cloud_dict : dict
         Dictionary where keys are "bucket_name" and "path".
     min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+   anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
 
     Returns
     -------
-    valid_labels : dict
-        Dictionary where each item is an swc_id and an array of the xyz
-        coordinates read from cooresponding swc file.
+    dict
+        Dictionary that maps an swc_id to the the xyz coordinates read from
+        that swc file.
 
     """
     # Initializations
@@ -107,46 +153,51 @@ def parse_cloud_paths(cloud_dict, min_size):
     print("Downloading predicted swc files from cloud...")
     print("# zip files:", len(zip_paths))
 
-    # Assign processes
+    # Main
     cnt = 1
     chunk_size = len(zip_paths) * 0.02
     t0, t1 = utils.init_timers()
     with ProcessPoolExecutor() as executor:
+        # Assign processes
         processes = []
         for i, path in enumerate(zip_paths):
             zip_content = bucket.blob(path).download_as_bytes()
-            processes.append(executor.submit(download, zip_content, min_size))
+            processes.append(
+                executor.submit(download, zip_content, min_size, anisotropy)
+            )
             if i >= cnt * chunk_size:
                 cnt, t1 = utils.report_progress(
                     i, len(zip_paths), chunk_size, cnt, t0, t1
                 )
 
-    # Store results
-    valid_labels = set()
-    for i, process in enumerate(as_completed(processes)):
-        valid_labels = valid_labels.union(process.result())
-    print("\n# Valid Labels:", len(valid_labels))
-    return valid_labels
+        # Store results
+        swc_coords = dict()
+        for i, process in enumerate(as_completed(processes)):
+            swc_coords.update(process.result())
+    return swc_coords
 
 
-def download(zip_content, min_size):
+def download(zip_content, min_size, anisotropy):
     """
-    Downloads the contents from each swc file contained in the zip file at
+    Downloads the content from each swc file contained in the zip file at
     "zip_path".
 
     Parameters
     ----------
     zip_content : ...
-        Contents of a zip file.
+        content of a zip file.
     min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+   anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
 
     Returns
     -------
-    valid_labels : dict
-        Dictionary where each item is an swc_id and an array of the xyz
-        coordinates read from cooresponding swc file.
+    dict
+        Dictionary that maps an swc_id to the the xyz coordinates read from
+        that swc file.
 
     """
     with ZipFile(BytesIO(zip_content)) as zip_file:
@@ -154,41 +205,48 @@ def download(zip_content, min_size):
             # Assign threads
             paths = utils.list_files_in_gcs_zip(zip_content)
             threads = [
-                executor.submit(parse_gcs_zip, zip_file, path, min_size)
+                executor.submit(
+                    parse_gcs_zip, zip_file, path, min_size, anisotropy
+                )
                 for path in paths
             ]
 
-    # Process results
-    valid_labels = set()
-    for thread in as_completed(threads):
-        label = thread.result()
-        if label > 0:
-            valid_labels.add(label)
-    return valid_labels
+            # Process results
+            swc_coords = dict()
+            for thread in as_completed(threads):
+                swc_coords.update(thread.result())
+    return swc_coords
 
 
-def parse_gcs_zip(zip_file, path, min_size):
+def parse_gcs_zip(zip_file, path, min_size, anisotropy):
     """
     Reads swc file stored at "path" which points to a file in a GCS bucket.
 
     Parameters
     ----------
     zip_file : ZipFile
-        Zip file containing swc file to be read.
+        Zip containing swc file to be read.
     path : str
         Path to swc file to be read.
     min_size : int
-        Threshold on the number of nodes contained in an swc file. Only swc
-        files with more than "min_size" nodes are stored in "valid_labels".
+        Threshold on the number of nodes stored in an swc file. Only swc files
+        with more than "min_size" nodes are stored in "swc_coords".
+    anisotropy : list[float], optional
+       Image to world scaling factors applied to xyz coordinates to account
+        for anisotropy of the microscope.
 
     Returns
     -------
-    int
-        ...
+    dict
+        Dictionary that maps an swc_id to the the xyz coordinates read from
+        that swc file.
 
     """
-    contents = read_from_cloud(zip_file, path)
-    return int(utils.get_id(path)) if len(contents) >= min_size else -1
+    content = read_from_cloud(zip_file, path)
+    if len(content) > min_size:
+        return {int(utils.get_id(path)): get_coords(content, anisotropy)}
+    else:
+        dict()
 
 
 def read_from_local(path):
@@ -203,7 +261,7 @@ def read_from_local(path):
     Returns
     -------
     list
-        List such that each entry is a line from the swc file.
+        Entries in a swc file.
 
     """
     with open(path, "r") as file:
@@ -214,21 +272,30 @@ def read_from_cloud(zip_file, path):
     """
     Reads the content of an swc file from a zip file in a GCS bucket.
 
+    Parameters
+    ----------
+    zip_file : ZipFile
+        Zip containing swc file to be read.
+
+    Returns
+    -------
+
     """
     with zip_file.open(path) as f:
         return f.read().decode("utf-8").splitlines()
 
 
-def get_coords(contents, anisotropy):
+def get_coords(content, anisotropy):
     """
-    Gets the xyz coords from the swc file at "path".
+    Gets the xyz coords from the an swc file that has been read and stored as
+    "content".
 
     Parameters
     ----------
-    path : str
-        Path to swc file to be parsed.
+    content : list[str]
+        Entries in swc file where each entry is the text string from an swc.
     anisotropy : list[float]
-        Image to World scaling factors applied to xyz coordinates to account
+        Image to world scaling factors applied to xyz coordinates to account
         for anisotropy of the microscope.
 
     Returns
@@ -239,41 +306,38 @@ def get_coords(contents, anisotropy):
     """
     coords_list = []
     offset = [0, 0, 0]
-    for line in contents:
+    for line in content:
         if line.startswith("# OFFSET"):
             parts = line.split()
-            offset = read_xyz(parts[2:5])
+            offset = read_xyz(parts[2:5], anisotropy, offset)
         if not line.startswith("#"):
             parts = line.split()
-            coord = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
-            coords_list.append(coord)
+            coords_list.append(read_xyz(parts[2:5], anisotropy, offset))
     return np.array(coords_list)
 
 
-def read_xyz(xyz, anisotropy=[1.0, 1.0, 1.0], offset=[0, 0, 0]):
+def read_xyz(xyz, anisotropy, offset):
     """
-    Reads the (x,y,z) coordinates from an swc file, then reverses and scales
-    them.
+    Reads the xyz coordinates from an swc file, then transforms the
+    coordinates with respect to "anisotropy" and "offset".
 
     Parameters
     ----------
-    coord : str
-        xyz coordinate.
-    anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors applied to "xyz". The
-        default is [1.0, 1.0, 1.0].
-    offset : list[int], optional
-        Offset of (x, y, z) coordinates in swc file. The default is [0, 0, 0].
+    xyz : str
+        xyz coordinate stored in a str.
+    anisotropy : list[float]
+        Image to real-world coordinates scaling factors applied to "xyz".
+    offset : list[int]
+        Offset of xyz coordinates in swc file.
 
     Returns
     -------
-    tuple
-        The (x,y,z) coordinates of an entry from an swc file in real-world
-        coordinates.
+    numpy.ndarray
+        xyz coordinates of an entry from an swc file.
 
     """
     xyz = [float(xyz[i]) + offset[i] for i in range(3)]
-    return np.array([xyz[i] / anisotropy[i] for i in range(3)], dtype=int)
+    return np.array([xyz[i] * anisotropy[i] for i in range(3)], dtype=int)
 
 
 def save(path, xyz_1, xyz_2, color=None):
@@ -284,8 +348,10 @@ def save(path, xyz_1, xyz_2, color=None):
     ----------
     path : str
         Path on local machine that swc file will be written to.
-    entry_list : list[list]
-        List of entries that will be written to an swc file.
+    xyz_1 : ...
+        ...
+    xyz_2 : ...
+        ...
     color : str, optional
         Color of nodes. The default is None.
 
@@ -358,12 +424,12 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
     for line in read_from_local(path):
         if line.startswith("# OFFSET"):
             parts = line.split()
-            offset = read_xyz(parts[2:5])
+            offset = read_xyz(parts[2:5], anisotropy)
         if not line.startswith("#"):
             parts = line.split()
             child = int(parts[0])
             parent = int(parts[-1])
-            xyz = read_xyz(parts[2:5], anisotropy=anisotropy, offset=offset)
+            xyz = read_xyz(parts[2:5], anisotropy, offset=offset)
             graph.add_node(child, xyz=xyz)
             if parent != -1:
                 graph.add_edge(parent, child)
