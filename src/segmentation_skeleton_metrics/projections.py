@@ -7,23 +7,31 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import multiprocessing
+import os
 from zipfile import ZipFile
-
-from scipy.spatial import distance
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import swc_utils, utils
 
 
 # -- projection utils --
-def compute_run_length(zip_path, key, swc_ids):
+def compute_run_length(zip_path, key, swc_ids, output_dir=None):
+    # Initializations
+    anisotropy = [1.0 / 0.748, 1.0 / 0.748, 1.0]  # hard coded
     run_length = 0
+    if output_dir:
+        swc_dir = os.path.join(output_dir, key)
+        utils.mkdir(swc_dir, delete=True)
+
+    # Main
     with ZipFile(zip_path, "r") as zip_file:
         for swc_id in swc_ids:
             content = utils.read_zip(zip_file, f"{swc_id}.swc").splitlines()
-            graph = swc_utils.to_graph(content)
+            graph = swc_utils.to_graph(content, anisotropy=anisotropy)
             run_length += gutils.compute_run_length(graph)
-    return {key: run_length}
+            if output_dir:
+                pass  # save graph as swc
+    return key, run_length
 
 
 def compute_projections(kdtrees, zip_path):
@@ -76,28 +84,7 @@ def query_kdtree(kdtree, process_id, coords, queue):
         for xyz in arr:
             d, _ = kdtree.query(xyz, k=1)
             cnt += 1 if d < 3 else 0
-            if cnt > 30:
+            if cnt > 25:
                 hits.add(key)
                 break
     queue.put({process_id: hits})
-
-
-# -- miscellaneous --
-def dist(v_1, v_2):
-    """
-    Computes distance between "v_1" and "v_2".
-
-    Parameters
-    ----------
-    v_1 : np.ndarray
-        Vector.
-    v_2 : np.ndarray
-        Vector.
-
-    Returns
-    -------
-    float
-        Distance between "v_1" and "v_2".
-
-    """
-    return distance.euclidean(v_1, v_2)

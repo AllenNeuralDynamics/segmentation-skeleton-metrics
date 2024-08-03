@@ -8,6 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
+import shutil
 from io import BytesIO
 from time import time
 from zipfile import ZipFile
@@ -19,6 +20,47 @@ SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # -- os utils ---
+def mkdir(path, delete=False):
+    """
+    Creates a directory at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path of directory to be created.
+    delete : bool, optional
+        Indication of whether to delete directory at path if it already
+        exists. The default is False.
+
+    Returns
+    -------
+    None
+
+    """
+    if delete:
+        rmdir(path)
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+
+def rmdir(path):
+    """
+    Removes directory and all subdirectories at "path".
+
+    Parameters
+    ----------
+    path : str
+        Path to directory and subdirectories to be deleted if they exist.
+
+    Returns
+    -------
+    None
+
+    """
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
+
 def list_dir(directory, extension=None):
     """
     Lists all filenames in "directory". If "extension" is provided, then only

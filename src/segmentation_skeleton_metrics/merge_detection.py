@@ -9,8 +9,7 @@ Created on Wed April 8 20:30:00 2024
 """
 
 import numpy as np
-
-from segmentation_skeleton_metrics import geometry
+from scipy.spatial.distance import euclidean as get_dist
 
 
 def find_sites(graphs, get_labels):
@@ -81,8 +80,8 @@ def localize(graph_1, graph_2, merged_1, merged_2, dist_threshold, merge_id):
         for j in merged_2:
             xyz_i = graph_1.nodes[i]["xyz"]
             xyz_j = graph_2.nodes[j]["xyz"]
-            if geometry.dist(xyz_i, xyz_j) < min_dist:
-                min_dist = geometry.dist(xyz_i, xyz_j)
+            if get_dist(xyz_i, xyz_j) < min_dist:
+                min_dist = get_dist(xyz_i, xyz_j)
                 xyz_pair = [xyz_i, xyz_j]
                 if min_dist < dist_threshold:
                     print("Merge Detected:", merge_id, xyz_pair, min_dist)

@@ -25,7 +25,7 @@ from segmentation_skeleton_metrics import (
     swc_utils,
     utils,
 )
-from segmentation_skeleton_metrics.geometry import (
+from segmentation_skeleton_metrics.projections import (
     compute_projections,
     compute_run_length,
 )
@@ -393,6 +393,22 @@ class SkeletonMetric:
 
     # -- Projected Run Lengths --
     def compute_projected_run_lengths(self):
+        """
+        Computes the projected run length for each graph in "self.graphs".
+        First, we detect fragments from "self.pred_swc_paths" that are
+        sufficiently close (as determined by projection distances) to the
+        given graph. The projected run length is the sum of the path lengths
+        of fragments that were detected.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         # Initializations
         kdtrees = self.init_kdtrees()
         key_to_swc_ids = compute_projections(kdtrees, self.pred_swc_paths)
@@ -403,17 +419,23 @@ class SkeletonMetric:
             for key, swc_ids in key_to_swc_ids.items():
                 processes.append(
                     executor.submit(
-                        compute_run_length, self.pred_swc_paths, key, swc_ids
+                        compute_run_length,
+                        self.pred_swc_paths,
+                        key,
+                        swc_ids,
+                        self.save_projections,
                     )
                 )
 
+            self.run_length_ratio = dict()
             self.projected_run_length = dict()
+            self.target_run_length = dict()
             for process in as_completed(processes):
-                self.projected_run_length.update(process.result())
-
-        # Finish
-        if self.save_projections:
-            pass
+                key, projected_rl = process.result()
+                target_rl = self.get_run_length(key)
+                self.projected_run_length[key] = projected_rl
+                self.target_run_length[key] = target_rl
+                self.run_length_ratio[key] = projected_rl / target_rl
 
     def init_kdtrees(self):
         """
@@ -483,16 +505,16 @@ class SkeletonMetric:
         None
 
         """
-        self.split_cnts = dict()
+        self.split_cnt = dict()
         self.omit_cnts = dict()
-        self.omit_percents = dict()
+        self.omit_percent = dict()
         for key in self.graphs.keys():
             n_pred_edges = self.graphs[key].number_of_edges()
             n_target_edges = self.graphs[key].graph["initial_number_of_edges"]
 
-            self.split_cnts[key] = gutils.count_splits(self.graphs[key])
+            self.split_cnt[key] = gutils.count_splits(self.graphs[key])
             self.omit_cnts[key] = n_target_edges - n_pred_edges
-            self.omit_percents[key] = 1 - n_pred_edges / n_target_edges
+            self.omit_percent[key] = 1 - n_pred_edges / n_target_edges
 
     # -- Merge Detection --
     def detect_merges(self):
@@ -510,9 +532,9 @@ class SkeletonMetric:
 
         """
         # Initilizations
-        self.merge_cnts = self.init_counter()
+        self.merge_cnt = self.init_counter()
         self.merged_cnts = self.init_counter()
-        self.merged_percents = self.init_counter()
+        self.merged_percent = self.init_counter()
 
         # Main
         detected_merges = []
@@ -652,7 +674,7 @@ class SkeletonMetric:
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
         self.graphs[key] = graph
         self.merged_cnts[key] += merged_cnt
-        self.merge_cnts[key] += 1
+        self.merge_cnt[key] += 1
 
     def quantify_merges(self):
         """
@@ -667,11 +689,11 @@ class SkeletonMetric:
         None
 
         """
-        self.merged_percents = dict()
+        self.merged_percent = dict()
         for key in self.graphs.keys():
             n_edges = self.graphs[key].number_of_edges()
             percent = self.merged_cnts[key] / n_edges
-            self.merged_percents[key] = percent
+            self.merged_percent[key] = percent
 
     # -- Compute Metrics --
     def compile_results(self):
@@ -728,11 +750,14 @@ class SkeletonMetric:
         keys = list(self.graphs.keys())
         keys.sort()
         stats = {
-            "# splits": generate_result(keys, self.split_cnts),
-            "# merges": generate_result(keys, self.merge_cnts),
-            "% omit": generate_result(keys, self.omit_percents),
-            "% merged": generate_result(keys, self.merged_percents),
+            "# splits": generate_result(keys, self.split_cnt),
+            "# merges": generate_result(keys, self.merge_cnt),
+            "% omit": generate_result(keys, self.omit_percent),
+            "% merged": generate_result(keys, self.merged_percent),
             "edge accuracy": generate_result(keys, self.edge_accuracy),
+            "projected_rl": generate_result(keys, self.projected_run_length),
+            "target_rl": generate_result(keys, self.target_run_length),
+            "rl_ratio": generate_result(keys, self.run_length_ratio),
             "erl": generate_result(keys, self.erl),
             "normalized erl": generate_result(keys, self.normalized_erl),
         }
@@ -753,11 +778,14 @@ class SkeletonMetric:
 
         """
         avg_stats = {
-            "# splits": self.avg_result(self.split_cnts),
-            "# merges": self.avg_result(self.merge_cnts) / 2,
-            "% omit": self.avg_result(self.omit_percents),
-            "% merged": self.avg_result(self.merged_percents),
+            "# splits": self.avg_result(self.split_cnt),
+            "# merges": self.avg_result(self.merge_cnt) / 2,
+            "% omit": self.avg_result(self.omit_percent),
+            "% merged": self.avg_result(self.merged_percent),
             "edge accuracy": self.avg_result(self.edge_accuracy),
+            "projected_rl": self.avg_result(self.projected_run_length),
+            "target_rl": self.avg_result(self.target_run_length),
+            "rl_ratio": self.avg_result(self.run_length_ratio),
             "erl": self.avg_result(self.erl),
             "normalized erl": self.avg_result(self.normalized_erl),
         }
@@ -783,7 +811,7 @@ class SkeletonMetric:
         result = []
         wgts = []
         for key, wgt in self.wgts.items():
-            if self.omit_percents[key] < 1:
+            if self.omit_percent[key] < 1:
                 result.append(stats[key])
                 wgts.append(wgt)
         return np.average(result, weights=wgts)
@@ -803,8 +831,8 @@ class SkeletonMetric:
         """
         self.edge_accuracy = dict()
         for key in self.graphs.keys():
-            omit_percent = self.omit_percents[key]
-            merged_percent = self.merged_percents[key]
+            omit_percent = self.omit_percent[key]
+            merged_percent = self.merged_percent[key]
             self.edge_accuracy[key] = 1 - omit_percent - merged_percent
 
     def compute_erl(self):
@@ -825,7 +853,7 @@ class SkeletonMetric:
         self.wgts = dict()
         total_run_length = 0
         for key in self.graphs.keys():
-            run_length = self.graphs[key].graph["initial_run_length"]
+            run_length = self.get_run_length(key)
             run_lengths = gutils.compute_run_lengths(self.graphs[key])
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
@@ -837,6 +865,23 @@ class SkeletonMetric:
 
         for key in self.graphs.keys():
             self.wgts[key] = self.wgts[key] / total_run_length
+
+    def get_run_length(self, key):
+        """
+        Gets the path length of "self.graphs[key]".
+
+        Parameters
+        ----------
+        key : str
+            Identifier of graph of interest.
+
+        Returns
+        -------
+        float
+            Run length of "self.graphs[key]".
+
+        """
+        return self.graphs[key].graph["initial_run_length"]
 
     def list_metrics(self):
         """
