@@ -13,9 +13,7 @@ from time import time
 from zipfile import ZipFile
 
 import networkx as nx
-import numpy as np
 import tensorstore as ts
-from scipy.spatial import distance
 
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
@@ -128,13 +126,22 @@ def open_tensorstore(path, driver):
     return arr
 
 
-def read_from_gcs_zip(zip_file, path):
+def read_zip(zip_file, path):
     """
-    Reads the content of an swc file from a zip file in a GCS bucket.
+    Reads the content of an swc file from a zip file.
 
+    Parameters
+    ----------
+    zip_file : ZipFile
+        Zip containing text file to be read.
+
+    Returns
+    -------
+    str
+        Contents of a txt file.
     """
     with zip_file.open(path) as f:
-        return f.read().decode("utf-8").splitlines()
+        return f.read().decode("utf-8")
 
 
 def read_txt(path):
@@ -180,7 +187,7 @@ def list_gcs_filenames(bucket, cloud_path, extension):
     return [blob.name for blob in blobs if blob.name.endswith(extension)]
 
 
-def list_files_in_gcs_zip(zip_content):
+def list_files_in_zip(zip_content):
     """
     Lists all filenames in a zip.
 
@@ -199,6 +206,24 @@ def list_files_in_gcs_zip(zip_content):
 
 
 # -- dict utils --
+def merge_dict_list(list_of_dicts):
+    """
+    Merges a list of dictionaries into a single dictionary.
+
+    Parameters
+    ----------
+    list_of_dicts
+        List of dictionaries to be merged.
+
+    Returns
+    -------
+    dict
+        Dictionary containing dictionaries from "list_of_dicts" as items.
+
+    """
+    return {k: v for d in list_of_dicts for k, v in d.items()}
+
+
 def check_edge(edge_list, edge):
     """
     Checks if "edge" is in "edge_list".
@@ -383,65 +408,3 @@ def progress_bar(current, total, bar_length=50):
         f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
     )
     print(f"\r{bar}", end="", flush=True)
-
-
-# -- Miscellaneous --
-def dist(v_1, v_2):
-    """
-    Computes distance between "v_1" and "v_2".
-
-    Parameters
-    ----------
-    v_1 : np.ndarray
-        Vector.
-    v_2 : np.ndarray
-        Vector.
-
-    Returns
-    -------
-    float
-        Distance between "v_1" and "v_2".
-
-    """
-    return distance.euclidean(v_1, v_2)
-
-
-def get_midpoint(xyz_1, xyz_2):
-    """
-    Computes the midpoint between "xyz_1" and "xyz_2".
-
-    Parameters
-    ----------
-    xyz_1 : numpy.ndarray
-        xyz coordinate.
-    xyz_2 : numpy.ndarray
-        xyz coordinate.
-
-    Returns
-    -------
-    numpy.ndarray
-        Midpoint between "xyz_1" and "xyz_2".
-
-    """
-    return np.array([np.mean([xyz_1[i], xyz_2[i]]) for i in range(3)])
-
-
-def to_world(xyz, anisotropy):
-    """
-    Converts "xyz" from image coordinates to real-world coordinates.
-
-    Parameters
-    ----------
-    xyz : tuple or list
-        Coordinates to be transformed.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files.
-
-    Returns
-    -------
-    list[float]
-        Transformed coordinates.
-
-    """
-    return [xyz[i] * anisotropy[i] for i in range(3)]

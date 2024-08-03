@@ -7,7 +7,6 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import multiprocessing
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -26,7 +25,10 @@ from segmentation_skeleton_metrics import (
     swc_utils,
     utils,
 )
-from segmentation_skeleton_metrics.swc_utils import save, to_graph
+from segmentation_skeleton_metrics.geometry import (
+    compute_projections,
+    compute_run_length,
+)
 
 MERGE_DIST_THRESHOLD = 20
 
@@ -107,6 +109,7 @@ class SkeletonMetric:
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
         self.pred_swc_paths = pred_swc_paths
+        self.save_projections = save_projections
         self.save_sites = save_sites
 
         # Labels
@@ -163,7 +166,10 @@ class SkeletonMetric:
         self.graphs = dict()
         for path in paths:
             key = utils.get_id(path)
-            self.graphs[key] = to_graph(path, anisotropy=anisotropy)
+            content = utils.read_txt(path)
+            self.graphs[key] = swc_utils.to_graph(
+                content, anisotropy=anisotropy
+            )
         self.init_key_label_nodes()
 
     def init_key_label_nodes(self):
@@ -389,29 +395,25 @@ class SkeletonMetric:
     def compute_projected_run_lengths(self):
         # Initializations
         kdtrees = self.init_kdtrees()
-        coords = swc_utils.parse_local_zip(self.pred_swc_paths, 0, [1, 1, 1])
-        manager = multiprocessing.Manager()
-        shared_coords = manager.dict(coords)
-        del coords
+        key_to_swc_ids = compute_projections(kdtrees, self.pred_swc_paths)
 
         # Main
-        processes = []
-        queue = multiprocessing.Queue()
-        for key, kdtree in kdtrees.items():
-            process = multiprocessing.Process(
-                target=query_kdtree, args=(kdtree, key, shared_coords, queue)
-            )
-            processes.append(process)
-            process.start()
+        with ProcessPoolExecutor() as executor:
+            processes = list()
+            for key, swc_ids in key_to_swc_ids.items():
+                processes.append(
+                    executor.submit(
+                        compute_run_length, self.pred_swc_paths, key, swc_ids
+                    )
+                )
 
-        for process in processes:
-            process.join()
+            self.projected_run_length = dict()
+            for process in as_completed(processes):
+                self.projected_run_length.update(process.result())
 
-        results = [queue.get() for _ in kdtrees]
-        print(results)
         # Finish
-        # --> save projections if applicable
-        # --> compute run lengths
+        if self.save_projections:
+            pass
 
     def init_kdtrees(self):
         """
@@ -558,7 +560,7 @@ class SkeletonMetric:
         """
         n_merged_nodes_1 = len(self.key_to_label_to_nodes[key_1][label])
         n_merged_nodes_2 = len(self.key_to_label_to_nodes[key_2][label])
-        is_valid = n_merged_nodes_1 < 20 and n_merged_nodes_2 < 20
+        is_valid = n_merged_nodes_1 < 30 and n_merged_nodes_2 < 30
         return True if is_valid else False
 
     def localize_merges(self, detected_merges):
@@ -626,7 +628,7 @@ class SkeletonMetric:
         xyz_2 = utils.to_world(xyz_2, self.anisotropy)
         color = "1.0 0.0 0.0"
         path = f"{self.output_dir}/merge-{self.saved_site_cnt}.swc"
-        save(path, xyz_1, xyz_2, color=color)
+        swc_utils.save(path, xyz_1, xyz_2, color=color)
 
     def process_merge(self, key, label):
         """
@@ -945,16 +947,3 @@ def generate_result(keys, stats):
 
     """
     return [stats[key] for key in keys]
-
-
-def query_kdtree(kdtree, process_id, coords, queue):
-    hits = set()
-    for key, arr in coords.items():
-        cnt = 0
-        for xyz in arr:
-            d, _ = kdtree.query(xyz, k=1)
-            cnt += 1 if d < 3 else 0
-            if cnt > 30:
-                hits.add(key)
-                break
-    queue.put({process_id: hits})

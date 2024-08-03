@@ -81,7 +81,7 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
     """
     swc_coords = dict()
     for path in swc_paths:
-        content = read_from_local(path)
+        content = utils.read_txt(path)
         if len(content) > min_size:
             key = int(utils.get_id(path))
             swc_coords[key] = get_coords(content, anisotropy)
@@ -117,11 +117,10 @@ def parse_local_zip(zip_path, min_size, anisotropy):
     with ZipFile(zip_path, "r") as zip_file:
         files = zip_file.namelist()
         for swc_file in [f for f in files if f.endswith(".swc")]:
-            with zip_file.open(swc_file) as file:
-                content = file.read().decode("utf-8").splitlines()
-                if len(content) > min_size:
-                    key = int(utils.get_id(swc_file))
-                    swc_coords[key] = get_coords(content, anisotropy)
+            content = utils.read_zip(zip_file, swc_file).splitlines()
+            if len(content) > min_size:
+                key = int(utils.get_id(swc_file))
+                swc_coords[key] = get_coords(content, anisotropy)
     return swc_coords
 
 
@@ -203,12 +202,11 @@ def download(zip_content, min_size, anisotropy):
     with ZipFile(BytesIO(zip_content)) as zip_file:
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            paths = utils.list_files_in_gcs_zip(zip_content)
             threads = [
                 executor.submit(
-                    parse_gcs_zip, zip_file, path, min_size, anisotropy
+                    parse_gcs_zip, zip_file, f, min_size, anisotropy
                 )
-                for path in paths
+                for f in utils.list_files_in_zip(zip_content)
             ]
 
             # Process results
@@ -242,47 +240,11 @@ def parse_gcs_zip(zip_file, path, min_size, anisotropy):
         that swc file.
 
     """
-    content = read_from_cloud(zip_file, path)
+    content = utils.read_zip(zip_file, path).splitlines()
     if len(content) > min_size:
         return {int(utils.get_id(path)): get_coords(content, anisotropy)}
     else:
-        dict()
-
-
-def read_from_local(path):
-    """
-    Reads swc file stored at "path" on local machine.
-
-    Parameters
-    ----------
-    path : str
-        Path to swc file to be read.
-
-    Returns
-    -------
-    list
-        Entries in a swc file.
-
-    """
-    with open(path, "r") as file:
-        return file.readlines()
-
-
-def read_from_cloud(zip_file, path):
-    """
-    Reads the content of an swc file from a zip file in a GCS bucket.
-
-    Parameters
-    ----------
-    zip_file : ZipFile
-        Zip containing swc file to be read.
-
-    Returns
-    -------
-
-    """
-    with zip_file.open(path) as f:
-        return f.read().decode("utf-8").splitlines()
+        return dict()
 
 
 def get_coords(content, anisotropy):
@@ -400,7 +362,7 @@ def make_entry(node_id, parent_id, xyz):
     return entry
 
 
-def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
+def to_graph(content, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads an swc file and builds an undirected graph from it.
 
@@ -419,9 +381,9 @@ def to_graph(path, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     # Build Gaph
-    graph = nx.Graph(swc_id=utils.get_id(path))
+    graph = nx.Graph()
     offset = [0, 0, 0]
-    for line in read_from_local(path):
+    for line in content:
         if line.startswith("# OFFSET"):
             parts = line.split()
             offset = read_xyz(parts[2:5], anisotropy)

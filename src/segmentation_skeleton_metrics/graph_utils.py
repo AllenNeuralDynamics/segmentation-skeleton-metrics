@@ -10,7 +10,8 @@ from random import sample
 
 import networkx as nx
 import numpy as np
-from scipy.spatial.distance import euclidean as dist
+
+from segmentation_skeleton_metrics import geometry
 
 
 # --- Update graph structure ---
@@ -211,7 +212,7 @@ def compute_run_length(graph):
     for i, j in nx.dfs_edges(graph):
         xyz_1 = graph.nodes[i]["xyz"]
         xyz_2 = graph.nodes[j]["xyz"]
-        path_length += dist(xyz_1, xyz_2)
+        path_length += geometry.dist(xyz_1, xyz_2)
     return path_length
 
 
