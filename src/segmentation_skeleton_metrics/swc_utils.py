@@ -85,7 +85,7 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
         content = utils.read_txt(path)
         if len(content) > min_size:
             key = int(utils.get_id(path))
-            graphs[key] = to_graph(content, anisotropy=anisotropy)
+            graphs[key] = get_coords(content, anisotropy)
     return graphs
 
 
@@ -114,15 +114,16 @@ def parse_local_zip(zip_path, min_size, anisotropy=[1.0, 1.0, 1.0]):
         that swc file.
 
     """
-    swc_coords = dict()
+    graphs = dict()
+    anisotropy = [1.0 / 0.748, 1.0 / 0.748, 1.0]  # hard coded
     with ZipFile(zip_path, "r") as zip_file:
         files = zip_file.namelist()
         for swc_file in [f for f in files if f.endswith(".swc")]:
             content = utils.read_zip(zip_file, swc_file).splitlines()
             if len(content) > min_size:
                 key = int(utils.get_id(swc_file))
-                swc_coords[key] = get_coords(content, anisotropy)
-    return swc_coords
+                graphs[key] = to_graph(content, anisotropy=anisotropy)
+    return graphs
 
 
 def parse_cloud_paths(cloud_dict, min_size, anisotropy):

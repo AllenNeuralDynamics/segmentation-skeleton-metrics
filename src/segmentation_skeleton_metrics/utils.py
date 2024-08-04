@@ -369,7 +369,7 @@ def delete_keys(my_dict, keys):
 # -- build label graph --
 def init_label_map(connections_path, labels):
     label_to_class = {0: 0}
-    class_to_labels = {0: 0}
+    class_to_labels = {0: [0]}
     labels_graph = build_labels_graph(connections_path, labels)
     for i, component in enumerate(nx.connected_components(labels_graph)):
         i += 1

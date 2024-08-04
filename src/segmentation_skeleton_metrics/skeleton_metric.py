@@ -25,10 +25,6 @@ from segmentation_skeleton_metrics import (
     swc_utils,
     utils,
 )
-from segmentation_skeleton_metrics.projections import (
-    compute_projections,
-    compute_run_length,
-)
 
 MERGE_DIST_THRESHOLD = 20
 
@@ -145,6 +141,7 @@ class SkeletonMetric:
             )
         else:
             self.label_map = None
+            self.inv_label_map = None
 
     def init_graphs(self, paths, anisotropy):
         """
@@ -432,7 +429,7 @@ class SkeletonMetric:
         self.projected_run_length = dict()
         self.target_run_length = dict()
         pred_graphs = swc_utils.parse_local_zip(self.pred_swc_paths, 0)
-        print("\nPredicted SWCs read!")
+        print("\nPredicted SWCs read!\n")
         for key, projection in projections.items():
             projected_rl = compute_run_length(
                 projection, pred_graphs, self.inv_label_map
@@ -441,31 +438,6 @@ class SkeletonMetric:
             self.projected_run_length[key] = projected_rl
             self.target_run_length[key] = target_rl
             self.run_length_ratio[key] = projected_rl / target_rl
-
-    def init_kdtrees(self):
-        """
-        Builds kd-trees from xyz coordiantes stored as a node-level attribute
-        in each graph from "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict[KDTree]
-            KD-Trees built from xyz coordinates stored in each graph from
-            "self.graphs".
-
-        """
-        kdtrees = dict()
-        for key, graph in self.graphs.items():
-            coords = [graph.nodes[i]["xyz"] for i in graph.nodes]
-            coords = np.array(coords, dtype=float)
-            coords[:, 0] *= 0.748  # hard coded
-            coords[:, 1] *= 0.748  # hard coded
-            kdtrees[key] = KDTree(coords)
-        return kdtrees
 
     # -- Split Detection --
     def detect_splits(self):
@@ -977,6 +949,44 @@ class SkeletonMetric:
 
 
 # -- utils --
+def compute_projections(graph, key):
+    # Main
+    projections = dict()
+    for i in graph.nodes:
+        label = graph.nodes[i]["label"]
+        if label in projections.keys():
+            projections[label] += 1
+        else:
+            projections[label] = 0
+
+    # Finish
+    rm_labels = list()
+    for label, cnt in projections.items():
+        if cnt < 20:
+            rm_labels.append(label)
+    projections = utils.delete_keys(projections, rm_labels)
+    return {key: list(projections.keys())}
+
+
+def compute_run_length(projections, graphs, inv_label_map):
+    run_length = 0
+    for key in projections:
+        if inv_label_map:
+            run_length += rl_with_label_map(graphs, inv_label_map, key)
+        elif key in graphs.keys():
+            run_length += gutils.compute_run_length(graphs[key])
+    return run_length
+
+
+def rl_with_label_map(graphs, inv_label_map, key):
+    run_length = 0
+    if key in inv_label_map.keys():
+        for swc_id in inv_label_map[key]:
+            if swc_id in graphs.keys():
+                run_length += gutils.compute_run_length(graphs[swc_id])
+    return run_length
+
+
 def generate_result(keys, stats):
     """
     Reorders items in "stats" with respect to the order defined by "keys".
