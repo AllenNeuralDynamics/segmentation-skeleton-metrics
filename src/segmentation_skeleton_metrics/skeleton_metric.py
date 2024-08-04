@@ -140,7 +140,9 @@ class SkeletonMetric:
         """
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
-            self.label_map = utils.init_label_map(path, self.valid_labels)
+            self.label_map, self.inv_label_map = utils.init_label_map(
+                path, self.valid_labels
+            )
         else:
             self.label_map = None
 
@@ -189,9 +191,12 @@ class SkeletonMetric:
         """
         print("\nLabeling Graphs...")
         t0 = time()
+        cnt = 0
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key, graph in self.graphs.items():
+            utils.progress_bar(cnt + 1, len(self.graphs))
             self.key_to_label_to_nodes[key] = self.set_labels(graph)
+            cnt += 1
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
@@ -409,33 +414,33 @@ class SkeletonMetric:
         None
 
         """
-        # Initializations
-        kdtrees = self.init_kdtrees()
-        key_to_swc_ids = compute_projections(kdtrees, self.pred_swc_paths)
-
-        # Main
+        # Compute projections
         with ProcessPoolExecutor() as executor:
             processes = list()
-            for key, swc_ids in key_to_swc_ids.items():
+            for key, graph in self.graphs.items():
                 processes.append(
-                    executor.submit(
-                        compute_run_length,
-                        self.pred_swc_paths,
-                        key,
-                        swc_ids,
-                        self.save_projections,
-                    )
+                    executor.submit(compute_projections, graph, key)
                 )
 
-            self.run_length_ratio = dict()
-            self.projected_run_length = dict()
-            self.target_run_length = dict()
-            for process in as_completed(processes):
-                key, projected_rl = process.result()
-                target_rl = self.get_run_length(key)
-                self.projected_run_length[key] = projected_rl
-                self.target_run_length[key] = target_rl
-                self.run_length_ratio[key] = projected_rl / target_rl
+            projections = dict()
+            for cnt, process in enumerate(as_completed(processes)):
+                utils.progress_bar(cnt + 1, len(self.graphs))
+                projections.update(process.result())
+
+        # Compute run lengths
+        self.run_length_ratio = dict()
+        self.projected_run_length = dict()
+        self.target_run_length = dict()
+        pred_graphs = swc_utils.parse_local_zip(self.pred_swc_paths, 0)
+        print("\nPredicted SWCs read!")
+        for key, projection in projections.items():
+            projected_rl = compute_run_length(
+                projection, pred_graphs, self.inv_label_map
+            )
+            target_rl = self.get_run_length(key)
+            self.projected_run_length[key] = projected_rl
+            self.target_run_length[key] = target_rl
+            self.run_length_ratio[key] = projected_rl / target_rl
 
     def init_kdtrees(self):
         """

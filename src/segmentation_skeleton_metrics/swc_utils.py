@@ -58,6 +58,7 @@ def init_valid_labels(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
 def parse_local_paths(swc_paths, min_size, anisotropy):
     """
     Reads swc files from local machine and extracts the xyz coordinates.
+    --> hard coded
 
     Paramters
     ---------
@@ -79,16 +80,16 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
         that swc file.
 
     """
-    swc_coords = dict()
+    graphs = dict()
     for path in swc_paths:
         content = utils.read_txt(path)
         if len(content) > min_size:
             key = int(utils.get_id(path))
-            swc_coords[key] = get_coords(content, anisotropy)
-    return swc_coords
+            graphs[key] = to_graph(content, anisotropy=anisotropy)
+    return graphs
 
 
-def parse_local_zip(zip_path, min_size, anisotropy):
+def parse_local_zip(zip_path, min_size, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads swc files from a zip stored on the local machine and extracts the
     xyz coordinates.

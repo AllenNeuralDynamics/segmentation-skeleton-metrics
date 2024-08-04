@@ -344,15 +344,40 @@ def find_best(my_dict, keys):
     return best_key
 
 
+def delete_keys(my_dict, keys):
+    """
+    Deletes a set of keys from a dictionary.
+
+    Parameters
+    ----------
+    my_dict : dict
+        Dictionary to be updated.
+    keys : container
+        Keys to be deleted
+
+    Returns
+    -------
+    dict
+        Updated dictionary.
+
+    """
+    for key in keys:
+        del my_dict[key]
+    return my_dict
+
+
 # -- build label graph --
 def init_label_map(connections_path, labels):
     label_to_class = {0: 0}
+    class_to_labels = {0: 0}
     labels_graph = build_labels_graph(connections_path, labels)
     for i, component in enumerate(nx.connected_components(labels_graph)):
         i += 1
+        class_to_labels[i] = set()
         for label in component:
             label_to_class[label] = i
-    return label_to_class
+            class_to_labels[i].add(label)
+    return label_to_class, class_to_labels
 
 
 def build_labels_graph(connections_path, labels):

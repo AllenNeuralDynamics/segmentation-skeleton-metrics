@@ -15,7 +15,44 @@ from segmentation_skeleton_metrics import swc_utils, utils
 
 
 # -- projection utils --
-def compute_run_length(zip_path, key, swc_ids, output_dir=None):
+def compute_run_length(projections, graphs, inv_label_map):
+    run_length = 0
+    for key in projections.keys():
+        if inv_label_map:
+            run_length += rl_with_label_map(graphs, inv_label_map, key)
+        elif key in graphs.keys():
+            run_length += gutils.compute_run_length(graphs[key])
+    return run_length
+
+
+def rl_with_label_map(graphs, inv_label_map, key):
+    run_length = 0
+    if key in inv_label_map.keys():
+        for swc_id in inv_label_map[key]:
+            if swc_id in graphs.keys():
+                run_length += gutils.compute_run_length(graphs[swc_id])
+    return run_length
+
+
+def compute_projections(graph, key):
+    # Main
+    projections = dict()
+    for i in graph.nodes:
+        label = graph.nodes[i]["label"]
+        if label in projections.keys():
+            projections[label] += 1
+        else:
+            projections[label] = 0
+
+    # Finish
+    keys = list()
+    for key, cnt in projections.items():
+        if cnt < 30:
+            keys.append(key)
+    return {key: utils.delete_keys(projections, keys)}
+
+
+def compute_run_length_old(zip_path, key, swc_ids, output_dir=None):
     # Initializations
     anisotropy = [1.0 / 0.748, 1.0 / 0.748, 1.0]  # hard coded
     run_length = 0
@@ -34,7 +71,7 @@ def compute_run_length(zip_path, key, swc_ids, output_dir=None):
     return key, run_length
 
 
-def compute_projections(kdtrees, zip_path):
+def compute_projections_old(kdtrees, zip_path):
     # Initializations
     manager = multiprocessing.Manager()
     coords = swc_utils.parse_local_zip(zip_path, 0, [1, 1, 1])
