@@ -668,7 +668,7 @@ class SkeletonMetric:
         """
         self.merged_percent = dict()
         for key in self.graphs.keys():
-            n_edges = self.graphs[key].number_of_edges()
+            n_edges = self.graphs[key]["initial_number_of_edges"]
             percent = self.merged_cnts[key] / n_edges
             self.merged_percent[key] = percent
 
