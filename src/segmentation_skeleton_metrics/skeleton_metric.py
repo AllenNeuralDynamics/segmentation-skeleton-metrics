@@ -559,7 +559,7 @@ class SkeletonMetric:
         """
         n_merged_nodes_1 = len(self.key_to_label_to_nodes[key_1][label])
         n_merged_nodes_2 = len(self.key_to_label_to_nodes[key_2][label])
-        is_valid = n_merged_nodes_1 < 30 and n_merged_nodes_2 < 30
+        is_valid = n_merged_nodes_1 > 30 and n_merged_nodes_2 > 30
         return True if is_valid else False
 
     def localize_merges(self, detected_merges):
