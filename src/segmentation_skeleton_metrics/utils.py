@@ -16,6 +16,7 @@ from zipfile import ZipFile
 import networkx as nx
 import tensorstore as ts
 
+ANISOTROPY = [0.748, 0.748, 1.0]
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
@@ -381,6 +382,9 @@ def init_label_map(connections_path, labels):
 
 
 def build_labels_graph(connections_path, labels):
+    """
+    Builds a graph where
+    """
     # Initializations
     labels_graph = nx.Graph()
     labels_graph.add_nodes_from(labels)
@@ -475,3 +479,22 @@ def progress_bar(current, total, bar_length=50):
         f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
     )
     print(f"\r{bar}", end="", flush=True)
+
+
+# -- miscellaneous --
+def to_world(voxel):
+    """
+    Converts coordinates from voxels to world.
+
+    Parameters
+    ----------
+    voxel : numpy.ndarray
+        Coordinate to be converted.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
