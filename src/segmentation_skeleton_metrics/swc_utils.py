@@ -12,7 +12,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
-from io import BytesIO
+from io import BytesIO, StringIO
 from zipfile import ZipFile
 
 import networkx as nx
@@ -22,7 +22,10 @@ from google.cloud import storage
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
 
+ANISOTROPY = [0.748, 0.748, 1.0]
 
+
+# -- read --
 def init_valid_labels(swc_paths, min_size, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads swc files and extracts the xyz coordinates.
@@ -92,7 +95,8 @@ def parse_local_paths(swc_paths, min_size, anisotropy):
 def parse_local_zip(zip_path, min_size, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads swc files from a zip stored on the local machine and extracts the
-    xyz coordinates.
+    xyz coordinates. Note this routine is hard coded for computing projected
+    run length.
 
     Paramters
     ---------
@@ -115,14 +119,15 @@ def parse_local_zip(zip_path, min_size, anisotropy=[1.0, 1.0, 1.0]):
 
     """
     graphs = dict()
-    anisotropy = [1.0 / 0.748, 1.0 / 0.748, 1.0]  # hard coded
+    anisotropy = [1.0 / val for val in ANISOTROPY]  # hard coded
     with ZipFile(zip_path, "r") as zip_file:
         files = zip_file.namelist()
-        for swc_file in [f for f in files if f.endswith(".swc")]:
-            content = utils.read_zip(zip_file, swc_file).splitlines()
+        for f in [f for f in files if f.endswith(".swc")]:
+            content = utils.read_zip(zip_file, f).splitlines()
             if len(content) > min_size:
-                key = int(utils.get_id(swc_file))
+                key = int(utils.get_id(f))
                 graphs[key] = to_graph(content, anisotropy=anisotropy)
+                graphs[key].graph["filename"] = f
     return graphs
 
 
@@ -304,6 +309,7 @@ def read_xyz(xyz, anisotropy, offset):
     return np.array([xyz[i] * anisotropy[i] for i in range(3)], dtype=int)
 
 
+# -- write --
 def save(path, xyz_1, xyz_2, color=None):
     """
     Writes an swc file.
@@ -359,11 +365,43 @@ def make_entry(node_id, parent_id, xyz):
         Entry to be written in an swc file.
 
     """
-    x, y, z = tuple(xyz)
+    x, y, z = tuple(utils.to_world(xyz))
     entry = f"{node_id} 2 {x} {y} {z} 8 {parent_id}"
     return entry
 
 
+def to_zipped_swc(zip_writer, graph, color=None):
+    with StringIO() as text_buffer:
+        # Preamble
+        n_entries = 0
+        node_to_idx = dict()
+        if color:
+            text_buffer.write("# COLOR " + color)
+        text_buffer.write("# id, type, z, y, x, r, pid")
+
+        # Write entries
+        r = 5 if color else 3
+        for i, j in nx.dfs_edges(graph):
+            # Special Case: Root
+            x, y, z = tuple(utils.to_world(graph.nodes[i]["xyz"]))
+            if n_entries == 0:
+                parent = -1
+                node_to_idx[i] = 1
+                text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} {parent}")
+                n_entries += 1
+
+            # General Case
+            node = n_entries + 1
+            parent = node_to_idx[i]
+            node_to_idx[j] = n_entries + 1
+            text_buffer.write("\n" + f"{node} 2 {x} {y} {z} {r} {parent}")
+            n_entries += 1
+
+        # Finish
+        zip_writer.writestr(graph.graph["filename"], text_buffer.getvalue())
+
+
+# -- conversions --
 def to_graph(content, anisotropy=[1.0, 1.0, 1.0]):
     """
     Reads an swc file and builds an undirected graph from it.
@@ -402,3 +440,21 @@ def to_graph(content, anisotropy=[1.0, 1.0, 1.0]):
     graph.graph["initial_number_of_edges"] = graph.number_of_edges()
     graph.graph["initial_run_length"] = gutils.compute_run_length(graph)
     return graph
+
+
+def to_voxels(xyz):
+    """
+    Converts coordinates from world to voxels.
+
+    Parameters
+    ----------
+    xyz : numpy.ndarray
+        Coordinate to be converted.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    return tuple([xyz[i] * 1.0 / ANISOTROPY[i] for i in range(3)])

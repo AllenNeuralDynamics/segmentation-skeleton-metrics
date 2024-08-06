@@ -7,16 +7,17 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
+import os
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
     as_completed,
 )
 from time import time
+from zipfile import ZipFile
 
 import numpy as np
 import tensorstore as ts
-from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import (
@@ -169,6 +170,7 @@ class SkeletonMetric:
             self.graphs[key] = swc_utils.to_graph(
                 content, anisotropy=anisotropy
             )
+            self.graphs[key].graph["filename"] = os.path.basename(path)
         self.init_key_label_nodes()
 
     def init_key_label_nodes(self):
@@ -186,7 +188,7 @@ class SkeletonMetric:
         None
 
         """
-        print("\nLabeling Graphs...")
+        print("Labeling Graphs...")
         t0 = time()
         cnt = 0
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
@@ -411,33 +413,44 @@ class SkeletonMetric:
         None
 
         """
-        # Compute projections
-        with ProcessPoolExecutor() as executor:
-            processes = list()
-            for key, graph in self.graphs.items():
-                processes.append(
-                    executor.submit(compute_projections, graph, key)
-                )
-
-            projections = dict()
-            for cnt, process in enumerate(as_completed(processes)):
-                utils.progress_bar(cnt + 1, len(self.graphs))
-                projections.update(process.result())
+        # Initializations
+        t0 = time()
+        projections = compute_projections(self.graphs)
+        pred_graphs = swc_utils.parse_local_zip(self.pred_swc_paths, 0)
+        if self.save_projections:
+            output_dir = os.path.join(self.output_dir, "projections")
+            utils.mkdir(output_dir)
 
         # Compute run lengths
         self.run_length_ratio = dict()
         self.projected_run_length = dict()
         self.target_run_length = dict()
-        pred_graphs = swc_utils.parse_local_zip(self.pred_swc_paths, 0)
-        print("\nPredicted SWCs read!\n")
         for key, projection in projections.items():
-            projected_rl = compute_run_length(
-                projection, pred_graphs, self.inv_label_map
-            )
+            # Check whether to save swcs
+            if self.save_projections:
+                zip_writer = ZipFile(f"{output_dir}/{key}.zip", "w")
+                swc_utils.to_zipped_swc(
+                    zip_writer, self.graphs[key], color="1.0 0.0 0.0"
+                )
+            else:
+                zip_writer = None
+
+            # Compute metrics
             target_rl = self.get_run_length(key)
+            projected_rl = compute_run_length(
+                projection,
+                pred_graphs,
+                self.inv_label_map,
+                zip_writer=zip_writer,
+            )
+
             self.projected_run_length[key] = projected_rl
             self.target_run_length[key] = target_rl
             self.run_length_ratio[key] = projected_rl / target_rl
+
+        # Report runtime
+        t, unit = utils.time_writer(time() - t0)
+        print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
     # -- Split Detection --
     def detect_splits(self):
@@ -949,7 +962,20 @@ class SkeletonMetric:
 
 
 # -- utils --
-def compute_projections(graph, key):
+def compute_projections(graphs):
+    with ProcessPoolExecutor() as executor:
+        processes = list()
+        for key, graph in graphs.items():
+            processes.append(executor.submit(parse_node_labels, graph, key))
+
+        projections = dict()
+        for cnt, process in enumerate(as_completed(processes)):
+            utils.progress_bar(cnt + 1, len(graphs))
+            projections.update(process.result())
+    return projections
+
+
+def parse_node_labels(graph, key):
     # Main
     projections = dict()
     for i in graph.nodes:
@@ -968,22 +994,30 @@ def compute_projections(graph, key):
     return {key: list(projections.keys())}
 
 
-def compute_run_length(projections, graphs, inv_label_map):
+def compute_run_length(projections, graphs, inv_label_map, zip_writer=None):
     run_length = 0
     for key in projections:
         if inv_label_map:
-            run_length += rl_with_label_map(graphs, inv_label_map, key)
+            run_length += compute_run_length_with_label_map(
+                graphs, inv_label_map, key, zip_writer=zip_writer
+            )
         elif key in graphs.keys():
-            run_length += gutils.compute_run_length(graphs[key])
+            run_length += gutils.compute_run_length(graphs[key], apply=False)
+            if zip_writer:
+                swc_utils.to_zipped_swc(zip_writer, graphs[key])
     return run_length
 
 
-def rl_with_label_map(graphs, inv_label_map, key):
+def compute_run_length_with_label_map(
+    graphs, inv_label_map, key, zip_writer=None
+):
     run_length = 0
     if key in inv_label_map.keys():
         for swc_id in inv_label_map[key]:
             if swc_id in graphs.keys():
                 run_length += gutils.compute_run_length(graphs[swc_id])
+                if zip_writer:
+                    swc_utils.to_zipped_swc(zip_writer, graphs[swc_id])
     return run_length
 
 

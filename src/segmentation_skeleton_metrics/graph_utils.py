@@ -12,6 +12,8 @@ import networkx as nx
 import numpy as np
 from scipy.spatial.distance import euclidean as get_dist
 
+from segmentation_skeleton_metrics import utils
+
 
 # --- Update graph structure ---
 def remove_edge(graph, i, j):
@@ -192,7 +194,7 @@ def compute_run_lengths(graph):
     return np.array(run_lengths)
 
 
-def compute_run_length(graph):
+def compute_run_length(graph, apply=True):
     """
     Computes path length of graph.
 
@@ -211,6 +213,9 @@ def compute_run_length(graph):
     for i, j in nx.dfs_edges(graph):
         xyz_1 = graph.nodes[i]["xyz"]
         xyz_2 = graph.nodes[j]["xyz"]
+        if apply:
+            xyz_1 = utils.to_world(xyz_1)
+            xyz_2 = utils.to_world(xyz_2)
         path_length += get_dist(xyz_1, xyz_2)
     return path_length
 
