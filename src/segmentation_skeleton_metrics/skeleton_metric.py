@@ -988,7 +988,7 @@ def parse_node_labels(graph, key):
     # Finish
     rm_labels = list()
     for label, cnt in projections.items():
-        if cnt < 20:
+        if cnt < 25:
             rm_labels.append(label)
     projections = utils.delete_keys(projections, rm_labels)
     return {key: list(projections.keys())}
