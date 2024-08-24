@@ -163,11 +163,11 @@ def is_nonzero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
         else:
             # left hit label
             dfs_edges.insert(0, (parent, j))
-            labeled_graph = gutils.remove_edge(labeled_graph, nb, root)
+            labeled_graph.remove_edge(root, nb)
             return dfs_edges, labeled_graph
 
     # End of search
-    labeled_graph = gutils.remove_edge(labeled_graph, nb, root)
+    labeled_graph.remove_edge(root, nb)
     return dfs_edges, labeled_graph
 
 

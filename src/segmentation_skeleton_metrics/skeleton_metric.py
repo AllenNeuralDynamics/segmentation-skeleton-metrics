@@ -18,6 +18,7 @@ from zipfile import ZipFile
 
 import numpy as np
 import tensorstore as ts
+from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import (
@@ -26,6 +27,7 @@ from segmentation_skeleton_metrics import (
     swc_utils,
     utils,
 )
+from segmentation_skeleton_metrics.merge_detection import find_sites
 
 MERGE_DIST_THRESHOLD = 20
 
@@ -103,9 +105,9 @@ class SkeletonMetric:
         """
         # Options
         self.anisotropy = anisotropy
+        self.connections_path = connections_path
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
-        self.pred_swc_paths = pred_swc_paths
         self.save_projections = save_projections
         self.save_sites = save_sites
 
@@ -117,6 +119,8 @@ class SkeletonMetric:
 
         # Build Graphs
         self.init_graphs(target_swc_paths, anisotropy)
+        self.graph_to_labels = gutils.get_node_labels(self.graphs)
+        self.load_fragments(pred_swc_paths)
 
     # -- Initialize and Label Graphs --
     def init_label_map(self, path):
@@ -163,14 +167,8 @@ class SkeletonMetric:
         None
 
         """
-        self.graphs = dict()
-        for path in paths:
-            key = utils.get_id(path)
-            content = utils.read_txt(path)
-            self.graphs[key] = swc_utils.to_graph(
-                content, anisotropy=anisotropy
-            )
-            self.graphs[key].graph["filename"] = os.path.basename(path)
+        reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
+        self.graphs = reader.load_from_local_paths(paths)
         self.init_key_label_nodes()
 
     def init_key_label_nodes(self):
@@ -213,11 +211,12 @@ class SkeletonMetric:
 
         Returns
         -------
-        networkx.Graph
-            Updated graph with node-level attributes called "label".
+        dict
+            Dictionary that maps a label to the subset of nodes in "graph"
+            that have that label.
 
         """
-        key_to_label_to_nodes = dict()
+        label_to_nodes = dict()
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
@@ -229,11 +228,11 @@ class SkeletonMetric:
             for thread in as_completed(threads):
                 i, label = thread.result()
                 graph.nodes[i].update({"label": label})
-                if label in key_to_label_to_nodes.keys():
-                    key_to_label_to_nodes[label].add(i)
+                if label in label_to_nodes:
+                    label_to_nodes[label].add(i)
                 else:
-                    key_to_label_to_nodes[label] = set([i])
-        return key_to_label_to_nodes
+                    label_to_nodes[label] = set([i])
+        return label_to_nodes
 
     def read_label(self, coord):
         """
@@ -359,8 +358,69 @@ class SkeletonMetric:
                 self.graphs[key].nodes[i]["label"] = 0
             del self.key_to_label_to_nodes[key][label]
 
+    # -- Load Fragments ~ hard coded --
+    def load_fragments(self, zip_path):
+        """
+        Loads and filters swc files from a local zip. These swc files are
+        assumed to be fragments from a predicted segmentation.
+
+        Parameters
+        ----------
+        zip_path : str
+            Path to the local zip file containing the fragments
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc id to the fragment graph.
+
+        """
+        t0 = time()
+        print("Loading Fragments...")
+        if zip_path:
+            reader = swc_utils.Reader(return_graphs=True)
+            fragment_graphs = reader.load_from_local_zip(zip_path)
+            self.fragment_graphs = self.filter_fragments(fragment_graphs)
+            print("\n# Fragments:", len(self.fragment_graphs))
+        else:
+            self.fragment_graphs = None
+
+        t, unit = utils.time_writer(time() - t0)
+        print(f"Runtime: {round(t, 2)} {unit}\n")
+
+    def filter_fragments(self, fragment_graphs):
+        """
+        Filters the provided "fragment_graphs" dictionary to include only
+        those fragments whose labels are present in the combined set of node
+        labels extracted from "self.graphs".
+
+        Parameters
+        ----------
+        fragment_graphs : dict
+            Dictionary that maps a label and to the corresponding fragment
+            graph.
+
+        Returns
+        -------
+        dict
+            Dictionary containing only those fragment graphs whose labels are
+            present in the combined set of labels from "self.graphs". The keys
+            are the labels and the values are the corresponding fragment
+            graphs.
+
+        """
+        labels = set.union(*list(self.graph_to_labels.values()))
+        print("# GT Labels:", labels)
+        return {l: fragment_graphs[l] for l in labels if l in fragment_graphs}
+
+    def init_fragment_arrays(self):
+        self.fragment_arrays = dict()
+        for label, graph in self.fragment_graphs.items():
+            self.fragment_arrays[label] = gutils.to_xyz_array(graph)
+        del self.fragment_graphs
+
     # -- Main Routine --
-    def compute_metrics(self):
+    def run(self):
         """
         Computes skeleton-based metrics.
 
@@ -375,9 +435,8 @@ class SkeletonMetric:
 
         """
         # Projected run lengths
-        if self.pred_swc_paths:
-            print("Computing Projected Run Lengths...")
-            self.compute_projected_run_lengths()
+        print("Computing Projected Run Lengths...")
+        self.compute_projected_run_lengths()
 
         # Split evaluation
         print("Detecting Splits...")
@@ -414,18 +473,16 @@ class SkeletonMetric:
 
         """
         # Initializations
-        t0 = time()
-        projections = compute_projections(self.graphs)
-        pred_graphs = swc_utils.parse_local_zip(self.pred_swc_paths, 0)
+        self.run_length_ratio = dict()
+        self.projected_run_length = dict()
+        self.target_run_length = dict()
         if self.save_projections:
             output_dir = os.path.join(self.output_dir, "projections")
             utils.mkdir(output_dir)
 
         # Compute run lengths
-        self.run_length_ratio = dict()
-        self.projected_run_length = dict()
-        self.target_run_length = dict()
-        for key, projection in projections.items():
+        t0 = time()
+        for key, labels in self.graph_to_labels.items():
             # Check whether to save swcs
             if self.save_projections:
                 zip_writer = ZipFile(f"{output_dir}/{key}.zip", "w")
@@ -437,11 +494,8 @@ class SkeletonMetric:
 
             # Compute metrics
             target_rl = self.get_run_length(key)
-            projected_rl = compute_run_length(
-                projection,
-                pred_graphs,
-                self.inv_label_map,
-                zip_writer=zip_writer,
+            projected_rl = self.compute_projected_run_length(
+                labels, zip_writer
             )
 
             self.projected_run_length[key] = projected_rl
@@ -450,7 +504,37 @@ class SkeletonMetric:
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
-        print(f"\nRuntime: {round(t, 2)} {unit}\n")
+        print(f"Runtime: {round(t, 2)} {unit}\n")
+
+    def compute_projected_run_length(self, labels, zip_writer):
+        run_length = 0
+        for key in labels:
+            if self.inv_label_map:
+                run_length += self.compute_projected_run_length_with_map(
+                    key, zip_writer
+                )
+            elif key in self.fragment_graphs:
+                rl = self.fragment_graphs[key].graph["run_length"]
+                run_length += rl
+                if zip_writer:
+                    swc_utils.to_zipped_swc(
+                        zip_writer, self.fragment_graphs[key]
+                    )
+        return run_length
+
+    def compute_projected_run_length_with_map(self, key, zip_writer):
+        run_length = 0
+        if key in self.inv_label_map:
+            for swc_id in self.inv_label_map[key]:
+                if swc_id in self.fragment_graphs:
+                    run_length += self.fragment_graphs[swc_id].graph[
+                        "run_length"
+                    ]
+                    if zip_writer:
+                        swc_utils.to_zipped_swc(
+                            zip_writer, self.graphs[swc_id]
+                        )
+        return run_length
 
     # -- Split Detection --
     def detect_splits(self):
@@ -498,9 +582,9 @@ class SkeletonMetric:
         self.split_cnt = dict()
         self.omit_cnts = dict()
         self.omit_percent = dict()
-        for key in self.graphs.keys():
+        for key in self.graphs:
             n_pred_edges = self.graphs[key].number_of_edges()
-            n_target_edges = self.graphs[key].graph["initial_number_of_edges"]
+            n_target_edges = self.graphs[key].graph["number_of_edges"]
 
             self.split_cnt[key] = gutils.count_splits(self.graphs[key])
             self.omit_cnts[key] = n_target_edges - n_pred_edges
@@ -525,35 +609,24 @@ class SkeletonMetric:
         self.merge_cnt = self.init_counter()
         self.merged_cnts = self.init_counter()
         self.merged_percent = self.init_counter()
+        self.merged_labels = set()
+        # add conditional that checks whether detected merges file exists
+        # to adjust for scenario when evaluating a corrected segmentation
 
-        # Main
+        # Merges between ground truth - percent merged
         detected_merges = []
-        for (key_1, key_2), label in self.detect_potential_merges():
+        for (key_1, key_2), label in find_sites(self.graphs, self.get_labels):
             if self.is_valid_merge(key_1, key_2, label):
                 self.process_merge(key_1, label)
                 self.process_merge(key_2, label)
                 detected_merges.append(((key_1, key_2), label))
 
-        if self.save_sites:
-            self.localize_merges(detected_merges)
-
-    def detect_potential_merges(self):
-        """
-        Detects merges between ground truth graphs which are considered to be
-        potential merge sites.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        set
-            Set of tuples containing a tuple of graph keys and common label
-            between the graphs.
-
-        """
-        return merge_detection.find_sites(self.graphs, self.get_labels)
+        # Merges outside of ground truth - number of merges
+        self.init_fragment_arrays()
+        for key, graph in self.graphs.items():
+            xyz_array = gutils.to_xyz_array(graph)
+            kdtree = KDTree(xyz_array)
+            self.count_merges(key, kdtree)
 
     def is_valid_merge(self, key_1, key_2, label):
         """
@@ -575,7 +648,17 @@ class SkeletonMetric:
         is_valid = n_merged_nodes_1 > 30 and n_merged_nodes_2 > 30
         return True if is_valid else False
 
-    def localize_merges(self, detected_merges):
+    def count_merges(self, key, kdtree):
+        for label in self.graph_to_labels[key]:
+            if label in self.fragment_arrays:
+                for xyz in self.fragment_arrays[label][::4]:
+                    d, _ = kdtree.query(xyz, k=1)
+                    if d > 40:
+                        self.merge_cnt[key] += 1
+                        self.merged_labels.add(label)
+                        break
+
+    def localize_merges_old(self, detected_merges):
         """
         Searches for exact site where a merge occurs.
 
@@ -664,7 +747,7 @@ class SkeletonMetric:
         graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
         self.graphs[key] = graph
         self.merged_cnts[key] += merged_cnt
-        self.merge_cnt[key] += 1
+        self.merged_labels.add(label)
 
     def quantify_merges(self):
         """
@@ -680,8 +763,8 @@ class SkeletonMetric:
 
         """
         self.merged_percent = dict()
-        for key in self.graphs.keys():
-            n_edges = self.graphs[key].graph["initial_number_of_edges"]
+        for key in self.graphs:
+            n_edges = self.graphs[key].graph["number_of_edges"]
             percent = self.merged_cnts[key] / n_edges
             self.merged_percent[key] = percent
 
@@ -769,7 +852,7 @@ class SkeletonMetric:
         """
         avg_stats = {
             "# splits": self.avg_result(self.split_cnt),
-            "# merges": self.avg_result(self.merge_cnt) / 2,
+            "# merges": self.avg_result(self.merge_cnt),
             "% omit": self.avg_result(self.omit_percent),
             "% merged": self.avg_result(self.merged_percent),
             "edge accuracy": self.avg_result(self.edge_accuracy),
@@ -871,7 +954,7 @@ class SkeletonMetric:
             Run length of "self.graphs[key]".
 
         """
-        return self.graphs[key].graph["initial_run_length"]
+        return self.graphs[key].graph["run_length"]
 
     def list_metrics(self):
         """
@@ -962,65 +1045,6 @@ class SkeletonMetric:
 
 
 # -- utils --
-def compute_projections(graphs):
-    with ProcessPoolExecutor() as executor:
-        processes = list()
-        for key, graph in graphs.items():
-            processes.append(executor.submit(parse_node_labels, graph, key))
-
-        projections = dict()
-        for cnt, process in enumerate(as_completed(processes)):
-            utils.progress_bar(cnt + 1, len(graphs))
-            projections.update(process.result())
-    return projections
-
-
-def parse_node_labels(graph, key):
-    # Main
-    projections = dict()
-    for i in graph.nodes:
-        label = graph.nodes[i]["label"]
-        if label in projections.keys():
-            projections[label] += 1
-        else:
-            projections[label] = 0
-
-    # Finish
-    rm_labels = list()
-    for label, cnt in projections.items():
-        if cnt < 30:
-            rm_labels.append(label)
-    projections = utils.delete_keys(projections, rm_labels)
-    return {key: list(projections.keys())}
-
-
-def compute_run_length(projections, graphs, inv_label_map, zip_writer=None):
-    run_length = 0
-    for key in projections:
-        if inv_label_map:
-            run_length += compute_run_length_with_label_map(
-                graphs, inv_label_map, key, zip_writer=zip_writer
-            )
-        elif key in graphs.keys():
-            run_length += gutils.compute_run_length(graphs[key], apply=False)
-            if zip_writer:
-                swc_utils.to_zipped_swc(zip_writer, graphs[key])
-    return run_length
-
-
-def compute_run_length_with_label_map(
-    graphs, inv_label_map, key, zip_writer=None
-):
-    run_length = 0
-    if key in inv_label_map.keys():
-        for swc_id in inv_label_map[key]:
-            if swc_id in graphs.keys():
-                run_length += gutils.compute_run_length(graphs[swc_id])
-                if zip_writer:
-                    swc_utils.to_zipped_swc(zip_writer, graphs[swc_id])
-    return run_length
-
-
 def generate_result(keys, stats):
     """
     Reorders items in "stats" with respect to the order defined by "keys".
