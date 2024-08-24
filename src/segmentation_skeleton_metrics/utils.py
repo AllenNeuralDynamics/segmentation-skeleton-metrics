@@ -125,8 +125,8 @@ def get_id(path):
     Segment id of swc file.
 
     """
-    filename = os.path.basename(path)
-    return filename.split(".")[0]
+    filename = os.path.basename(path).split(".")[0]
+    return int(filename) if filename.isdigit() else filename
 
 
 # --- io utils ---
@@ -383,7 +383,24 @@ def init_label_map(connections_path, labels):
 
 def build_labels_graph(connections_path, labels):
     """
-    Builds a graph where
+    Builds a graph from a list of labels and connection data. The nodes are
+    initialized from the provided list of labels, then edges are added between
+    nodes based on a list of connections specified in a file.
+
+    Parameters
+    ----------
+    connections_path : str
+        The file path to a text file containing connections. Each line should
+        represent a connection between two swc ids.
+    labels : iterable
+        An iterable containing the IDs of the nodes to be added to the graph.
+
+    Returns
+    -------
+    networkx.Graph
+        Graph with nodes that represent labels and edges are based on the
+        connections read from the "connections_path".
+
     """
     # Initializations
     labels_graph = nx.Graph()
