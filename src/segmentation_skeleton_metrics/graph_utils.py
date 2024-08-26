@@ -141,7 +141,7 @@ def get_node_labels(graphs):
 def parse_node_labels(graph, key):
     """
     Parses and filters node labels from the given graph based on whether they
-    occur less frequently than a predefined minimum count (MIN_CNT). 
+    occur less frequently than a predefined minimum count (MIN_CNT).
     frequencies.
 
     Parameters
