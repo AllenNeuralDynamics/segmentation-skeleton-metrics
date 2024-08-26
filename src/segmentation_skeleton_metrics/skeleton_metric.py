@@ -16,6 +16,7 @@ from concurrent.futures import (
 from time import time
 from zipfile import ZipFile
 
+import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
@@ -108,19 +109,20 @@ class SkeletonMetric:
         self.connections_path = connections_path
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
-        self.save_projections = save_projections
-        self.save_sites = save_sites
+        self.pred_swc_paths = pred_swc_paths
+        self.save_sites = save_sites            
 
-        # Labels
+        # Labels and Graphs
         assert type(valid_labels) is set if valid_labels else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
-
-        # Build Graphs
         self.init_graphs(target_swc_paths, anisotropy)
-        self.graph_to_labels = gutils.get_node_labels(self.graphs)
-        self.load_fragments(pred_swc_paths)
+
+        # Initialize writers
+        self.save_projections = save_projections
+        if self.save_projections:
+            self.init_zip_writers()
 
     # -- Initialize and Label Graphs --
     def init_label_map(self, path):
@@ -358,11 +360,13 @@ class SkeletonMetric:
                 self.graphs[key].nodes[i]["label"] = 0
             del self.key_to_label_to_nodes[key][label]
 
-    # -- Load Fragments ~ hard coded --
-    def load_fragments(self, zip_path):
+    # -- Load Fragments --
+    def load_fragments(self):
         """
+        
         Loads and filters swc files from a local zip. These swc files are
-        assumed to be fragments from a predicted segmentation.
+        assumed to be fragments from a predicted segmentation. Note: Hard
+        coded to read from a local zip
 
         Parameters
         ----------
@@ -375,15 +379,16 @@ class SkeletonMetric:
             Dictionary that maps an swc id to the fragment graph.
 
         """
+        # Read fragments
         t0 = time()
-        print("Loading Fragments...")
-        if zip_path:
-            reader = swc_utils.Reader(return_graphs=True)
-            fragment_graphs = reader.load_from_local_zip(zip_path)
-            self.fragment_graphs = self.filter_fragments(fragment_graphs)
-            print("\n# Fragments:", len(self.fragment_graphs))
-        else:
-            self.fragment_graphs = None
+        print("Loading Fragments")
+        reader = swc_utils.Reader(return_graphs=True)
+        fragment_graphs = reader.load_from_local_zip(self.pred_swc_paths)
+
+        # Filter fragments
+        self.graph_to_labels = gutils.get_node_labels(self.graphs)
+        self.fragment_graphs = self.filter_fragments(fragment_graphs)
+        print("\n# Fragments:", len(self.fragment_graphs))
 
         t, unit = utils.time_writer(time() - t0)
         print(f"Runtime: {round(t, 2)} {unit}\n")
@@ -410,7 +415,6 @@ class SkeletonMetric:
 
         """
         labels = set.union(*list(self.graph_to_labels.values()))
-        print("# GT Labels:", labels)
         return {l: fragment_graphs[l] for l in labels if l in fragment_graphs}
 
     def init_fragment_arrays(self):
@@ -418,6 +422,21 @@ class SkeletonMetric:
         for label, graph in self.fragment_graphs.items():
             self.fragment_arrays[label] = gutils.to_xyz_array(graph)
         del self.fragment_graphs
+
+    def init_zip_writers(self):
+        # Initialize output directory
+        output_dir = os.path.join(self.output_dir, "projections")
+        utils.mkdir(output_dir)
+
+        # Save intial graphs
+        self.zip_writer = dict()
+        for key in self.graphs.keys():
+            self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
+            swc_utils.to_zipped_swc(
+                    self.zip_writer[key],
+                    self.graphs[key],
+                    color="1.0 0.0 0.0",
+                )
 
     # -- Main Routine --
     def run(self):
@@ -434,15 +453,17 @@ class SkeletonMetric:
             ...
 
         """
-        # Projected run lengths
-        print("Computing Projected Run Lengths...")
-        self.compute_projected_run_lengths()
-
         # Split evaluation
         print("Detecting Splits...")
         self.saved_site_cnt = 0
         self.detect_splits()
         self.quantify_splits()
+
+        # Projected run lengths
+        if self.pred_swc_paths:
+            print("Computing Projected Run Lengths...")
+            self.load_fragments()
+            self.compute_projected_run_lengths()
 
         # Merge evaluation
         print("Detecting Merges...")
@@ -476,26 +497,13 @@ class SkeletonMetric:
         self.run_length_ratio = dict()
         self.projected_run_length = dict()
         self.target_run_length = dict()
-        if self.save_projections:
-            output_dir = os.path.join(self.output_dir, "projections")
-            utils.mkdir(output_dir)
 
         # Compute run lengths
         t0 = time()
         for key, labels in self.graph_to_labels.items():
-            # Check whether to save swcs
-            if self.save_projections:
-                zip_writer = ZipFile(f"{output_dir}/{key}.zip", "w")
-                swc_utils.to_zipped_swc(
-                    zip_writer, self.graphs[key], color="1.0 0.0 0.0"
-                )
-            else:
-                zip_writer = None
-
-            # Compute metrics
             target_rl = self.get_run_length(key)
             projected_rl = self.compute_projected_run_length(
-                labels, zip_writer
+                labels, self.zip_writer[key]
             )
 
             self.projected_run_length[key] = projected_rl
@@ -516,7 +524,7 @@ class SkeletonMetric:
             elif key in self.fragment_graphs:
                 rl = self.fragment_graphs[key].graph["run_length"]
                 run_length += rl
-                if zip_writer:
+                if self.save_projections:
                     swc_utils.to_zipped_swc(
                         zip_writer, self.fragment_graphs[key]
                     )
@@ -530,9 +538,9 @@ class SkeletonMetric:
                     run_length += self.fragment_graphs[swc_id].graph[
                         "run_length"
                     ]
-                    if zip_writer:
+                    if self.save_projections:
                         swc_utils.to_zipped_swc(
-                            zip_writer, self.graphs[swc_id]
+                            zip_writer, self.fragment_graphs[swc_id]
                         )
         return run_length
 
@@ -557,7 +565,7 @@ class SkeletonMetric:
             utils.progress_bar(cnt + 1, len(self.graphs))
             graph = split_detection.run(graph, self.graphs[key])
 
-            # Update predicted graph
+            # Update graph by removing omits
             self.graphs[key] = gutils.delete_nodes(graph, 0)
             self.key_to_label_to_nodes[key] = gutils.store_labels(graph)
 
