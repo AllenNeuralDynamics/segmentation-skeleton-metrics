@@ -16,6 +16,7 @@ from concurrent.futures import (
 from time import time
 from zipfile import ZipFile
 
+import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
@@ -362,7 +363,6 @@ class SkeletonMetric:
     # -- Load Fragments --
     def load_fragments(self):
         """
-
         Loads and filters swc files from a local zip. These swc files are
         assumed to be fragments from a predicted segmentation. Note: Hard
         coded to read from a local zip
