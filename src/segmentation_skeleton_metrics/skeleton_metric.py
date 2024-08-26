@@ -110,7 +110,7 @@ class SkeletonMetric:
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
         self.pred_swc_paths = pred_swc_paths
-        self.save_sites = save_sites            
+        self.save_sites = save_sites
 
         # Labels and Graphs
         assert type(valid_labels) is set if valid_labels else True
@@ -119,10 +119,10 @@ class SkeletonMetric:
         self.init_label_map(connections_path)
         self.init_graphs(target_swc_paths, anisotropy)
 
-        # Initialize writers
+        # Initialize writer
         self.save_projections = save_projections
         if self.save_projections:
-            self.init_zip_writers()
+            self.init_zip_writer()
 
     # -- Initialize and Label Graphs --
     def init_label_map(self, path):
@@ -363,7 +363,6 @@ class SkeletonMetric:
     # -- Load Fragments --
     def load_fragments(self):
         """
-        
         Loads and filters swc files from a local zip. These swc files are
         assumed to be fragments from a predicted segmentation. Note: Hard
         coded to read from a local zip
@@ -418,12 +417,39 @@ class SkeletonMetric:
         return {l: fragment_graphs[l] for l in labels if l in fragment_graphs}
 
     def init_fragment_arrays(self):
+        """
+        Initializes "self.fragment_arrays" by converting the graphs stored in
+        "self.fragment_graphs" into xyz arrays by extracting the node's xyz
+        coordinates.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         self.fragment_arrays = dict()
         for label, graph in self.fragment_graphs.items():
             self.fragment_arrays[label] = gutils.to_xyz_array(graph)
         del self.fragment_graphs
 
-    def init_zip_writers(self):
+    def init_zip_writer(self):
+        """
+        Initializes "self.zip_writer" attribute by setting up a directory for
+        output files and creating ZIP files for each graph in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
         # Initialize output directory
         output_dir = os.path.join(self.output_dir, "projections")
         utils.mkdir(output_dir)
@@ -433,10 +459,8 @@ class SkeletonMetric:
         for key in self.graphs.keys():
             self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
             swc_utils.to_zipped_swc(
-                    self.zip_writer[key],
-                    self.graphs[key],
-                    color="1.0 0.0 0.0",
-                )
+                self.zip_writer[key], self.graphs[key], color="1.0 0.0 0.0"
+            )
 
     # -- Main Routine --
     def run(self):
