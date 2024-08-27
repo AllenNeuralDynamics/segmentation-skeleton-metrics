@@ -34,7 +34,11 @@ class Reader:
     """
 
     def __init__(
-        self, anisotropy=[1.0, 1.0, 1.0], min_size=0, return_graphs=False
+        self,
+        anisotropy=[1.0, 1.0, 1.0],
+        img_coords_bool=True,
+        min_size=0,
+        return_graphs=False,
     ):
         """
         Initializes a Reader object that loads swc files.
@@ -45,6 +49,9 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             [1.0, 1.0, 1.0].
+        img_coords_bool : bool, optional
+            Indication of whether node xyz coordinates coorespond to voxels or
+            world. The default is True.
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default
@@ -59,6 +66,7 @@ class Reader:
 
         """
         self.anisotropy = anisotropy
+        self.img_coords_bool = img_coords_bool
         self.min_size = min_size
         self.return_graphs = return_graphs
 
@@ -69,7 +77,7 @@ class Reader:
 
         Paramters
         ---------
-        swc_paths : list or dict
+        swc_paths : list
             List of paths to swc files stored on the local machine.
 
         Returns
@@ -85,10 +93,10 @@ class Reader:
             if len(content) > self.min_size:
                 key = utils.get_id(path)
                 if self.return_graphs:
-                    swc_dict[key] = get_graph(content, self.anisotropy)
+                    swc_dict[key] = self.get_graph(content)
                     swc_dict[key].graph["filename"] = os.path.basename(path)
                 else:
-                    swc_dict[key] = get_coords(content, self.anisotropy)
+                    swc_dict[key] = self.get_coords(content)
         return swc_dict
 
     def load_from_local_zip(self, zip_path):
@@ -111,7 +119,6 @@ class Reader:
             that swc file.
 
         """
-        anisotropy = [1.0 / val for val in ANISOTROPY]  # hard coded
         cnt = 1
         swc_dict = dict()
         with ZipFile(zip_path, "r") as zip:
@@ -123,10 +130,10 @@ class Reader:
                 if len(content) > self.min_size:
                     key = utils.get_id(f)
                     if self.return_graphs:
-                        swc_dict[key] = get_graph(content, anisotropy)
+                        swc_dict[key] = self.get_graph(content)
                         swc_dict[key].graph["filename"] = f
                     else:
-                        swc_dict[key] = get_coords(content, anisotropy)
+                        swc_dict[key] = self.get_coords(content)
 
                 # Report progress
                 if i >= cnt * chunk_size:
@@ -233,13 +240,104 @@ class Reader:
         if len(content) > self.min_size:
             key = utils.get_id(path)
             if self.return_graphs:
-                graph = get_graph(content, self.anisotropy)
+                graph = self.get_graph(content)
                 graph.graph["filename"] = os.path.basename(path)
                 return {key: graph}
             else:
-                return {key: get_coords(content, self.anisotropy)}
+                return {key: self.get_coords(content)}
         else:
             return dict()
+
+    def get_coords(self, content):
+        """
+        Gets the xyz coords from the an swc file that has been read and stored
+        as "content".
+
+        Parameters
+        ----------
+        content : list[str]
+            Entries from swc where each item is the text string from an swc.
+        anisotropy : list[float]
+            Image to world scaling factors applied to xyz coordinates to
+            account for anisotropy of the microscope.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coords from an swc file.
+
+        """
+        coords_list = []
+        offset = [0, 0, 0]
+        for line in content:
+            if line.startswith("# OFFSET"):
+                parts = line.split()
+                offset = self.read_xyz(parts[2:5], offset)
+            if not line.startswith("#"):
+                parts = line.split()
+                coords_list.append(self.read_xyz(parts[2:5], offset))
+        return np.array(coords_list)
+
+    def read_xyz(self, xyz_str, offset):
+        """
+        Reads the xyz coordinates from an swc file, then transforms the
+        coordinates with respect to "anisotropy" and "offset".
+
+        Parameters
+        ----------
+        xyz_str : str
+            xyz coordinate stored in a str.
+        offset : list[int]
+            Offset of xyz coordinates in swc file.
+
+        Returns
+        -------
+        numpy.ndarray
+            xyz coordinates of an entry from an swc file.
+
+        """
+        xyz = np.zeros((3))
+        for i in range(3):
+            xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
+        return xyz.astype(int)
+
+    def get_graph(self, content):
+        """
+        Reads an swc file and builds an undirected graph from it.
+
+        Parameters
+        ----------
+        path : str
+            Path to swc file to be read.
+
+        Returns
+        -------
+        networkx.Graph
+            Graph built from an swc file.
+
+        """
+        # Build Gaph
+        graph = nx.Graph()
+        offset = [0, 0, 0]
+        for line in content:
+            if line.startswith("# OFFSET"):
+                parts = line.split()
+                offset = self.read_xyz(parts[2:5])
+            if not line.startswith("#"):
+                parts = line.split()
+                child = int(parts[0])
+                parent = int(parts[-1])
+                xyz = self.read_xyz(parts[2:5], offset=offset)
+                graph.add_node(child, xyz=xyz)
+                if parent != -1:
+                    graph.add_edge(parent, child)
+
+        # Set graph-level attributes
+        graph.graph["number_of_edges"] = graph.number_of_edges()
+        graph.graph["run_length"] = gutils.compute_run_length(
+            graph, self.img_coords_bool
+        )
+        return graph
 
 
 # -- write --
@@ -309,7 +407,7 @@ def to_zipped_swc(zip_writer, graph, color=None):
 
     Parameters
     ----------
-    zip_writer : ...
+    zip_writer : zipfile.ZipFile
         ...
     graph : networkx.Graph
         Graph to be written to an swc file.
@@ -349,117 +447,3 @@ def to_zipped_swc(zip_writer, graph, color=None):
 
         # Finish
         zip_writer.writestr(graph.graph["filename"], text_buffer.getvalue())
-
-
-# -- utils --
-def get_coords(content, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Gets the xyz coords from the an swc file that has been read and stored as
-    "content".
-
-    Parameters
-    ----------
-    content : list[str]
-        Entries in swc file where each entry is the text string from an swc.
-    anisotropy : list[float]
-        Image to world scaling factors applied to xyz coordinates to account
-        for anisotropy of the microscope.
-
-    Returns
-    -------
-    numpy.ndarray
-        xyz coords from an swc file.
-
-    """
-    coords_list = []
-    offset = [0, 0, 0]
-    for line in content:
-        if line.startswith("# OFFSET"):
-            parts = line.split()
-            offset = read_xyz(parts[2:5], anisotropy, offset)
-        if not line.startswith("#"):
-            parts = line.split()
-            coords_list.append(read_xyz(parts[2:5], anisotropy, offset))
-    return np.array(coords_list)
-
-
-def read_xyz(xyz, anisotropy, offset):
-    """
-    Reads the xyz coordinates from an swc file, then transforms the
-    coordinates with respect to "anisotropy" and "offset".
-
-    Parameters
-    ----------
-    xyz : str
-        xyz coordinate stored in a str.
-    anisotropy : list[float]
-        Image to real-world coordinates scaling factors applied to "xyz".
-    offset : list[int]
-        Offset of xyz coordinates in swc file.
-
-    Returns
-    -------
-    numpy.ndarray
-        xyz coordinates of an entry from an swc file.
-
-    """
-    xyz = [float(xyz[i]) + offset[i] for i in range(3)]
-    return np.array([xyz[i] * anisotropy[i] for i in range(3)], dtype=int)
-
-
-def get_graph(content, anisotropy=[1.0, 1.0, 1.0]):
-    """
-    Reads an swc file and builds an undirected graph from it.
-
-    Parameters
-    ----------
-    path : str
-        Path to swc file to be read.
-    anisotropy : list[float], optional
-        Image to real-world coordinates scaling factors for (x, y, z) that is
-        applied to swc files. The default is [1.0, 1.0, 1.0].
-
-    Returns
-    -------
-    networkx.Graph
-        Graph built from an swc file.
-
-    """
-    # Build Gaph
-    graph = nx.Graph()
-    offset = [0, 0, 0]
-    for line in content:
-        if line.startswith("# OFFSET"):
-            parts = line.split()
-            offset = read_xyz(parts[2:5], anisotropy)
-        if not line.startswith("#"):
-            parts = line.split()
-            child = int(parts[0])
-            parent = int(parts[-1])
-            xyz = read_xyz(parts[2:5], anisotropy, offset=offset)
-            graph.add_node(child, xyz=xyz)
-            if parent != -1:
-                graph.add_edge(parent, child)
-
-    # Set graph-level attributes
-    graph.graph["number_of_edges"] = graph.number_of_edges()
-    graph.graph["run_length"] = gutils.compute_run_length(graph)
-    return graph
-
-
-def to_voxels(xyz):
-    """
-    Converts coordinates from world to voxels.
-
-    Parameters
-    ----------
-    xyz : numpy.ndarray
-        Coordinate to be converted.
-
-    Returns
-    -------
-    tuple
-        Converted coordinates.
-
-    """
-    return tuple([xyz[i] * 1.0 / ANISOTROPY[i] for i in range(3)])

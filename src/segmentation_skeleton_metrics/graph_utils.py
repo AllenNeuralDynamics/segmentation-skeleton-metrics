@@ -15,7 +15,7 @@ from scipy.spatial.distance import euclidean as get_dist
 
 from segmentation_skeleton_metrics import utils
 
-MIN_CNT = 30
+MIN_CNT = 20
 
 
 # --- Update graph structure ---
@@ -217,7 +217,7 @@ def compute_run_lengths(graph):
     return np.array(run_lengths)
 
 
-def compute_run_length(graph, apply=True):
+def compute_run_length(graph, img_coords_bool=True):
     """
     Computes path length of graph.
 
@@ -236,7 +236,7 @@ def compute_run_length(graph, apply=True):
     for i, j in nx.dfs_edges(graph):
         xyz_1 = graph.nodes[i]["xyz"]
         xyz_2 = graph.nodes[j]["xyz"]
-        if apply:
+        if img_coords_bool:
             xyz_1 = utils.to_world(xyz_1)
             xyz_2 = utils.to_world(xyz_2)
         path_length += get_dist(xyz_1, xyz_2)

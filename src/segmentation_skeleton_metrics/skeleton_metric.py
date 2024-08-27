@@ -16,7 +16,6 @@ from concurrent.futures import (
 from time import time
 from zipfile import ZipFile
 
-import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
@@ -30,6 +29,7 @@ from segmentation_skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.merge_detection import find_sites
 
+ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 20
 
 
@@ -54,6 +54,7 @@ class SkeletonMetric:
         target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
         connections_path=None,
+        merged_ids_path=None,
         ignore_boundary_mistakes=False,
         output_dir=None,
         pred_swc_paths=None,
@@ -75,9 +76,12 @@ class SkeletonMetric:
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
             files at "target_swc_paths". The default is [1.0, 1.0, 1.0].
-        connections_path : list[tuple]
+        connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
-            that were merged into a single segment.
+            that were merged into a single segment. The default is None.
+        merged_ids_path : str, optional
+            Path to txt file that contains segment ids that correspond to
+            merge mistakes. The default is None.
         ignore_boundary_mistakes : bool, optional
             Indication of whether to ignore mistakes near boundary of bounding
             box. The default is False.
@@ -94,7 +98,10 @@ class SkeletonMetric:
             The purpose of this argument is to account for segments that were
             removed due to thresholding by path length. The default is None.
         save_projections: bool, optional
-            ...
+            Indication of whether to save fragments that 'project' onto the
+            ground truth neurons (i.e. there exists a node in a graph from
+            "self.graphs" that is labeled with a given fragment id. The
+            default is None.
         save_sites, : bool, optional
             Indication of whether to write merge sites to an swc file. The
             default is False.
@@ -236,42 +243,42 @@ class SkeletonMetric:
                     label_to_nodes[label] = set([i])
         return label_to_nodes
 
-    def read_label(self, coord):
+    def read_label(self, voxel):
         """
-        Gets label at image coordinates "coord".
+        Gets label at image coordinate "voxel".
 
         Parameters
         ----------
-        coord : tuple[int]
-            Coordinates that indexes into "self.label_mask".
+        voxel : tuple[int]
+            Image coordinate that indexes into "self.label_mask".
 
         Returns
         -------
         int
-           Label at image coordinates "coord".
+           Label of voxel.
 
         """
         if type(self.label_mask) == ts.TensorStore:
-            return int(self.label_mask[coord].read().result())
+            return int(self.label_mask[voxel].read().result())
         else:
-            return self.label_mask[coord]
+            return self.label_mask[voxel]
 
-    def get_label(self, coord, return_node=False):
+    def get_label(self, voxel, return_node=False):
         """
-        Gets label of voxel at "coord".
+        Gets label of voxel at "voxel".
 
         Parameters
         ----------
-        coord : numpy.ndarray
+        voxel : numpy.ndarray
             Image coordinate of voxel to be read.
 
         Returns
         -------
         int
-           Label of voxel at "coord".
+           Label of voxel.
 
         """
-        label = self.read_label(coord)
+        label = self.read_label(voxel)
         if return_node:
             return return_node, self.validate(label)
         else:
@@ -381,7 +388,10 @@ class SkeletonMetric:
         # Read fragments
         t0 = time()
         print("Loading Fragments")
-        reader = swc_utils.Reader(return_graphs=True)
+        anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
+        reader = swc_utils.Reader(
+            anisotropy=anisotropy, img_coords_bool=False, return_graphs=True
+        )
         fragment_graphs = reader.load_from_local_zip(self.pred_swc_paths)
 
         # Filter fragments
@@ -414,6 +424,8 @@ class SkeletonMetric:
 
         """
         labels = set.union(*list(self.graph_to_labels.values()))
+        if self.inv_label_map:
+            labels = set.union(*[self.inv_label_map[l] for l in labels])
         return {l: fragment_graphs[l] for l in labels if l in fragment_graphs}
 
     def init_fragment_arrays(self):
@@ -524,6 +536,7 @@ class SkeletonMetric:
 
         # Compute run lengths
         t0 = time()
+        print("Computing Run Lengths")
         for key, labels in self.graph_to_labels.items():
             target_rl = self.get_run_length(key)
             projected_rl = self.compute_projected_run_length(
@@ -642,6 +655,8 @@ class SkeletonMetric:
         self.merged_cnts = self.init_counter()
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
+
+        # Check whether to delete prexisting merges
         # add conditional that checks whether detected merges file exists
         # to adjust for scenario when evaluating a corrected segmentation
 
@@ -681,57 +696,19 @@ class SkeletonMetric:
         return True if is_valid else False
 
     def count_merges(self, key, kdtree):
-        for label in self.graph_to_labels[key]:
+        # Get labels
+        labels = self.graph_to_labels[key]
+        if self.inv_label_map:
+            labels = set.union(*[self.inv_label_map[l] for l in labels])
+            
+        for label in labels:
             if label in self.fragment_arrays:
                 for xyz in self.fragment_arrays[label][::4]:
                     d, _ = kdtree.query(xyz, k=1)
-                    if d > 40:
+                    if d > 100:
                         self.merge_cnt[key] += 1
                         self.merged_labels.add(label)
                         break
-
-    def localize_merges_old(self, detected_merges):
-        """
-        Searches for exact site where a merge occurs.
-
-        Parameters
-        ----------
-        detected_merges : list[tuple[str, str, int]]
-            Merge sites indicated by a pair of keys and label.
-
-        Returns
-        -------
-        None
-
-        """
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = []
-            for (key_1, key_2), label in detected_merges:
-                processes.append(
-                    executor.submit(
-                        merge_detection.localize,
-                        self.graphs[key_1],
-                        self.graphs[key_2],
-                        self.key_to_label_to_nodes[key_1][label],
-                        self.key_to_label_to_nodes[key_2][label],
-                        MERGE_DIST_THRESHOLD,
-                        ((key_1, key_2), label),
-                    )
-                )
-
-            # Compile results
-            cnt = 1
-            for i, process in enumerate(as_completed(processes)):
-                # Check site
-                site, d = process.result()
-                if d < MERGE_DIST_THRESHOLD:
-                    self.save_merge_site(site[0], site[1])
-
-                # Report process
-                if i >= cnt * len(processes) * 0.02:
-                    utils.progress_bar(i + 1, len(processes))
-                    cnt += 1
 
     def save_merge_site(self, xyz_1, xyz_2):
         """
