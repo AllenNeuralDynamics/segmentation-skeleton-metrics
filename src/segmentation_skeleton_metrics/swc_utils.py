@@ -48,6 +48,9 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             [1.0, 1.0, 1.0].
+        img_coords_bool : bool, optional
+            Indication of whether node xyz coordinates coorespond to voxels or
+            world. The default is True.
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default
@@ -62,6 +65,7 @@ class Reader:
 
         """
         self.anisotropy = anisotropy
+        self.img_coords_bool = img_coords_bool
         self.min_size = min_size
         self.return_graphs = return_graphs
 
