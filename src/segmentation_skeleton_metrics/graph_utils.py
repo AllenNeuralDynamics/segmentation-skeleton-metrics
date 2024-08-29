@@ -15,7 +15,7 @@ from scipy.spatial.distance import euclidean as get_dist
 
 from segmentation_skeleton_metrics import utils
 
-MIN_CNT = 20
+MIN_CNT = 30
 
 
 # --- Update graph structure ---

@@ -8,11 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
-from concurrent.futures import (
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
-    as_completed,
-)
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import time
 from zipfile import ZipFile
 
@@ -21,13 +17,7 @@ import tensorstore as ts
 from scipy.spatial import KDTree
 
 from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import (
-    merge_detection,
-    split_detection,
-    swc_utils,
-    utils,
-)
-from segmentation_skeleton_metrics.merge_detection import find_sites
+from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 20
@@ -60,7 +50,6 @@ class SkeletonMetric:
         pred_swc_paths=None,
         valid_labels=None,
         save_projections=False,
-        save_sites=False,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -102,9 +91,6 @@ class SkeletonMetric:
             ground truth neurons (i.e. there exists a node in a graph from
             "self.graphs" that is labeled with a given fragment id. The
             default is None.
-        save_sites, : bool, optional
-            Indication of whether to write merge sites to an swc file. The
-            default is False.
 
         Returns
         -------
@@ -117,7 +103,6 @@ class SkeletonMetric:
         self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
         self.pred_swc_paths = pred_swc_paths
-        self.save_sites = save_sites
 
         # Labels and Graphs
         assert type(valid_labels) is set if valid_labels else True
@@ -700,7 +685,7 @@ class SkeletonMetric:
         labels = self.graph_to_labels[key]
         if self.inv_label_map:
             labels = set.union(*[self.inv_label_map[l] for l in labels])
-            
+
         for label in labels:
             if label in self.fragment_arrays:
                 for xyz in self.fragment_arrays[label][::4]:
@@ -1054,6 +1039,40 @@ class SkeletonMetric:
 
 
 # -- utils --
+def find_sites(graphs, get_labels):
+    """
+    Detects merges between ground truth graphs which are considered to be
+    potential merge sites.
+
+    Parameters
+    ----------
+    graphs : dict
+        Dictionary where the keys are graph ids and values are graphs.
+    get_labels : func
+        Gets the label of a node in "graphs".
+
+    Returns
+    -------
+    merge_ids : set[tuple]
+        Set of tuples containing a tuple of graph ids and common label between
+        the graphs.
+
+    """
+    merge_ids = set()
+    visited = set()
+    for key_1 in graphs.keys():
+        for key_2 in graphs.keys():
+            keys = frozenset((key_1, key_2))
+            if key_1 != key_2 and keys not in visited:
+                visited.add(keys)
+                intersection = get_labels(key_1).intersection(
+                    get_labels(key_2)
+                )
+                for label in intersection:
+                    merge_ids.add((keys, label))
+    return merge_ids
+
+
 def generate_result(keys, stats):
     """
     Reorders items in "stats" with respect to the order defined by "keys".
