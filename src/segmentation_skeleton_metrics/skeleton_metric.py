@@ -389,9 +389,7 @@ class SkeletonMetric:
         t0 = time()
         print("Loading Fragments")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
-        reader = swc_utils.Reader(
-            anisotropy=anisotropy, img_coords_bool=False, return_graphs=True
-        )
+        reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
         fragment_graphs = reader.load_from_local_zip(self.pred_swc_paths)
 
         # Filter fragments

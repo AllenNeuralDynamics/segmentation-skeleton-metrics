@@ -515,3 +515,21 @@ def to_world(voxel):
 
     """
     return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
+
+
+def to_voxels(xyz):
+    """
+    Converts coordinates from world to voxels.
+
+    Parameters
+    ----------
+    voxel : numpy.ndarray
+        Coordinate to be converted.
+
+    Returns
+    -------
+    tuple
+        Converted coordinates.
+
+    """
+    return tuple([int(np.round(xyz[i] / ANISOTROPY[i])) for i in range(3)])

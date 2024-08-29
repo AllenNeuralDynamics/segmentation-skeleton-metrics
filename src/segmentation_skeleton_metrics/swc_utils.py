@@ -36,7 +36,6 @@ class Reader:
     def __init__(
         self,
         anisotropy=[1.0, 1.0, 1.0],
-        img_coords_bool=True,
         min_size=0,
         return_graphs=False,
     ):
@@ -49,9 +48,6 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             [1.0, 1.0, 1.0].
-        img_coords_bool : bool, optional
-            Indication of whether node xyz coordinates coorespond to voxels or
-            world. The default is True.
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default
@@ -66,7 +62,6 @@ class Reader:
 
         """
         self.anisotropy = anisotropy
-        self.img_coords_bool = img_coords_bool
         self.min_size = min_size
         self.return_graphs = return_graphs
 
@@ -137,7 +132,7 @@ class Reader:
 
                 # Report progress
                 if i >= cnt * chunk_size:
-                    utils.progress_bar(i, len(swc_files))
+                    utils.progress_bar(i + 1, len(swc_files))
                     cnt += 1
         return swc_dict
 
@@ -299,7 +294,7 @@ class Reader:
         xyz = np.zeros((3))
         for i in range(3):
             xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
-        return xyz.astype(int)
+        return np.round(xyz).astype(int)
 
     def get_graph(self, content):
         """
@@ -334,9 +329,7 @@ class Reader:
 
         # Set graph-level attributes
         graph.graph["number_of_edges"] = graph.number_of_edges()
-        graph.graph["run_length"] = gutils.compute_run_length(
-            graph, self.img_coords_bool
-        )
+        graph.graph["run_length"] = gutils.compute_run_length(graph)
         return graph
 
 

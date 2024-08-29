@@ -7,6 +7,7 @@ Created on Wed Aug 15 12:00:00 2023
 
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from copy import deepcopy
 from random import sample
 
 import networkx as nx
@@ -133,7 +134,7 @@ def get_node_labels(graphs):
             processes.append(executor.submit(parse_node_labels, graph, key))
 
         graph_to_labels = dict()
-        for cnt, process in enumerate(as_completed(processes)):
+        for process in as_completed(processes):
             graph_to_labels.update(process.result())
     return graph_to_labels
 
@@ -166,7 +167,7 @@ def parse_node_labels(graph, key):
         if label in label_to_cnt and label != 0:
             label_to_cnt[label] += 1
         else:
-            label_to_cnt[label] = 0
+            label_to_cnt[label] = 1
 
     # Filter
     keep = [l for l, cnt in label_to_cnt.items() if cnt > MIN_CNT]
@@ -189,7 +190,7 @@ def count_splits(graph):
         Number of splits in "graph".
 
     """
-    return max(len(list(nx.connected_components(graph))) - 1, 0)
+    return len(list(nx.connected_components(graph))) - 1
 
 
 def compute_run_lengths(graph):
@@ -217,7 +218,7 @@ def compute_run_lengths(graph):
     return np.array(run_lengths)
 
 
-def compute_run_length(graph, img_coords_bool=True):
+def compute_run_length(graph):
     """
     Computes path length of graph.
 
@@ -232,15 +233,12 @@ def compute_run_length(graph, img_coords_bool=True):
         Path length of graph.
 
     """
-    path_length = 0
+    run_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = graph.nodes[i]["xyz"]
-        xyz_2 = graph.nodes[j]["xyz"]
-        if img_coords_bool:
-            xyz_1 = utils.to_world(xyz_1)
-            xyz_2 = utils.to_world(xyz_2)
-        path_length += get_dist(xyz_1, xyz_2)
-    return path_length
+        xyz_1 = utils.to_world(graph.nodes[i]["xyz"])
+        xyz_2 = utils.to_world(graph.nodes[j]["xyz"])
+        run_length += get_dist(xyz_1, xyz_2)
+    return run_length
 
 
 # -- miscellaneous --
