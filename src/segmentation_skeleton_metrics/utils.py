@@ -17,6 +17,7 @@ import networkx as nx
 import tensorstore as ts
 
 ANISOTROPY = [0.748, 0.748, 1.0]
+MIN_CNT = 20
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
@@ -249,22 +250,8 @@ def list_files_in_zip(zip_content):
 
 
 # -- dict utils --
-def merge_dict_list(list_of_dicts):
-    """
-    Merges a list of dictionaries into a single dictionary.
-
-    Parameters
-    ----------
-    list_of_dicts
-        List of dictionaries to be merged.
-
-    Returns
-    -------
-    dict
-        Dictionary containing dictionaries from "list_of_dicts" as items.
-
-    """
-    return {k: v for d in list_of_dicts for k, v in d.items()}
+def filter_dict(my_dict):
+    return {k: v for k, v in my_dict.items() if len(v) > MIN_CNT}
 
 
 def check_edge(edge_list, edge):
@@ -288,61 +275,6 @@ def check_edge(edge_list, edge):
         return True
     else:
         return False
-
-
-def append_dict_value(my_dict, key, value):
-    """
-    Appends "value" to the list stored at "key".
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be queried.
-    key : hashable data type
-        Key to be query.
-    value : list item type
-        Value to append to list stored at "key".
-
-    Returns
-    -------
-    my_dict : dict
-        Updated dictionary.
-
-    """
-    if key in my_dict.keys():
-        my_dict[key].append(value)
-    else:
-        my_dict[key] = [value]
-    return my_dict
-
-
-def find_best(my_dict, keys):
-    """
-    Given a dictionary where each value is either a list or int (i.e. cnt),
-    finds the key associated with the longest list or largest integer.
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be searched.
-    keys : list
-        Keys to consider in search.
-
-    Returns
-    -------
-    hashable data type
-        Key associated with the longest list or largest integer in "my_dict".
-
-    """
-    best_key = None
-    best_vote_cnt = 0
-    if len(my_dict) > 0:
-        for key in keys:
-            vote_cnt = len(my_dict[key]) if key in my_dict.keys() else 0
-            if vote_cnt > best_vote_cnt:
-                best_key = key
-                best_vote_cnt = vote_cnt
-    return best_key
 
 
 def delete_keys(my_dict, keys):

@@ -135,17 +135,17 @@ class SkeletonMetric:
         """
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
-            self.label_map, self.inv_label_map = utils.init_label_map(
+            self.label_map, self.inverse_label_map = utils.init_label_map(
                 path, self.valid_labels
             )
         else:
             self.label_map = None
-            self.inv_label_map = None
+            self.inverse_label_map = None
 
     def init_graphs(self, paths, anisotropy):
         """
-        Initializes "self.graphs" by iterating over "paths" which
-        correspond to neurons in the ground truth.
+        Initializes "self.graphs" by iterating over "paths" which corresponds
+        to neurons in the ground truth.
 
         Parameters
         ----------
@@ -161,42 +161,29 @@ class SkeletonMetric:
         None
 
         """
+        # Read graphs
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
         self.graphs = reader.load_from_local_paths(paths)
-        self.init_key_label_nodes()
 
-    def init_key_label_nodes(self):
-        """
-        Initializes "self.graphs" by copying each graph in
-        "self.graphs", then labels each node with the label in
-        "self.label_mask" that coincides with it.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        print("Labeling Graphs...")
+        # Label nodes
         t0 = time()
-        cnt = 0
+        print("\nLabeling Graphs...")
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
-        for key, graph in self.graphs.items():
-            utils.progress_bar(cnt + 1, len(self.graphs))
-            self.key_to_label_to_nodes[key] = self.set_labels(graph)
-            cnt += 1
+        for i, key in enumerate(self.graphs.keys()):
+            utils.progress_bar(i + 1, len(self.graphs))
+            self.set_node_labels(key)
+            self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
+                self.graphs[key]
+            )
 
         t, unit = utils.time_writer(time() - t0)
         print(f"\nRuntime: {round(t, 2)} {unit}\n")
 
-    def set_labels(self, graph):
+    def set_node_labels(self, key):
         """
-        Iterates over nodes in "graph" and stores the label in the predicted
-        segmentation mask (i.e. "self.label_mask") which coincides with each
-        node as a node-level attribute called "label".
+        Iterates over nodes in "graph" and stores the corresponding label from
+        predicted segmentation mask (i.e. "self.label_mask") as a node-level
+        attribute called "label".
 
         Parameters
         ----------
@@ -205,55 +192,29 @@ class SkeletonMetric:
 
         Returns
         -------
-        dict
-            Dictionary that maps a label to the subset of nodes in "graph"
-            that have that label.
+        None
 
         """
-        label_to_nodes = dict()
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = []
-            for i in graph.nodes:
-                coord = gutils.get_coord(graph, i)
-                threads.append(executor.submit(self.get_label, coord, i))
+            for i in self.graphs[key].nodes:
+                voxel = tuple(self.graphs[key].nodes[i]["xyz"])
+                threads.append(executor.submit(self.get_label, i, voxel))
 
             # Store results
             for thread in as_completed(threads):
                 i, label = thread.result()
-                graph.nodes[i].update({"label": label})
-                if label in label_to_nodes:
-                    label_to_nodes[label].add(i)
-                else:
-                    label_to_nodes[label] = set([i])
-        return label_to_nodes
+                self.graphs[key].nodes[i].update({"label": label})
 
-    def read_label(self, voxel):
+    def get_label(self, i, voxel):
         """
-        Gets label at image coordinate "voxel".
+        Gets label of voxel in "self.label_mask".
 
         Parameters
         ----------
-        voxel : tuple[int]
-            Image coordinate that indexes into "self.label_mask".
-
-        Returns
-        -------
-        int
-           Label of voxel.
-
-        """
-        if type(self.label_mask) == ts.TensorStore:
-            return int(self.label_mask[voxel].read().result())
-        else:
-            return self.label_mask[voxel]
-
-    def get_label(self, voxel, return_node=False):
-        """
-        Gets label of voxel at "voxel".
-
-        Parameters
-        ----------
+        i : int
+            Node ID.
         voxel : numpy.ndarray
             Image coordinate of voxel to be read.
 
@@ -263,53 +224,20 @@ class SkeletonMetric:
            Label of voxel.
 
         """
-        label = self.read_label(voxel)
-        if return_node:
-            return return_node, self.validate(label)
+        # Read label
+        if type(self.label_mask) == ts.TensorStore:
+            label = int(self.label_mask[voxel].read().result())
         else:
-            return self.validate(label)
+            label = self.label_mask[voxel]
 
-    def get_labels(self, key):
-        """
-        Gets the set of labels contained in the graph corresponding to "key".
-
-        Parameters
-        ----------
-        key : str
-
-        Returns
-        -------
-        set
-            Labels contained in the graph corresponding to "key".
-        """
-        return set(self.key_to_label_to_nodes[key].keys())
-
-    def validate(self, label):
-        """
-        Validates label by checking whether it is contained in
-        "self.valid_labels".
-
-        Parameters
-        ----------
-        label : int
-            Label to be validated.
-
-        Returns
-        -------
-        int
-            There are two possibilities: (1) original label if either "label"
-            is contained in "self.valid_labels" or "self.valid_labels" is
-            None, or (2) 0 if "label" is not contained in self.valid_labels.
-
-        """
+        # Check whether to update label
         if self.label_map:
-            return self.equivalent_label(label)
+            label = self.get_equivalent_label(label)
         elif self.valid_labels:
-            return 0 if label not in self.valid_labels else label
-        else:
-            return label
+            label = 0 if label not in self.valid_labels else label
+        return i, label
 
-    def equivalent_label(self, label):
+    def get_equivalent_label(self, label):
         """
         Gets the equivalence class label corresponding to "label".
 
@@ -324,10 +252,52 @@ class SkeletonMetric:
             Equivalence class label.
 
         """
-        if label in self.label_map.keys():
-            return self.label_map[label]
-        else:
-            return 0
+        return self.label_map[label] if label in self.label_map.keys() else 0
+
+    def get_graph_labels(self, key, inverse_bool=False):
+        """
+        Gets the set of labels of nodes in the graph corresponding to "key".
+
+        Parameters
+        ----------
+        key : str
+            ID of graph in "self.graphs".
+        inverse_bool : bool
+            Indication of whether to return original labels from
+            "self.labels_mask" in the case where labels were remapped. The
+            default is False.
+
+        Returns
+        -------
+        set
+            Labels contained in the graph corresponding to "key".
+
+        """
+        labels = set(self.key_to_label_to_nodes[key].keys())
+        if inverse_bool:
+            labels = set.union(*[self.inverse_label_map[l] for l in labels])
+        return labels
+
+    def get_all_graph_labels(self):
+        """
+        Gets the a set of all unique labels from all graphs in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        set
+            A set containing all unique labels from all graphs.
+
+        """
+        all_labels = set()
+        inverse_bool = True if self.inverse_label_map else False
+        for key in self.graphs.keys():
+            labels = self.get_graph_labels(key, inverse_bool=inverse_bool)
+            all_labels = all_labels.union(labels)
+        return all_labels
 
     def zero_nodes(self, key, label):
         """
@@ -337,7 +307,7 @@ class SkeletonMetric:
         Parameters
         ----------
         key : str
-            ID of ground truth graph to be updated.
+            ID of graph in "self.graphs".
         label : int
             Label that identifies which nodes to have their label updated to
             zero.
@@ -374,44 +344,18 @@ class SkeletonMetric:
         t0 = time()
         print("Loading Fragments")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
-        reader = swc_utils.Reader(
-            anisotropy=anisotropy, img_coords_bool=False, return_graphs=True
-        )
+        reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
         fragment_graphs = reader.load_from_local_zip(self.pred_swc_paths)
 
         # Filter fragments
-        self.graph_to_labels = gutils.get_node_labels(self.graphs)
-        self.fragment_graphs = self.filter_fragments(fragment_graphs)
-        print("\n# Fragments:", len(self.fragment_graphs))
+        self.fragment_graphs = dict()
+        for label in self.get_all_graph_labels():
+            self.fragment_graphs[label] = fragment_graphs[label]
 
+        # Report Results
         t, unit = utils.time_writer(time() - t0)
+        print("\n# Fragments:", len(self.fragment_graphs))
         print(f"Runtime: {round(t, 2)} {unit}\n")
-
-    def filter_fragments(self, fragment_graphs):
-        """
-        Filters the provided "fragment_graphs" dictionary to include only
-        those fragments whose labels are present in the combined set of node
-        labels extracted from "self.graphs".
-
-        Parameters
-        ----------
-        fragment_graphs : dict
-            Dictionary that maps a label and to the corresponding fragment
-            graph.
-
-        Returns
-        -------
-        dict
-            Dictionary containing only those fragment graphs whose labels are
-            present in the combined set of labels from "self.graphs". The keys
-            are the labels and the values are the corresponding fragment
-            graphs.
-
-        """
-        labels = set.union(*list(self.graph_to_labels.values()))
-        if self.inv_label_map:
-            labels = set.union(*[self.inv_label_map[l] for l in labels])
-        return {l: fragment_graphs[l] for l in labels if l in fragment_graphs}
 
     def init_fragment_arrays(self):
         """
@@ -522,11 +466,9 @@ class SkeletonMetric:
         # Compute run lengths
         t0 = time()
         print("Computing Run Lengths")
-        for key, labels in self.graph_to_labels.items():
+        for key in self.graphs.keys():
             target_rl = self.get_run_length(key)
-            projected_rl = self.compute_projected_run_length(
-                labels, self.zip_writer[key]
-            )
+            projected_rl = self.compute_projected_run_length(key)
 
             self.projected_run_length[key] = projected_rl
             self.target_run_length[key] = target_rl
@@ -536,35 +478,17 @@ class SkeletonMetric:
         t, unit = utils.time_writer(time() - t0)
         print(f"Runtime: {round(t, 2)} {unit}\n")
 
-    def compute_projected_run_length(self, labels, zip_writer):
-        run_length = 0
-        for key in labels:
-            if self.inv_label_map:
-                run_length += self.compute_projected_run_length_with_map(
-                    key, zip_writer
-                )
-            elif key in self.fragment_graphs:
-                rl = self.fragment_graphs[key].graph["run_length"]
-                run_length += rl
+    def compute_projected_run_length(self, key):
+        rl = 0
+        inverse_bool = True if self.inverse_label_map else False
+        for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
+            if label in self.fragment_graphs:
+                rl += self.fragment_graphs[label].graph["run_length"]
                 if self.save_projections:
                     swc_utils.to_zipped_swc(
-                        zip_writer, self.fragment_graphs[key]
+                        self.zip_writer[key], self.fragment_graphs[label]
                     )
-        return run_length
-
-    def compute_projected_run_length_with_map(self, key, zip_writer):
-        run_length = 0
-        if key in self.inv_label_map:
-            for swc_id in self.inv_label_map[key]:
-                if swc_id in self.fragment_graphs:
-                    run_length += self.fragment_graphs[swc_id].graph[
-                        "run_length"
-                    ]
-                    if self.save_projections:
-                        swc_utils.to_zipped_swc(
-                            zip_writer, self.fragment_graphs[swc_id]
-                        )
-        return run_length
+        return rl
 
     # -- Split Detection --
     def detect_splits(self):
@@ -589,7 +513,9 @@ class SkeletonMetric:
 
             # Update graph by removing omits
             self.graphs[key] = gutils.delete_nodes(graph, 0)
-            self.key_to_label_to_nodes[key] = gutils.store_labels(graph)
+            self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
+                self.graphs[key], filter_bool=True
+            )
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
@@ -647,11 +573,10 @@ class SkeletonMetric:
 
         # Merges between ground truth - percent merged
         detected_merges = []
-        for (key_1, key_2), label in find_sites(self.graphs, self.get_labels):
-            if self.is_valid_merge(key_1, key_2, label):
-                self.process_merge(key_1, label)
-                self.process_merge(key_2, label)
-                detected_merges.append(((key_1, key_2), label))
+        for (key_1, key_2), label in self.find_merges():
+            self.process_merge(key_1, label)
+            self.process_merge(key_2, label)
+            detected_merges.append(((key_1, key_2), label))
 
         # Merges outside of ground truth - number of merges
         self.init_fragment_arrays()
@@ -660,10 +585,9 @@ class SkeletonMetric:
             kdtree = KDTree(xyz_array)
             self.count_merges(key, kdtree)
 
-    def is_valid_merge(self, key_1, key_2, label):
+    def find_merges(self):
         """
-        Checks whether merge is valid (i.e. not a few nodes with merged
-        label).
+        Detects merges between ground truth graphs.
 
         Parameters
         ----------
@@ -671,53 +595,50 @@ class SkeletonMetric:
 
         Returns
         -------
-        bool
-            Indication of whether merge is valid.
+        set[tuple]
+            Set of tuples containing a tuple of graph ids and common label
+            between the graphs.
 
         """
-        n_merged_nodes_1 = len(self.key_to_label_to_nodes[key_1][label])
-        n_merged_nodes_2 = len(self.key_to_label_to_nodes[key_2][label])
-        is_valid = n_merged_nodes_1 > 30 and n_merged_nodes_2 > 30
-        return True if is_valid else False
+        merged_graph_ids = set()
+        visited = set()
+        for key_1 in self.graphs.keys():
+            for key_2 in self.graphs.keys():
+                keys = frozenset((key_1, key_2))
+                if key_1 != key_2 and keys not in visited:
+                    visited.add(keys)
+                    labels_1 = self.get_graph_labels(key_1)
+                    labels_2 = self.get_graph_labels(key_2)
+                    for label in labels_1.intersection(labels_2):
+                        merged_graph_ids.add((keys, label))
+        return merged_graph_ids
 
     def count_merges(self, key, kdtree):
-        # Get labels
-        labels = self.graph_to_labels[key]
-        if self.inv_label_map:
-            labels = set.union(*[self.inv_label_map[l] for l in labels])
+        """
+        Counts the number of label merges for a given graph key based on
+        whether the fragment graph corresponding to a label has a node that is
+        more that 100ums away from the nearest point in "kdtree".
 
-        for label in labels:
+        Parameters
+        ----------
+        key : str
+            ID of graph in "self.graphs".
+        kdtree : scipy.spatial.KDTree
+            A KD-tree built from xyz coordinates in "self.graphs[key]".
+
+        Returns
+        -------
+        None
+
+        """
+        inverse_bool = True if self.inverse_label_map else False
+        for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
             if label in self.fragment_arrays:
-                for xyz in self.fragment_arrays[label][::4]:
-                    d, _ = kdtree.query(xyz, k=1)
-                    if d > 100:
+                for xyz in self.fragment_arrays[label][::5]:
+                    if kdtree.query(xyz, k=1)[0] > 100:
                         self.merge_cnt[key] += 1
                         self.merged_labels.add(label)
                         break
-
-    def save_merge_site(self, xyz_1, xyz_2):
-        """
-        Saves the site where a merge is located by writing the xyz coordinates
-        to an swc file.
-
-        Parameters
-        ----------
-        xyz_1 : numpy.ndarray
-            xyz coordinate of merge site.
-        xyz_2 : numpy.ndarray
-            xyz coordinate of merge site.
-
-        Returns
-        -------
-        None
-
-        """
-        self.saved_site_cnt += 1
-        xyz_1 = utils.to_world(xyz_1, self.anisotropy)
-        xyz_2 = utils.to_world(xyz_2, self.anisotropy)
-        color = "1.0 0.0 0.0"
-        path = f"{self.output_dir}/merge-{self.saved_site_cnt}.swc"
-        swc_utils.save(path, xyz_1, xyz_2, color=color)
 
     def process_merge(self, key, label):
         """
@@ -940,7 +861,7 @@ class SkeletonMetric:
         Parameters
         ----------
         key : str
-            Identifier of graph of interest.
+            ID of graph in "self.graphs".
 
         Returns
         -------
@@ -976,29 +897,6 @@ class SkeletonMetric:
         return metrics
 
     # -- Utils --
-    def near_bdd(self, xyz):
-        """
-        Determines whether "xyz" is near the boundary of the image.
-
-        Parameters
-        ----------
-        xyz : numpy.ndarray
-            xyz coordinate to be checked
-
-        Returns
-        -------
-        bool
-            Indication of whether "xyz" is near the boundary of the image.
-
-        """
-        near_bdd_bool = False
-        if self.ignore_boundary_mistakes:
-            mask_shape = self.label_mask.shape
-            above = [xyz[i] >= mask_shape[i] - 32 for i in range(3)]
-            below = [xyz[i] < 32 for i in range(3)]
-            near_bdd_bool = True if any(above) or any(below) else False
-        return near_bdd_bool
-
     def init_counter(self):
         """
         Initializes a dictionary that is used to count some type of mistake
@@ -1014,10 +912,7 @@ class SkeletonMetric:
             Dictionary used to count some type of mistake for each graph.
 
         """
-        counter = dict()
-        for key in self.graphs.keys():
-            counter[key] = 0
-        return counter
+        return {key: 0 for key in self.graphs.keys()}
 
     def init_tracker(self):
         """
@@ -1039,40 +934,6 @@ class SkeletonMetric:
 
 
 # -- utils --
-def find_sites(graphs, get_labels):
-    """
-    Detects merges between ground truth graphs which are considered to be
-    potential merge sites.
-
-    Parameters
-    ----------
-    graphs : dict
-        Dictionary where the keys are graph ids and values are graphs.
-    get_labels : func
-        Gets the label of a node in "graphs".
-
-    Returns
-    -------
-    merge_ids : set[tuple]
-        Set of tuples containing a tuple of graph ids and common label between
-        the graphs.
-
-    """
-    merge_ids = set()
-    visited = set()
-    for key_1 in graphs.keys():
-        for key_2 in graphs.keys():
-            keys = frozenset((key_1, key_2))
-            if key_1 != key_2 and keys not in visited:
-                visited.add(keys)
-                intersection = get_labels(key_1).intersection(
-                    get_labels(key_2)
-                )
-                for label in intersection:
-                    merge_ids.add((keys, label))
-    return merge_ids
-
-
 def generate_result(keys, stats):
     """
     Reorders items in "stats" with respect to the order defined by "keys".

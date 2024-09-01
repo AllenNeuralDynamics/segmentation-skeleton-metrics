@@ -34,11 +34,7 @@ class Reader:
     """
 
     def __init__(
-        self,
-        anisotropy=[1.0, 1.0, 1.0],
-        img_coords_bool=True,
-        min_size=0,
-        return_graphs=False,
+        self, anisotropy=[1.0, 1.0, 1.0], min_size=0, return_graphs=False
     ):
         """
         Initializes a Reader object that loads swc files.
@@ -49,9 +45,6 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             [1.0, 1.0, 1.0].
-        img_coords_bool : bool, optional
-            Indication of whether node xyz coordinates coorespond to voxels or
-            world. The default is True.
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default
@@ -66,9 +59,18 @@ class Reader:
 
         """
         self.anisotropy = anisotropy
-        self.img_coords_bool = img_coords_bool
         self.min_size = min_size
         self.return_graphs = return_graphs
+
+    def load(self, swc_pointer):
+        if type(swc_pointer) is dict:
+            return self.load_from_gcs(swc_pointer)
+        elif type(swc_pointer) is list:
+            return self.load_from_local_paths(swc_pointer)
+        elif type(swc_pointer) is str and ".zip" in swc_pointer:
+            return self.load_from_local_zip(swc_pointer)
+        else:
+            print("SWC Pointer is not Valid!")
 
     def load_from_local_paths(self, swc_paths):
         """
@@ -334,9 +336,7 @@ class Reader:
 
         # Set graph-level attributes
         graph.graph["number_of_edges"] = graph.number_of_edges()
-        graph.graph["run_length"] = gutils.compute_run_length(
-            graph, self.img_coords_bool
-        )
+        graph.graph["run_length"] = gutils.compute_run_length(graph)
         return graph
 
 
