@@ -10,7 +10,6 @@ Created on Wed Dec 21 19:00:00 2022
 import os
 import shutil
 from io import BytesIO
-from time import time
 from zipfile import ZipFile
 
 import networkx as nx
@@ -123,7 +122,8 @@ def get_id(path):
 
     Return
     ------
-    Segment id of swc file.
+    int or str
+        Segment id of swc file.
 
     """
     filename = os.path.basename(path).split(".")[0]
@@ -183,6 +183,7 @@ def read_zip(zip_file, path):
     -------
     str
         Contents of a txt file.
+
     """
     with zip_file.open(path) as f:
         return f.read().decode("utf-8")
@@ -244,6 +245,7 @@ def list_files_in_zip(zip_content):
     -------
     list
         Filenames in a zip.
+
     """
     with ZipFile(BytesIO(zip_content), "r") as zip_file:
         return zip_file.namelist()
@@ -251,6 +253,22 @@ def list_files_in_zip(zip_content):
 
 # -- dict utils --
 def filter_dict(my_dict):
+    """
+    Filters a dictionary by removing entries with values that do not meet a
+    minimum count threshold.
+
+    Parameters
+    ----------
+    my_dict : dict
+        A dictionary where each key is a set of items.
+
+    Returns
+    -------
+    dict
+        A new dictionary containing only the entries from "my_dict" where the
+        length of the value is greater than "MIN_CNT".
+
+    """
     return {k: v for k, v in my_dict.items() if len(v) > MIN_CNT}
 
 
@@ -267,7 +285,7 @@ def check_edge(edge_list, edge):
 
     Returns
     -------
-    bool : bool
+    bool
         Indication of whether "edge" is contained in "edge_list".
 
     """
@@ -365,13 +383,13 @@ def time_writer(t, unit="seconds"):
     t : float
         Runtime to be converted.
     unit : str, optional
-        Unit of "t".
+        Unit of "t". The default is "seconds".
 
     Returns
     -------
-    t : float
+    float
         Converted runtime.
-    unit : str
+    str
         Unit of "t"
 
     """
@@ -386,25 +404,6 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-def init_timers():
-    """
-    Initializes two timers.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    time.time
-        Timer.
-    time.time
-        Timer.
-
-    """
-    return time(), time()
-
-
 def progress_bar(current, total, bar_length=50):
     """
     Reports the progress of completing some process.
@@ -414,9 +413,9 @@ def progress_bar(current, total, bar_length=50):
     current : int
         Current iteration of process.
     total : int
-        Total number of iterations to be completed
+        Total number of iterations to be completed.
     bar_length : int, optional
-        Length of progress bar
+        Length of progress bar. The default is 50.
 
     Returns
     -------

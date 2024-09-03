@@ -197,7 +197,7 @@ def compute_run_lengths(graph):
     return np.array(run_lengths)
 
 
-def compute_run_length(graph, img_coords_bool=True):
+def compute_run_length(graph):
     """
     Computes path length of graph.
 
@@ -214,11 +214,8 @@ def compute_run_length(graph, img_coords_bool=True):
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = graph.nodes[i]["xyz"]
-        xyz_2 = graph.nodes[j]["xyz"]
-        if img_coords_bool:
-            xyz_1 = utils.to_world(xyz_1)
-            xyz_2 = utils.to_world(xyz_2)
+        xyz_1 = utils.to_world(graph.nodes[i]["xyz"])
+        xyz_2 = utils.to_world(graph.nodes[j]["xyz"])
         path_length += get_dist(xyz_1, xyz_2)
     return path_length
 
