@@ -575,7 +575,7 @@ class SkeletonMetric:
         """
         Counts the number of label merges for a given graph key based on
         whether the fragment graph corresponding to a label has a node that is
-        more that 100ums away from the nearest point in "kdtree".
+        more that 200ums away from the nearest point in "kdtree".
 
         Parameters
         ----------
@@ -593,7 +593,7 @@ class SkeletonMetric:
         for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
             if label in self.fragment_arrays:
                 for xyz in self.fragment_arrays[label][::5]:
-                    if kdtree.query(xyz, k=1)[0] > 100:
+                    if kdtree.query(xyz, k=1)[0] > 200:
                         self.merge_cnt[key] += 1
                         self.merged_labels.add((key, label))
                         break
