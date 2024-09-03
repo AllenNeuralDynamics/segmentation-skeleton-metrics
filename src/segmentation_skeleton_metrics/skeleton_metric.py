@@ -442,8 +442,6 @@ class SkeletonMetric:
         self.target_run_length = dict()
 
         # Compute run lengths
-        t0 = time()
-        print("Computing Run Lengths")
         for key in self.graphs.keys():
             target_rl = self.get_run_length(key)
             projected_rl = self.compute_projected_run_length(key)
@@ -451,10 +449,6 @@ class SkeletonMetric:
             self.projected_run_length[key] = projected_rl
             self.target_run_length[key] = target_rl
             self.run_length_ratio[key] = projected_rl / target_rl
-
-        # Report runtime
-        t, unit = utils.time_writer(time() - t0)
-        print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def compute_projected_run_length(self, key):
         """
