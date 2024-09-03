@@ -63,6 +63,23 @@ class Reader:
         self.return_graphs = return_graphs
 
     def load(self, swc_pointer):
+        """
+        Load data based on the type and format of the provided "swc_pointer".
+
+        Parameters
+        ----------
+        swc_pointer : dict, list, str
+            Must be one of the following: (1) A dictionary for loading from a
+            GCS bucket, (2) list of file paths for loading from local paths,
+            or (3) path to ".zip" file containing swc files.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the xyz coordinates or graph read
+            from that swc file.
+
+        """
         if type(swc_pointer) is dict:
             return self.load_from_gcs(swc_pointer)
         elif type(swc_pointer) is list:
@@ -282,15 +299,15 @@ class Reader:
 
     def read_xyz(self, xyz_str, offset):
         """
-        Reads the xyz coordinates from an swc file, then transforms the
-        coordinates with respect to "anisotropy" and "offset".
+        Reads the coordinates from a string, then transforms them to image
+        coordinates (if applicable).
 
         Parameters
         ----------
         xyz_str : str
-            xyz coordinate stored in a str.
+            Coordinate stored in a str.
         offset : list[int]
-            Offset of xyz coordinates in swc file.
+            Offset of coordinates in swc file.
 
         Returns
         -------
@@ -301,7 +318,7 @@ class Reader:
         xyz = np.zeros((3))
         for i in range(3):
             xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
-        return xyz.astype(int)
+        return np.round(xyz).astype(int)
 
     def get_graph(self, content):
         """
@@ -335,7 +352,7 @@ class Reader:
                     graph.add_edge(parent, child)
 
         # Set graph-level attributes
-        graph.graph["number_of_edges"] = graph.number_of_edges()
+        graph.graph["n_edges"] = graph.number_of_edges()
         graph.graph["run_length"] = gutils.compute_run_length(graph)
         return graph
 

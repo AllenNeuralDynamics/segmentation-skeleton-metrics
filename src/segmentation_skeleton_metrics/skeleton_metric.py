@@ -44,12 +44,11 @@ class SkeletonMetric:
         target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
         connections_path=None,
-        merged_ids_path=None,
-        ignore_boundary_mistakes=False,
         output_dir=None,
         pred_swc_paths=None,
-        valid_labels=None,
+        preexisting_merges=None,
         save_projections=False,
+        valid_labels=None,
     ):
         """
         Constructs skeleton metric object that evaluates the quality of a
@@ -68,12 +67,9 @@ class SkeletonMetric:
         connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
             that were merged into a single segment. The default is None.
-        merged_ids_path : str, optional
+        preexisting_merges : str, optional
             Path to txt file that contains segment ids that correspond to
             merge mistakes. The default is None.
-        ignore_boundary_mistakes : bool, optional
-            Indication of whether to ignore mistakes near boundary of bounding
-            box. The default is False.
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
@@ -82,15 +78,18 @@ class SkeletonMetric:
             neuron from the prediction. If provided, these fragments are used
             to compute the 'projected run length' (see merge_detection.py for
             details). The default is None.
-        valid_labels : set[int], optional
-            Segment ids (i.e. labels) that are present in the segmentation.
-            The purpose of this argument is to account for segments that were
-            removed due to thresholding by path length. The default is None.
+        preexisting_merges : list[int], optional
+            List of segment IDs that are known to be create a false merge. The
+            default is None.
         save_projections: bool, optional
             Indication of whether to save fragments that 'project' onto the
             ground truth neurons (i.e. there exists a node in a graph from
             "self.graphs" that is labeled with a given fragment id. The
             default is None.
+        valid_labels : set[int], optional
+            Segment ids (i.e. labels) that are present in the segmentation.
+            The purpose of this argument is to account for segments that were
+            removed due to thresholding by path length. The default is None.
 
         Returns
         -------
@@ -100,9 +99,9 @@ class SkeletonMetric:
         # Options
         self.anisotropy = anisotropy
         self.connections_path = connections_path
-        self.ignore_boundary_mistakes = ignore_boundary_mistakes
         self.output_dir = output_dir
         self.pred_swc_paths = pred_swc_paths
+        self.preexisting_merges = preexisting_merges
 
         # Labels and Graphs
         assert type(valid_labels) is set if valid_labels else True
@@ -163,7 +162,7 @@ class SkeletonMetric:
         """
         # Read graphs
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
-        self.graphs = reader.load_from_local_paths(paths)
+        self.graphs = reader.load(paths)
 
         # Label nodes
         t0 = time()
@@ -289,7 +288,7 @@ class SkeletonMetric:
         Returns
         -------
         set
-            A set containing all unique labels from all graphs.
+            Set containing all unique labels from all graphs.
 
         """
         all_labels = set()
@@ -299,35 +298,11 @@ class SkeletonMetric:
             all_labels = all_labels.union(labels)
         return all_labels
 
-    def zero_nodes(self, key, label):
-        """
-        Zeros out nodes in "self.graph[key]" in the sense that nodes with label
-        "label" are updated to zero.
-
-        Parameters
-        ----------
-        key : str
-            ID of graph in "self.graphs".
-        label : int
-            Label that identifies which nodes to have their label updated to
-            zero.
-
-        Returns
-        -------
-        None
-
-        """
-        if label in self.key_to_label_to_nodes[key].keys():
-            for i in self.key_to_label_to_nodes[key][label]:
-                self.graphs[key].nodes[i]["label"] = 0
-            del self.key_to_label_to_nodes[key][label]
-
     # -- Load Fragments --
     def load_fragments(self):
         """
         Loads and filters swc files from a local zip. These swc files are
-        assumed to be fragments from a predicted segmentation. Note: Hard
-        coded to read from a local zip
+        assumed to be fragments from a predicted segmentation.
 
         Parameters
         ----------
@@ -345,16 +320,16 @@ class SkeletonMetric:
         print("Loading Fragments")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
-        fragment_graphs = reader.load_from_local_zip(self.pred_swc_paths)
+        fragment_graphs = reader.load(self.pred_swc_paths)
 
         # Filter fragments
         self.fragment_graphs = dict()
         for label in self.get_all_graph_labels():
             self.fragment_graphs[label] = fragment_graphs[label]
+        print("\n# Fragments:", len(self.fragment_graphs))
 
         # Report Results
         t, unit = utils.time_writer(time() - t0)
-        print("\n# Fragments:", len(self.fragment_graphs))
         print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def init_fragment_arrays(self):
@@ -420,9 +395,13 @@ class SkeletonMetric:
         """
         # Split evaluation
         print("Detecting Splits...")
-        self.saved_site_cnt = 0
         self.detect_splits()
         self.quantify_splits()
+
+        # Check whether to delete prexisting merges
+        if self.preexisting_merges:
+            for key in self.graphs.keys():
+                self.adjust_metrics(key)
 
         # Projected run lengths
         if self.pred_swc_paths:
@@ -432,7 +411,6 @@ class SkeletonMetric:
 
         # Merge evaluation
         print("Detecting Merges...")
-        self.saved_site_cnt = 0
         self.detect_merges()
         self.quantify_merges()
 
@@ -479,6 +457,23 @@ class SkeletonMetric:
         print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def compute_projected_run_length(self, key):
+        """
+        Compute the projected run length based of graph in "self.graphs" that
+        cooresponds to "key".
+
+        Parameters
+        ----------
+        key : str
+            The key used to retrieve graph for computing the run length.
+
+        Returns
+        -------
+        float
+            Total projected run length, which is the sum of run lengths from
+            fragment graphs associated with the labels obtained for the given
+            key.
+
+        """
         rl = 0
         inverse_bool = True if self.inverse_label_map else False
         for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
@@ -540,7 +535,7 @@ class SkeletonMetric:
         self.omit_percent = dict()
         for key in self.graphs:
             n_pred_edges = self.graphs[key].number_of_edges()
-            n_target_edges = self.graphs[key].graph["number_of_edges"]
+            n_target_edges = self.graphs[key].graph["n_edges"]
 
             self.split_cnt[key] = gutils.count_splits(self.graphs[key])
             self.omit_cnts[key] = n_target_edges - n_pred_edges
@@ -563,55 +558,24 @@ class SkeletonMetric:
         """
         # Initilizations
         self.merge_cnt = self.init_counter()
-        self.merged_cnts = self.init_counter()
+        self.merged_edges_cnt = self.init_counter()
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
 
-        # Check whether to delete prexisting merges
-        # add conditional that checks whether detected merges file exists
-        # to adjust for scenario when evaluating a corrected segmentation
-
-        # Merges between ground truth - percent merged
-        detected_merges = []
-        for (key_1, key_2), label in self.find_merges():
-            self.process_merge(key_1, label)
-            self.process_merge(key_2, label)
-            detected_merges.append(((key_1, key_2), label))
-
-        # Merges outside of ground truth - number of merges
+        # Count total merges
         self.init_fragment_arrays()
         for key, graph in self.graphs.items():
             xyz_array = gutils.to_xyz_array(graph)
             kdtree = KDTree(xyz_array)
             self.count_merges(key, kdtree)
 
-    def find_merges(self):
-        """
-        Detects merges between ground truth graphs.
+        # Process merges
+        for (key_1, key_2), label in self.find_label_intersections():
+            self.process_merge(key_1, label)
+            self.process_merge(key_2, label)
 
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        set[tuple]
-            Set of tuples containing a tuple of graph ids and common label
-            between the graphs.
-
-        """
-        merged_graph_ids = set()
-        visited = set()
-        for key_1 in self.graphs.keys():
-            for key_2 in self.graphs.keys():
-                keys = frozenset((key_1, key_2))
-                if key_1 != key_2 and keys not in visited:
-                    visited.add(keys)
-                    labels_1 = self.get_graph_labels(key_1)
-                    labels_2 = self.get_graph_labels(key_2)
-                    for label in labels_1.intersection(labels_2):
-                        merged_graph_ids.add((keys, label))
-        return merged_graph_ids
+        for key, label in self.merged_labels:
+            self.process_merge(key, label, update_merged_labels=False)
 
     def count_merges(self, key, kdtree):
         """
@@ -637,10 +601,39 @@ class SkeletonMetric:
                 for xyz in self.fragment_arrays[label][::5]:
                     if kdtree.query(xyz, k=1)[0] > 100:
                         self.merge_cnt[key] += 1
-                        self.merged_labels.add(label)
+                        self.merged_labels.add((key, label))
                         break
 
-    def process_merge(self, key, label):
+    def find_label_intersections(self):
+        """
+        Detects merges between ground truth graphs, namely distinct graphs that
+        contain nodes with the same label.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        set[tuple]
+            Set of tuples containing a tuple of graph ids and common label
+            between the graphs.
+
+        """
+        label_intersections = set()
+        visited = set()
+        for key_1 in self.graphs.keys():
+            for key_2 in self.graphs.keys():
+                keys = frozenset((key_1, key_2))
+                if key_1 != key_2 and keys not in visited:
+                    visited.add(keys)
+                    labels_1 = self.get_graph_labels(key_1)
+                    labels_2 = self.get_graph_labels(key_2)
+                    for label in labels_1.intersection(labels_2):
+                        label_intersections.add((keys, label))
+        return label_intersections
+
+    def process_merge(self, key, label, update_merged_labels=True):
         """
         Once a merge has been detected that corresponds to "key", every
         node in "self.graphs[key]" with that "label" is
@@ -658,11 +651,17 @@ class SkeletonMetric:
         None
 
         """
-        graph = self.graphs[key].copy()
-        graph, merged_cnt = gutils.delete_nodes(graph, label, return_cnt=True)
-        self.graphs[key] = graph
-        self.merged_cnts[key] += merged_cnt
-        self.merged_labels.add(label)
+        if label in self.key_to_label_to_nodes[key]:
+            # Compute metrics
+            nodes = list(self.key_to_label_to_nodes[key][label])
+            subgraph = self.graphs[key].subgraph(nodes)
+            self.merged_edges_cnt[key] += subgraph.number_of_edges()
+
+            # Update self
+            self.graphs[key].remove_nodes_from(nodes)
+            del self.key_to_label_to_nodes[key][label]
+            if update_merged_labels:
+                self.merged_labels.add((key, label))
 
     def quantify_merges(self):
         """
@@ -679,9 +678,26 @@ class SkeletonMetric:
         """
         self.merged_percent = dict()
         for key in self.graphs:
-            n_edges = self.graphs[key].graph["number_of_edges"]
-            percent = self.merged_cnts[key] / n_edges
-            self.merged_percent[key] = percent
+            n_edges = self.graphs[key].graph["n_edges"]
+            self.merged_percent[key] = self.merged_edges_cnt[key] / n_edges
+
+    def adjust_metrics(self, key):
+        for label in self.preexisting_merges:
+            label = self.label_map[label] if self.label_map else label
+            if label in self.key_to_label_to_nodes[key].keys():
+                # Extract subgraph
+                nodes = self.key_to_label_to_nodes[key][label]
+                subgraph = self.graphs[key].subgraph(nodes)
+
+                # Adjust metrics
+                n_edges = subgraph.number_of_edges()
+                rls = gutils.compute_run_lengths(subgraph)
+                self.graphs[key].graph["run_length"] -= np.sum(rls)
+                self.graphs[key].graph["n_edges"] -= n_edges
+
+                # Update graph
+                self.graphs[key].remove_nodes_from(nodes)
+                del self.key_to_label_to_nodes[key][label]
 
     # -- Compute Metrics --
     def compile_results(self):
@@ -843,13 +859,12 @@ class SkeletonMetric:
         for key in self.graphs.keys():
             run_length = self.get_run_length(key)
             run_lengths = gutils.compute_run_lengths(self.graphs[key])
+            total_run_length += run_length
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
             self.erl[key] = np.sum(wgt * run_lengths)
             self.normalized_erl[key] = self.erl[key] / run_length
-
             self.wgts[key] = run_length
-            total_run_length += run_length
 
         for key in self.graphs.keys():
             self.wgts[key] = self.wgts[key] / total_run_length
@@ -913,24 +928,6 @@ class SkeletonMetric:
 
         """
         return {key: 0 for key in self.graphs.keys()}
-
-    def init_tracker(self):
-        """
-        Initializes a dictionary whose keys are "self.graphs.keys()" and
-        values are an emtpy set.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict
-            Dicionary whose keys are "self.graphs.keys()" and values are an
-            emtpy set.
-
-        """
-        return {key: set() for key in self.graphs.keys()}
 
 
 # -- utils --
