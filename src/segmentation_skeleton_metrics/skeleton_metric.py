@@ -224,7 +224,7 @@ class SkeletonMetric:
 
         """
         # Read label
-        if type(self.label_mask) == ts.TensorStore:
+        if type(self.label_mask) is ts.TensorStore:
             label = int(self.label_mask[voxel].read().result())
         else:
             label = self.label_mask[voxel]
