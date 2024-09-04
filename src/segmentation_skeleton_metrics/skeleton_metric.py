@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from time import time
 from zipfile import ZipFile
 
+import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
@@ -328,7 +329,7 @@ class SkeletonMetric:
             try:
                 self.fragment_graphs[label] = fragment_graphs[label]
             except KeyError as e:
-                print(f"KeyError: {e} was not found in the fragment_graphs.")
+                print(f"\nKeyError: {e} not found in the fragment_graphs.")
                 self.fragment_graphs[label] = nx.Graph()
         print("\n# Fragments:", len(self.fragment_graphs))
 
