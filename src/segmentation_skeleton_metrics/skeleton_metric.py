@@ -321,13 +321,15 @@ class SkeletonMetric:
 
         # Filter fragments
         self.fragment_graphs = dict()
+        n_excepts = 0
         for label in self.get_all_graph_labels():
             try:
                 self.fragment_graphs[label] = fragment_graphs[label]
-            except KeyError as e:
-                print(f"\nKeyError: {e} not found in the fragment_graphs.")
-                self.fragment_graphs[label] = nx.Graph()
-        print("\n# Fragments:", len(self.fragment_graphs))
+            except KeyError:
+                self.fragment_graphs[label] = nx.Graph(run_length=0, n_edges=1)
+                n_excepts += 1
+        print("\n% Excepts:", n_excepts / len(self.fragment_graphs))
+        print("# Fragments:", len(self.fragment_graphs) - n_excepts)
 
         # Report Results
         t, unit = utils.time_writer(time() - t0)
