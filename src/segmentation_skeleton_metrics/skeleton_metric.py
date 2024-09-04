@@ -20,7 +20,7 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
-MERGE_DIST_THRESHOLD = 20
+MERGE_DIST_THRESHOLD = 200
 
 
 class SkeletonMetric:
@@ -325,7 +325,11 @@ class SkeletonMetric:
         # Filter fragments
         self.fragment_graphs = dict()
         for label in self.get_all_graph_labels():
-            self.fragment_graphs[label] = fragment_graphs[label]
+            try:
+                self.fragment_graphs[label] = fragment_graphs[label]
+            except KeyError as e:
+                print(f"KeyError: {e} was not found in the fragment_graphs.")
+                self.fragment_graphs[label] = nx.Graph()
         print("\n# Fragments:", len(self.fragment_graphs))
 
         # Report Results
@@ -575,7 +579,8 @@ class SkeletonMetric:
         """
         Counts the number of label merges for a given graph key based on
         whether the fragment graph corresponding to a label has a node that is
-        more that 200ums away from the nearest point in "kdtree".
+        more that MERGE_DIST_THRESHOLD-ums away from the nearest point in
+        "kdtree".
 
         Parameters
         ----------
@@ -593,7 +598,7 @@ class SkeletonMetric:
         for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
             if label in self.fragment_arrays:
                 for xyz in self.fragment_arrays[label][::5]:
-                    if kdtree.query(xyz, k=1)[0] > 200:
+                    if kdtree.query(xyz, k=1)[0] > MERGE_DIST_THRESHOLD:
                         self.merge_cnt[key] += 1
                         self.merged_labels.add((key, label))
                         break
