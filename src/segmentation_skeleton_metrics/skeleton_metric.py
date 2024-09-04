@@ -41,12 +41,12 @@ class SkeletonMetric:
 
     def __init__(
         self,
+        gt_pointer,
         pred_labels,
-        target_swc_paths,
         anisotropy=[1.0, 1.0, 1.0],
         connections_path=None,
+        fragments_pointer=None,
         output_dir=None,
-        pred_swc_paths=None,
         preexisting_merges=None,
         save_projections=False,
         valid_labels=None,
@@ -57,28 +57,24 @@ class SkeletonMetric:
 
         Parameters
         ----------
+        gt_pointer : container
+            Pointer to ground truth swcs, see "swc_utils.Reader" for further
+            documentation.
         pred_labels : numpy.ndarray or tensorstore.TensorStore
             Predicted segmentation mask.
-        target_swc_paths : list[str]
-            List of paths to swc files where each file corresponds to a
-            neuron in the ground truth.
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
-            files at "target_swc_paths". The default is [1.0, 1.0, 1.0].
+            files at "gt_pointer". The default is [1.0, 1.0, 1.0].
         connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
             that were merged into a single segment. The default is None.
-        preexisting_merges : str, optional
-            Path to txt file that contains segment ids that correspond to
-            merge mistakes. The default is None.
+        fragments_pointer : container, optional
+            Pointer to fragments (i.e. swcs) corresponding to "pred_labels",
+            see "swc_utils.Reader" for further documentation. The default is
+            None.
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
-        pred_swc_paths : str, optional
-            List of paths to swc files where each file corresponds to a
-            neuron from the prediction. If provided, these fragments are used
-            to compute the 'projected run length' (see merge_detection.py for
-            details). The default is None.
         preexisting_merges : list[int], optional
             List of segment IDs that are known to be create a false merge. The
             default is None.
@@ -101,7 +97,7 @@ class SkeletonMetric:
         self.anisotropy = anisotropy
         self.connections_path = connections_path
         self.output_dir = output_dir
-        self.pred_swc_paths = pred_swc_paths
+        self.fragments_pointer = fragments_pointer
         self.preexisting_merges = preexisting_merges
 
         # Labels and Graphs
@@ -109,7 +105,7 @@ class SkeletonMetric:
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
-        self.init_graphs(target_swc_paths, anisotropy)
+        self.init_graphs(gt_pointer, anisotropy)
 
         # Initialize writer
         self.save_projections = save_projections
@@ -321,7 +317,7 @@ class SkeletonMetric:
         print("Loading Fragments")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
-        fragment_graphs = reader.load(self.pred_swc_paths)
+        fragment_graphs = reader.load(self.fragments_pointer)
 
         # Filter fragments
         self.fragment_graphs = dict()
@@ -409,7 +405,7 @@ class SkeletonMetric:
                 self.adjust_metrics(key)
 
         # Projected run lengths
-        if self.pred_swc_paths:
+        if self.fragments_pointer:
             print("Computing Projected Run Lengths...")
             self.load_fragments()
             self.compute_projected_run_lengths()
@@ -427,7 +423,7 @@ class SkeletonMetric:
     def compute_projected_run_lengths(self):
         """
         Computes the projected run length for each graph in "self.graphs".
-        First, we detect fragments from "self.pred_swc_paths" that are
+        First, we detect fragments from "self.fragments_pointer" that are
         sufficiently close (as determined by projection distances) to the
         given graph. The projected run length is the sum of the path lengths
         of fragments that were detected.
