@@ -71,7 +71,8 @@ class Reader:
         swc_pointer : dict, list, str
             Must be one of the following: (1) A dictionary for loading from a
             GCS bucket, (2) list of file paths for loading from local paths,
-            or (3) path to ".zip" file containing swc files.
+            (3) path to one swc file, or (4) path to ".zip" file containing
+            swc files.
 
         Returns
         -------
@@ -86,6 +87,8 @@ class Reader:
             return self.load_from_local_paths(swc_pointer)
         elif type(swc_pointer) is str and ".zip" in swc_pointer:
             return self.load_from_local_zip(swc_pointer)
+        elif type(swc_pointer) is str and ".swc" in swc_pointer:
+            return self.load_from_local_path(swc_pointer)
         else:
             print("SWC Pointer is not Valid!")
 
@@ -106,17 +109,48 @@ class Reader:
             from that swc file.
 
         """
-        swc_dict = dict()
-        for path in swc_paths:
-            content = utils.read_txt(path)
-            if len(content) > self.min_size:
-                key = utils.get_id(path)
-                if self.return_graphs:
-                    swc_dict[key] = self.get_graph(content)
-                    swc_dict[key].graph["filename"] = os.path.basename(path)
-                else:
-                    swc_dict[key] = self.get_coords(content)
-        return swc_dict
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for path in swc_paths:
+                processes.append(
+                    executor.submit(self.load_from_local_path, path)
+                )
+
+            # Store results
+            swc_dicts = dict()
+            for process in as_completed(processes):
+                swc_dicts.update(process.result())
+        return swc_dicts
+
+    def load_from_local_path(self, path):
+        """
+        Reads a single swc file from local machine, then returns either the
+        xyz coordinates or graphs.
+
+        Paramters
+        ---------
+        path : str
+            Path to swc file stored on the local machine.
+
+        Returns
+        -------
+        dict
+            Dictionary that maps an swc_id to the xyz coordinates or graph read
+            from that swc file.
+
+        """
+        content = utils.read_txt(path)
+        if len(content) > self.min_size:
+            key = utils.get_id(path)
+            if self.return_graphs:
+                result = self.get_graph(content)
+                result.graph["filename"] = os.path.basename(path)
+            else:
+                result = self.get_coords(content)
+            return {key: result}
+        else:
+            return dict()
 
     def load_from_local_zip(self, zip_path):
         """
