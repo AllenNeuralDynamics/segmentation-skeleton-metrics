@@ -21,7 +21,7 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
-MERGE_DIST_THRESHOLD = 200
+MERGE_DIST_THRESHOLD = 100
 
 
 class SkeletonMetric:
@@ -329,7 +329,7 @@ class SkeletonMetric:
                 self.fragment_graphs[label] = nx.Graph(
                     filename=f"{label}.swc", run_length=0, n_edges=1
                 )
-        print("# Fragments:", len(self.fragment_graphs) - n_excepts)
+        print("\n# Fragments:", len(self.fragment_graphs) - n_excepts)
 
         # Report Results
         t, unit = utils.time_writer(time() - t0)
