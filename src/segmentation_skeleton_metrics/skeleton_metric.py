@@ -326,8 +326,10 @@ class SkeletonMetric:
             try:
                 self.fragment_graphs[label] = fragment_graphs[label]
             except KeyError:
-                self.fragment_graphs[label] = nx.Graph(run_length=0, n_edges=1)
                 n_excepts += 1
+                self.fragment_graphs[label] = nx.Graph(
+                    filename=f"{label}.swc", run_length=0, n_edges=1
+                )
         print("\n% Excepts:", n_excepts / len(self.fragment_graphs))
         print("# Fragments:", len(self.fragment_graphs) - n_excepts)
 
