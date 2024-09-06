@@ -16,12 +16,11 @@ import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
-
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
-MERGE_DIST_THRESHOLD = 100
+MERGE_DIST_THRESHOLD = 200
 
 
 class SkeletonMetric:
@@ -680,6 +679,22 @@ class SkeletonMetric:
             self.merged_percent[key] = self.merged_edges_cnt[key] / n_edges
 
     def adjust_metrics(self, key):
+        """
+        Adjusts the metrics of the graph associated with the given key by
+        removing nodes corresponding to known merges and their corresponding
+        subgraphs. Updates the total number of edges and run lengths in the
+        graph.
+
+        Parameters
+        ----------
+        key : str
+            Identifier for the graph to adjust.
+
+        Returns
+        -------
+        None
+
+        """
         for label in self.preexisting_merges:
             label = self.label_map[label] if self.label_map else label
             if label in self.key_to_label_to_nodes[key].keys():

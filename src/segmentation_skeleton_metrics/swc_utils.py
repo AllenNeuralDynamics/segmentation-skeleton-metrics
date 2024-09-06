@@ -8,18 +8,14 @@ Created on Wed June 5 16:00:00 2023
 """
 
 import os
-from concurrent.futures import (
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
-    as_completed,
-)
+from concurrent.futures import (ProcessPoolExecutor, ThreadPoolExecutor,
+                                as_completed)
 from io import BytesIO, StringIO
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
 from google.cloud import storage
-
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
 
