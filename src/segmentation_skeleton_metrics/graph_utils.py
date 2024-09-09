@@ -13,6 +13,7 @@ from random import sample
 import networkx as nx
 import numpy as np
 from scipy.spatial.distance import euclidean as get_dist
+
 from segmentation_skeleton_metrics import utils
 
 

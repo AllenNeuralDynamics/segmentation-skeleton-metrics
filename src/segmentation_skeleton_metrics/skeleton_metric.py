@@ -16,11 +16,13 @@ import networkx as nx
 import numpy as np
 import tensorstore as ts
 from scipy.spatial import KDTree
+
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 200
+MIN_CNT = 30
 
 
 class SkeletonMetric:
@@ -473,12 +475,13 @@ class SkeletonMetric:
         rl = 0
         inverse_bool = True if self.inverse_label_map else False
         for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
-            if label in self.fragment_graphs:
-                rl += self.fragment_graphs[label].graph["run_length"]
-                if self.save_projections:
-                    swc_utils.to_zipped_swc(
-                        self.zip_writer[key], self.fragment_graphs[label]
-                    )
+            if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
+                if label in self.fragment_graphs:
+                    rl += self.fragment_graphs[label].graph["run_length"]
+                    if self.save_projections:
+                        swc_utils.to_zipped_swc(
+                            self.zip_writer[key], self.fragment_graphs[label]
+                        )
         return rl
 
     # -- Split Detection --
@@ -594,12 +597,13 @@ class SkeletonMetric:
         """
         inverse_bool = True if self.inverse_label_map else False
         for label in self.get_graph_labels(key, inverse_bool=inverse_bool):
-            if label in self.fragment_arrays:
-                for xyz in self.fragment_arrays[label][::5]:
-                    if kdtree.query(xyz, k=1)[0] > MERGE_DIST_THRESHOLD:
-                        self.merge_cnt[key] += 1
-                        self.merged_labels.add((key, label))
-                        break
+            if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
+                if label in self.fragment_arrays:
+                    for xyz in self.fragment_arrays[label][::5]:
+                        if kdtree.query(xyz, k=1)[0] > MERGE_DIST_THRESHOLD:
+                            self.merge_cnt[key] += 1
+                            self.merged_labels.add((key, label))
+                            break
 
     def find_label_intersections(self):
         """

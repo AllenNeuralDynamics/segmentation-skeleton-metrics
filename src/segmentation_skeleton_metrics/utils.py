@@ -16,7 +16,6 @@ import networkx as nx
 import tensorstore as ts
 
 ANISOTROPY = [0.748, 0.748, 1.0]
-MIN_CNT = 20
 SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
@@ -252,26 +251,6 @@ def list_files_in_zip(zip_content):
 
 
 # -- dict utils --
-def filter_dict(my_dict):
-    """
-    Filters a dictionary by removing entries with values that do not meet a
-    minimum count threshold.
-
-    Parameters
-    ----------
-    my_dict : dict
-        A dictionary where each key is a set of items.
-
-    Returns
-    -------
-    dict
-        A new dictionary containing only the entries from "my_dict" where the
-        length of the value is greater than "MIN_CNT".
-
-    """
-    return {k: v for k, v in my_dict.items() if len(v) > MIN_CNT}
-
-
 def check_edge(edge_list, edge):
     """
     Checks if "edge" is in "edge_list".
