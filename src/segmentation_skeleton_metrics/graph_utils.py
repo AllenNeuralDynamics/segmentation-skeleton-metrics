@@ -109,10 +109,6 @@ def init_label_to_nodes(graph, filter_bool=False, key=None):
     for i, label in node_to_label.items():
         label_to_nodes[label].add(i)
 
-    # Filter labels (if applicable)
-    if filter_bool:
-        label_to_nodes = utils.filter_dict(label_to_nodes)
-
     # Finish
     if key:
         return key, label_to_nodes

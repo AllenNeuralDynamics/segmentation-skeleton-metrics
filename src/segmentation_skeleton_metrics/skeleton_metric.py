@@ -508,7 +508,7 @@ class SkeletonMetric:
             # Update graph by removing omits
             self.graphs[key] = gutils.delete_nodes(graph, 0)
             self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
-                self.graphs[key], filter_bool=True
+                self.graphs[key],
             )
 
         # Report runtime
