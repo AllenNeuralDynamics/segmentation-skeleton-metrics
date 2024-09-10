@@ -22,7 +22,7 @@ from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 200
-MIN_CNT = 30
+MIN_CNT = 40
 
 
 class SkeletonMetric:
