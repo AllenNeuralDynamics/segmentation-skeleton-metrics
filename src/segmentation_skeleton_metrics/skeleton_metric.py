@@ -249,7 +249,7 @@ class SkeletonMetric:
             Equivalence class label.
 
         """
-        return self.label_map[label] if label in self.label_map.keys() else 0
+        return self.label_map[label] if label in self.label_map else 0
 
     def get_graph_labels(self, key, inverse_bool=False):
         """
@@ -272,8 +272,15 @@ class SkeletonMetric:
         """
         labels = set(self.key_to_label_to_nodes[key].keys())
         if inverse_bool:
-            labels = set.union(*[self.inverse_label_map[l] for l in labels])
-        return labels
+            output = set()
+            for l in labels:
+                try:
+                    output = output.union(self.inverse_label_map[l])
+                except KeyError as e:
+                    print(f"Label {l} not found in self.inverse_label_map")
+            return output
+        else:
+            return labels
 
     def get_all_graph_labels(self):
         """
@@ -562,11 +569,12 @@ class SkeletonMetric:
         self.merged_labels = set()
 
         # Count total merges
-        self.init_fragment_arrays()
-        for key, graph in self.graphs.items():
-            xyz_array = gutils.to_xyz_array(graph)
-            kdtree = KDTree(xyz_array)
-            self.count_merges(key, kdtree)
+        if self.fragment_graphs:
+            self.init_fragment_arrays()
+            for key, graph in self.graphs.items():
+                xyz_array = gutils.to_xyz_array(graph)
+                kdtree = KDTree(xyz_array)
+                self.count_merges(key, kdtree)
 
         # Process merges
         for (key_1, key_2), label in self.find_label_intersections():
