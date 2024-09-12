@@ -19,6 +19,7 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 from google.cloud import storage
+from tqdm import tqdm
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
@@ -172,12 +173,10 @@ class Reader:
             that swc file.
 
         """
-        cnt = 1
         swc_dict = dict()
         with ZipFile(zip_path, "r") as zip:
             swc_files = [f for f in zip.namelist() if f.endswith(".swc")]
-            chunk_size = len(swc_files) * 0.02
-            for i, f in enumerate(swc_files):
+            for f in tqdm(swc_files):
                 # Check whether to store content
                 content = utils.read_zip(zip, f).splitlines()
                 if len(content) > self.min_size:
@@ -187,11 +186,6 @@ class Reader:
                         swc_dict[key].graph["filename"] = f
                     else:
                         swc_dict[key] = self.get_coords(content)
-
-                # Report progress
-                if i >= cnt * chunk_size:
-                    utils.progress_bar(i, len(swc_files))
-                    cnt += 1
         return swc_dict
 
     def load_from_gcs(self, gcs_dict):
@@ -217,23 +211,18 @@ class Reader:
         print("# zip files:", len(zip_paths))
 
         # Main
-        cnt = 0
-        chunk_size = len(zip_paths) * 0.02
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = []
-            for i, path in enumerate(zip_paths):
+            for path in zip_paths:
                 zip_content = bucket.blob(path).download_as_bytes()
                 processes.append(
                     executor.submit(self.load_from_cloud_zip, zip_content)
                 )
-                if i >= cnt * chunk_size:
-                    utils.progress_bar(i + 1, len(zip_paths))
-                    cnt += 1
 
             # Store results
             swc_dict = dict()
-            for i, process in enumerate(as_completed(processes)):
+            for process in tqdm(as_completed(processes)):
                 swc_dict.update(process.result())
         return swc_dict
 

@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
+from segmentation_skeleton_metrics.graph_utils import to_xyz_array
 
 ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 200
@@ -168,7 +169,6 @@ class SkeletonMetric:
         self.fragment_graphs = None
 
         # Label nodes
-        t0 = time()
         print("\nLabeling Graphs...")
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key in tqdm(self.graphs):
@@ -252,6 +252,26 @@ class SkeletonMetric:
         """
         return self.label_map[label] if label in self.label_map else 0
 
+    def get_all_node_labels(self):
+        """
+        Gets the a set of all unique labels from all graphs in "self.graphs".
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        set
+            Set containing all unique labels from all graphs.
+
+        """
+        all_labels = set()
+        for key in self.graphs:
+            labels = self.get_node_labels(key, inverse_bool=True)
+            all_labels = all_labels.union(labels)
+        return all_labels
+
     def get_node_labels(self, key, inverse_bool=False):
         """
         Gets the set of labels of nodes in the graph corresponding to "key".
@@ -273,43 +293,11 @@ class SkeletonMetric:
         """
         if inverse_bool:
             output = set()
-            n_hits = 0
             for l in self.key_to_label_to_nodes[key].keys():
-                try:
-                    output = output.union(self.inverse_label_map[l])
-                    n_hits += 1
-                except KeyError as e:
-                    print(f"Label {l} not found in self.inverse_label_map")
-                    print("type(l):", type(l))
-                    print("# labels in self.label_map:", len(self.label_map))
-                    print("# labels in self.inverse_label_map:", len(self.inverse_label_map))
-                    print(f"Line 279 has successfully ran {n_hits} times")
-                    stop
-            print("SUCCESS!")
+                output = output.union(self.inverse_label_map[l])
             return output
         else:
             return set(self.key_to_label_to_nodes[key].keys())
-
-    def get_all_node_labels(self):
-        """
-        Gets the a set of all unique labels from all graphs in "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        set
-            Set containing all unique labels from all graphs.
-
-        """
-        all_labels = set()
-        inverse_bool = True if self.inverse_label_map else False
-        for key in self.graphs.keys():
-            labels = self.get_node_labels(key, inverse_bool=inverse_bool)
-            all_labels = all_labels.union(labels)
-        return all_labels
 
     # -- Load Fragments --
     def load_fragments(self):
@@ -329,47 +317,21 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        t0 = time()
-        print("Loading Fragments")
+        print("\nLoading Fragments...")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
         fragment_graphs = reader.load(self.fragments_pointer)
 
         # Filter fragments
         self.fragment_graphs = dict()
-        n_excepts = 0
         for label in self.get_all_node_labels():
-            try:
+            if label in fragment_graphs:
                 self.fragment_graphs[label] = fragment_graphs[label]
-            except KeyError:
+            else:
                 self.fragment_graphs[label] = nx.Graph(
                     filename=f"{label}.swc", run_length=0, n_edges=1
                 )
-
-        # Report Results
-        t, unit = utils.time_writer(time() - t0)
-        print("\n# Fragments:", len(self.fragment_graphs) - n_excepts)
-        print(f"Runtime: {round(t, 2)} {unit}\n")
-
-    def init_fragment_arrays(self):
-        """
-        Initializes "self.fragment_arrays" by converting the graphs stored in
-        "self.fragment_graphs" into xyz arrays by extracting the node's xyz
-        coordinates.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        self.fragment_arrays = dict()
-        for label, graph in self.fragment_graphs.items():
-            self.fragment_arrays[label] = gutils.to_xyz_array(graph)
-        del self.fragment_graphs
+        print("# Fragments:", len(self.fragment_graphs))
 
     def init_zip_writer(self):
         """
@@ -413,18 +375,19 @@ class SkeletonMetric:
 
         """
         # Split evaluation
-        print("Detecting Splits...")
+        print("\nDetecting Splits...")
         self.detect_splits()
         self.quantify_splits()
 
         # Check whether to delete prexisting merges
         if self.preexisting_merges:
             for key in self.graphs:
-                self.adjust_metrics(key)        
+                self.adjust_metrics(key)
 
         # Merge evaluation
         print("Detecting Merges...")
         self.detect_merges()
+        self.compute_projected_run_lengths()
         self.quantify_merges()
 
         # Compute metrics
@@ -481,20 +444,19 @@ class SkeletonMetric:
 
         """
         t0 = time()
-        for cnt, (key, graph) in enumerate(self.graphs.items()):
+        for key, graph in tqdm(self.graphs.items()):
             # Detection
-            utils.progress_bar(cnt + 1, len(self.graphs))
             graph = split_detection.run(graph, self.graphs[key])
 
             # Update graph by removing omits (i.e. nodes labeled 0)
             self.graphs[key] = gutils.delete_nodes(graph, 0)
             self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
-                self.graphs[key],
+                self.graphs[key]
             )
 
         # Report runtime
         t, unit = utils.time_writer(time() - t0)
-        print(f"\nRuntime: {round(t, 2)} {unit}\n")
+        print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def quantify_splits(self):
         """
@@ -541,11 +503,10 @@ class SkeletonMetric:
         self.merged_edges_cnt = self.init_counter()
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
+        self.projected_run_length = dict()
 
         # Count total merges
         if self.fragment_graphs:
-            self.compute_projected_run_lengths()
-            self.init_fragment_arrays()
             for key, graph in self.graphs.items():
                 kdtree = KDTree(gutils.to_xyz_array(graph))
                 self.count_merges(key, kdtree)
@@ -577,16 +538,56 @@ class SkeletonMetric:
         None
 
         """
-        print("count merges -", key)
-        inverse_bool = True if self.inverse_label_map else False
-        for label in self.get_node_labels(key, inverse_bool=inverse_bool):
+        self.projected_run_length[key] = 0
+        for label in self.get_node_labels(key):
             if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
-                if label in self.fragment_arrays:
-                    for xyz in self.fragment_arrays[label][::5]:
-                        if kdtree.query(xyz, k=1)[0] > MERGE_DIST_THRESHOLD:
-                            self.merge_cnt[key] += 1
-                            self.merged_labels.add((key, label))
-                            break
+                # Check whether to compute label inverse
+                if self.inverse_label_map:
+                    labels = deepcopy(self.inverse_label_map[label])
+                else:
+                    labels = [label]
+
+                # Check if fragment is a merge mistake
+                for label in labels:
+                    rl = self.fragment_graphs[label].graph["run_length"]
+                    self.projected_run_length[key] += rl
+                    self.is_fragment_merge(key, label, kdtree)
+
+    def is_fragment_merge(self, key, label, kdtree):
+        """
+        Determines whether fragment corresponding to "label" is falsely merged
+        to graph corresponding to "key". A fragment is said to be merged if
+        there is a node in the fragment more than MERGE_DIST_THRESHOLD-ums
+        away from the nearest point in "kdtree".
+
+        Parameters
+        ----------
+        key : str
+            ID of graph in "self.graphs".
+        label : int
+            ID of fragment.
+        kdtree : scipy.spatial.KDTree
+            A KD-tree built from xyz coordinates in "self.graphs[key]".
+
+        Returns
+        -------
+        None
+
+        """
+        for xyz in to_xyz_array(self.fragment_graphs[label])[::5]:
+            if kdtree.query(xyz)[0] > MERGE_DIST_THRESHOLD:
+                # Check whether to take inverse of label
+                if self.inverse_label_map:
+                    equivalent_label = self.label_map[label]
+    
+                # Record merge mistake
+                self.merge_cnt[key] += 1
+                self.merged_labels.add((key, equivalent_label))
+                if self.save_projections:
+                    swc_utils.to_zipped_swc(
+                        self.zip_writer[key], self.fragment_graphs[label]
+                    )
+                return
 
     def find_label_intersections(self):
         """
@@ -685,49 +686,16 @@ class SkeletonMetric:
         """
         # Initializations
         self.run_length_ratio = dict()
-        self.projected_run_length = dict()
         self.target_run_length = dict()
 
         # Compute run lengths
         for key in self.graphs:
             target_rl = self.get_run_length(key)
-            projected_rl = self.compute_projected_run_length(key)
+            projected_rl = self.projected_run_length[key]
 
             self.projected_run_length[key] = projected_rl
             self.target_run_length[key] = target_rl
             self.run_length_ratio[key] = projected_rl / target_rl
-
-    def compute_projected_run_length(self, key):
-        """
-        Compute the projected run length based of graph in "self.graphs" that
-        cooresponds to "key".
-
-        Parameters
-        ----------
-        key : str
-            The key used to retrieve graph for computing the run length.
-
-        Returns
-        -------
-        float
-            Total projected run length, which is the sum of run lengths from
-            fragment graphs associated with the labels obtained for the given
-            key.
-
-        """
-        rl = 0
-        print("projected run length -", key)
-        inverse_bool = True if self.inverse_label_map else False
-        for label in self.get_node_labels(key, inverse_bool=inverse_bool):
-            if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
-                if label in self.fragment_graphs:
-                    rl += self.fragment_graphs[label].graph["run_length"]
-                    if self.save_projections:
-                        swc_utils.to_zipped_swc(
-                            self.zip_writer[key], self.fragment_graphs[label]
-                        )
-        print("\nprojected run length =", rl)
-        return rl
 
     # -- Compute Metrics --
     def compile_results(self):
