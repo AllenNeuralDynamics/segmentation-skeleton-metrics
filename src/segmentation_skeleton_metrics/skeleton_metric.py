@@ -580,7 +580,9 @@ class SkeletonMetric:
                 # Check whether to take inverse of label
                 if self.inverse_label_map:
                     equivalent_label = self.label_map[label]
-    
+                else:
+                    equivalent_label = label
+
                 # Record merge mistake
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label))

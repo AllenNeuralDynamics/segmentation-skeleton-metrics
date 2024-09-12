@@ -331,12 +331,8 @@ def build_labels_graph(connections_path, labels):
         connections read from the "connections_path".
 
     """
-    # Initializations
     labels_graph = nx.Graph()
     labels_graph.add_nodes_from(labels)
-    n_components = nx.number_connected_components(labels_graph)
-
-    # Main
     for line in read_txt(connections_path):
         ids = line.split(",")
         id_1 = int(ids[0])
@@ -344,7 +340,6 @@ def build_labels_graph(connections_path, labels):
         assert id_1 in labels_graph.nodes
         assert id_2 in labels_graph.nodes
         labels_graph.add_edge(id_1, id_2)
-    n_components = nx.number_connected_components(labels_graph)
     return labels_graph
 
 
@@ -377,31 +372,6 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-def progress_bar(current, total, bar_length=50):
-    """
-    Reports the progress of completing some process.
-
-    Parameters
-    ----------
-    current : int
-        Current iteration of process.
-    total : int
-        Total number of iterations to be completed.
-    bar_length : int, optional
-        Length of progress bar. The default is 50.
-
-    Returns
-    -------
-    None
-
-    """
-    progress = int(current / total * bar_length)
-    bar = (
-        f"[{'=' * progress}{' ' * (bar_length - progress)}] {current}/{total}"
-    )
-    print(f"\r{bar}", end="", flush=True)
 
 
 # -- miscellaneous --
