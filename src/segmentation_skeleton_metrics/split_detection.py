@@ -33,8 +33,8 @@ def run(target_graph, labeled_graph):
         Labeled graph with omit and split edges removed.
 
     """
-    r = gutils.sample_leaf(target_graph)
-    dfs_edges = list(nx.dfs_edges(target_graph, source=r))
+    r = gutils.sample_leaf(labeled_graph)
+    dfs_edges = list(nx.dfs_edges(labeled_graph, source=r))
     while len(dfs_edges) > 0:
         # Visit edge
         (i, j) = dfs_edges.pop(0)

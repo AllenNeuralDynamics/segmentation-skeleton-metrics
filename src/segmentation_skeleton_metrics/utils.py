@@ -199,12 +199,12 @@ def read_txt(path):
 
     Returns
     -------
-    str
-        Contents of a txt file.
+    list[str]
+        List where each entry corresponds to a line from the txt file.
 
     """
     with open(path, "r") as f:
-        return f.readlines()
+        return f.read().splitlines()
 
 
 def list_gcs_filenames(bucket, cloud_path, extension):
@@ -337,7 +337,7 @@ def build_labels_graph(connections_path, labels):
     n_components = nx.number_connected_components(labels_graph)
 
     # Main
-    print("Building Label Graph...")
+    print("\nBuilding Label Graph...")
     print("# connected components - before adding edges:", n_components)
     for line in read_txt(connections_path):
         ids = line.split(",")
@@ -425,3 +425,46 @@ def to_world(voxel):
 
     """
     return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
+
+
+def load_merged_labels(path):
+    """
+    Loads a list of merged label IDs from a text file.
+
+    Parameters
+    ----------
+    path : str
+        Path to text file containing the label IDs corresponding to known
+        merge mistakes in a predicted segmentation.
+
+    Returns
+    -------
+    list
+        Integer IDs read from the text file.
+
+    """
+    merged_ids = read_txt(path)
+    return list(map(int, merged_ids)) if len(merged_ids) > 0 else None
+
+
+def load_valid_labels(path):
+    """
+    Loads the set of label IDs that are said to be 'valid', meaning that the
+    corresponding fragments were not filtered out during the neuron
+    reconstruction process. For example, this text file could contain the
+    label IDs of all fragments with path length greater than 20ums.
+
+    Parameters
+    ----------
+    path : str
+        Path to txt file containing label IDs corresponding to fragments used
+        in the neuron reconstruction process.
+
+    Returns
+    -------
+    set
+        Set of label IDs corresponding to fragments used in the neuron
+        reconstruction process.
+
+    """
+    return set(map(int, read_txt(path)))

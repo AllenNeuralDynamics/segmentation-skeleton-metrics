@@ -17,48 +17,33 @@ from scipy.spatial.distance import euclidean as get_dist
 from segmentation_skeleton_metrics import utils
 
 
-# --- Update graph structure ---
-def delete_nodes(graph, delete_label, return_cnt=False):
+# --- Update graph ---
+def delete_nodes(graph, target_label):
     """
-    Deletes nodes in "graph" whose label is identical to "delete_label".
+    Deletes nodes in "graph" whose label is "target_label".
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph to be searched and edited.
-    delete_label : int
-        Label to be removed from graph.
-    return : bool, optional
-        Indication of whether to return the number of nodes deleted from
-        "graph". The default is False.
+    target_label : int
+        Label to be deleted from graph.
 
     Returns
     -------
-    graph : networkx.Graph
+    networkx.Graph
         Updated graph.
 
     """
-    # Find nodes matching delete_marker
     delete_nodes = []
     for i in graph.nodes:
         label = graph.nodes[i]["label"]
-        if label == delete_label:
+        if label == target_label:
             delete_nodes.append(i)
-
-    # Count deleted edges (if applicable)
-    if return_cnt:
-        subgraph = graph.subgraph(delete_nodes)
-        cnt = subgraph.number_of_edges()
-
-    # Update graph
     graph.remove_nodes_from(delete_nodes)
-    if return_cnt:
-        return graph, cnt
-    else:
-        return graph
+    return graph
 
 
-# -- Label Nodes --
 def upd_labels(graph, nodes, label):
     """
     Updates the label of each node in "nodes" with "label".
@@ -83,19 +68,14 @@ def upd_labels(graph, nodes, label):
     return graph
 
 
-def init_label_to_nodes(graph, filter_bool=False, key=None):
+def init_label_to_nodes(graph):
     """
     Initializes a dictionary that maps a label to nodes with that label.
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph to be updated
-    filter_bool : bool, optional
-        Indication of whether to filter labels that occur less frequently than
-        a predefined minimum count (MIN_CNT). The default is False.
-    key : str
-        Graph ID of "graph".
+        Graph to be searched.
 
     Returns
     -------
@@ -103,50 +83,11 @@ def init_label_to_nodes(graph, filter_bool=False, key=None):
         Dictionary that maps a label to nodes with that label.
 
     """
-    # Initialize dictionary
     label_to_nodes = defaultdict(set)
     node_to_label = nx.get_node_attributes(graph, "label")
     for i, label in node_to_label.items():
         label_to_nodes[label].add(i)
-
-    # Finish
-    if key:
-        return key, label_to_nodes
-    else:
-        return label_to_nodes
-
-
-def get_node_labels(graphs):
-    """
-    Creates a dictionary that maps a graph id to the set of unique labels of
-    nodes in that graph.
-
-    Parameters
-    ----------
-    graphs : dict
-        Graphs to be searched.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps a graph id to the set of unique labels of nodes
-        in that graph.
-
-    """
-    with ProcessPoolExecutor() as executor:
-        # Assign processes
-        processes = list()
-        for key, graph in graphs.items():
-            processes.append(
-                executor.submit(init_label_to_nodes, graph, True, key)
-            )
-
-        # Store results
-        graph_to_labels = dict()
-        for cnt, process in enumerate(as_completed(processes)):
-            key, label_to_nodes = process.result()
-            graph_to_labels[key] = set(label_to_nodes.keys())
-    return graph_to_labels
+    return label_to_nodes
 
 
 # -- eval tools --
@@ -253,3 +194,36 @@ def sample_leaf(graph):
     """
     leafs = [i for i in graph.nodes if graph.degree[i] == 1]
     return sample(leafs, 1)[0]
+
+
+def get_node_labels(graphs):
+    """
+    Creates a dictionary that maps a graph id to the set of unique labels of
+    nodes in that graph.
+
+    Parameters
+    ----------
+    graphs : dict
+        Graphs to be searched.
+
+    Returns
+    -------
+    dict
+        Dictionary that maps a graph id to the set of unique labels of nodes
+        in that graph.
+
+    """
+    with ProcessPoolExecutor() as executor:
+        # Assign processes
+        processes = list()
+        for key, graph in graphs.items():
+            processes.append(
+                executor.submit(init_label_to_nodes, graph, True, key)
+            )
+
+        # Store results
+        graph_to_labels = dict()
+        for cnt, process in enumerate(as_completed(processes)):
+            key, label_to_nodes = process.result()
+            graph_to_labels[key] = set(label_to_nodes.keys())
+    return graph_to_labels
