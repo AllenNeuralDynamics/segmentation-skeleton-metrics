@@ -337,8 +337,6 @@ def build_labels_graph(connections_path, labels):
     n_components = nx.number_connected_components(labels_graph)
 
     # Main
-    print("\nBuilding Label Graph...")
-    print("# connected components - before adding edges:", n_components)
     for line in read_txt(connections_path):
         ids = line.split(",")
         id_1 = int(ids[0])
@@ -347,8 +345,6 @@ def build_labels_graph(connections_path, labels):
         assert id_2 in labels_graph.nodes
         labels_graph.add_edge(id_1, id_2)
     n_components = nx.number_connected_components(labels_graph)
-    print("# connected components - after adding edges:", n_components)
-    print("")
     return labels_graph
 
 
