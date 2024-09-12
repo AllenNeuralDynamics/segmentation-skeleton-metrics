@@ -267,8 +267,9 @@ class SkeletonMetric:
 
         """
         all_labels = set()
+        inverse_bool = True if self.inverse_label_map else False
         for key in self.graphs:
-            labels = self.get_node_labels(key, inverse_bool=True)
+            labels = self.get_node_labels(key, inverse_bool=inverse_bool)
             all_labels = all_labels.union(labels)
         return all_labels
 
