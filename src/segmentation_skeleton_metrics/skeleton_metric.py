@@ -105,6 +105,7 @@ class SkeletonMetric:
         self.preexisting_merges = preexisting_merges
 
         # Load Labels, Graphs, Fragments
+        print("\n(1) Initializations")
         assert type(valid_labels) is set if valid_labels else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
@@ -169,9 +170,8 @@ class SkeletonMetric:
         self.fragment_graphs = None
 
         # Label nodes
-        print("\nLabeling Graphs...")
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
-        for key in tqdm(self.graphs):
+        for key in tqdm(self.graphs, desc="Labeling Graphs"):
             self.set_node_labels(key)
             self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
                 self.graphs[key]
@@ -318,7 +318,6 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        print("\nLoading Fragments...")
         anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
         reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
         fragment_graphs = reader.load(self.fragments_pointer)
@@ -375,8 +374,9 @@ class SkeletonMetric:
             ...
 
         """
+        print("\n(2) Evaluation")
+
         # Split evaluation
-        print("\nDetecting Splits...")
         self.detect_splits()
         self.quantify_splits()
 
@@ -386,7 +386,6 @@ class SkeletonMetric:
                 self.adjust_metrics(key)
 
         # Merge evaluation
-        print("Detecting Merges...")
         self.detect_merges()
         self.compute_projected_run_lengths()
         self.quantify_merges()
@@ -445,7 +444,7 @@ class SkeletonMetric:
 
         """
         t0 = time()
-        for key, graph in tqdm(self.graphs.items()):
+        for key, graph in tqdm(self.graphs.items(), desc="Split Detection:"):
             # Detection
             graph = split_detection.run(graph, self.graphs[key])
 
