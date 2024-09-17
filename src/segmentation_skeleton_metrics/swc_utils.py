@@ -176,7 +176,7 @@ class Reader:
         swc_dict = dict()
         with ZipFile(zip_path, "r") as zip:
             swc_files = [f for f in zip.namelist() if f.endswith(".swc")]
-            for f in tqdm(swc_files):
+            for f in tqdm(swc_files, desc="Loading Fragments"):
                 # Check whether to store content
                 content = utils.read_zip(zip, f).splitlines()
                 if len(content) > self.min_size:
@@ -190,7 +190,7 @@ class Reader:
 
     def load_from_gcs(self, gcs_dict):
         """
-        Reads swc files from a GCS bucket and extracts the xyz coordinates.
+        Reads swc files from a GCS bucket.
 
         Parameters
         ----------
@@ -221,10 +221,10 @@ class Reader:
                 )
 
             # Store results
-            swc_dict = dict()
+            swc_dicts = dict()
             for process in tqdm(as_completed(processes)):
-                swc_dict.update(process.result())
-        return swc_dict
+                swc_dicts.update(process.result())
+        return swc_dicts
 
     def load_from_cloud_zip(self, zip_content):
         """
@@ -255,10 +255,10 @@ class Reader:
                     )
 
                 # Process results
-                swc_dict = dict()
+                swc_dicts = dict()
                 for thread in as_completed(threads):
-                    swc_dict.update(thread.result())
-        return swc_dict
+                    swc_dicts.update(thread.result())
+        return swc_dicts
 
     def load_from_cloud_zipped_file(self, zip_file, path):
         """
