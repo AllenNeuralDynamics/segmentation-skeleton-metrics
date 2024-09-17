@@ -1,11 +1,15 @@
-# segmentation-skeleton-metrics
+# SkeletonMetrics
 
 [![License](https://img.shields.io/badge/license-MIT-brightgreen)](LICENSE)
 ![Code Style](https://img.shields.io/badge/code%20style-black-black)
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-The SkeletonMetric class assesses the accuracy of a predicted segmentation by comparing it to ground truth skeletons. Each ground truth skeleton is assumed to be stored as an SWC file so that it can be represented as a graph with xyz coordinates as a node-level attribute. This evaluation is performed for each by first iterating over the ground truth skeletons (i.e. graphs) and labeling the nodes by querying segment ids from the predicted segmentation. Once the skeletons are labeled, topological mistakes can be detected by analyzing the labels of individual nodes, neighboring nodes, and nodes between different ground truth skeletons.
+Python package for evaluating the accuracy of a predicted segmentation of neuronal arbors by comparing it to a set of ground truth skeletons. This tool detects topological mistakes such as splits and merges in the predicted segmentation, then computes several skeleton-based metrics that quantify its topological accuracy.
+
+## Details
+
+Ground truth skeletons must be stored as SWC files so that each can be represented as a graph with xyz coordinates as a node-level attribute. The evaluation is performed for each by first iterating over the ground truth skeletons (i.e. graphs) and labeling the nodes with the segment ids from the predicted segmentation. Topological mistakes are detected by examining the labels of individual nodes, neighboring nodes, and nodes across different ground truth skeletons.
 
 Metrics computed for each ground truth skeleton:
 
