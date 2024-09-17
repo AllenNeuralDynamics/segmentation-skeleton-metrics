@@ -11,9 +11,10 @@ Python package for evaluating the accuracy of a predicted segmentation of neuron
 
 Ground truth skeletons must be stored as SWC files so that each can be represented as a graph with xyz coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of ground truth skeletons with the corresponding segment ids from the predicted segmentation. Topological mistakes are then detected by examining the labels of the nodes and edges.
 
-<img src="imgs/topological_mistakes.png" width="200" alt="Edge classes for skeleton accuracy computation">
-
-Edges in skeletons are either correctly or incorrectly reconstructed based on the presence of mergers or splits that affect nodes attached to an edge. Colors correspond to segment IDs. From top to bottom: correct edge (both nodes have the same ID), split edge (nodes assigned to different segments), omitted edge (one or two nodes do not have an associated ID), merged edge (node assigned to a segment that covers more than one skeleton)
+<figure>
+  <img src="imgs/topological_mistakes.png" width="200" alt="Edge classes for skeleton accuracy computation">
+  <figcaption>Edges in skeletons are either correctly or incorrectly reconstructed based on the presence of mergers or splits that affect nodes attached to an edge. Colors correspond to segment IDs. From top to bottom: correct edge (both nodes have the same ID), split edge (nodes assigned to different segments), omitted edge (one or two nodes do not have an associated ID), merged edge (node assigned to a segment that covers more than one skeleton).</figcaption>
+</figure>
 
 Metrics computed for each ground truth skeleton:
 
