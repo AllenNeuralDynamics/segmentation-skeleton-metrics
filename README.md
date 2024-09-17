@@ -5,8 +5,17 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for performing a skeleton-based evaluation of a predicted segmentation of neural arbors. This tool detects topological mistakes (i.e. splits and merges) in a predicted segmentation by comparing a set of ground truth skeletons to it. Once this comparison is complete, several statistics (e.g. edge accuracy, split count, merge count) are computed and returned in a dictionary.
+The SkeletonMetric class is designed to evaluate the quality of a predicted segmentation by comparing it to ground truth skeletons.
 
+## Features
+Metrics Computed: The class provides metrics to evaluate segmentation quality:
+
+- Number of Splits: Measures how often a single segment is incorrectly split into multiple segments.
+- Number of Merges: Measures how often multiple segments are incorrectly merged into a single segment.
+- Percentage of Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
+- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation compared to the ground truth.
+- Edge Accuracy: Evaluates how accurately the edges of the predicted segmentation match the ground truth.
+- Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
 
 ## Usage
 
