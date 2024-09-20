@@ -5,15 +5,15 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for evaluating the accuracy of a predicted segmentation of neuronal arbors by comparing it to a set of ground truth skeletons. This tool detects topological mistakes such as splits and merges in the predicted segmentation, then computes several skeleton-based metrics that quantify its topological accuracy.
+Python package for assessing the accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. This tool detects topological mistakes such as splits and merges in the predicted segmentation, then computes several skeleton-based metrics that quantify its topological accuracy.
 
 Metrics computed for each ground truth skeleton:
 
 - Number of Splits: Number of segments that a ground truth skeleton is broken into.
-- Number of Merges: Number multiple segments are incorrectly merged into a single segment.
+- Number of Merges: Number of segments that are incorrectly merged into a single segment.
 - Percentage of Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
-- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation compared to the ground truth.
-- Edge Accuracy: Evaluates how accurately the edges of the predicted segmentation match the ground truth.
+- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
+- Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
 - Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
 
 
