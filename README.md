@@ -5,7 +5,7 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for assessing the accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. This tool detects topological mistakes such as splits and merges in the predicted segmentation, then computes several skeleton-based metrics that quantify its topological accuracy.
+Python package for assessing the accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. This tool detects topological mistakes, such as splits and merges, in the predicted segmentation and then computes several skeleton-based metrics that quantify its topological accuracy.
 
 ## Details
 
