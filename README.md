@@ -7,16 +7,6 @@
 
 Python package for assessing the accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. This tool detects topological mistakes such as splits and merges in the predicted segmentation, then computes several skeleton-based metrics that quantify its topological accuracy.
 
-Metrics computed for each ground truth skeleton:
-
-- Number of Splits: Number of segments that a ground truth skeleton is broken into.
-- Number of Merges: Number of segments that are incorrectly merged into a single segment.
-- Percentage of Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
-- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
-- Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
-- Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
-
-
 ## Details
 
 Ground truth skeletons must be stored as SWC files so that each can be represented as a graph with xyz coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of ground truth skeletons with the corresponding segment ids from the predicted segmentation. Topological mistakes are then detected by examining the labels of the nodes and edges.
@@ -27,6 +17,14 @@ Ground truth skeletons must be stored as SWC files so that each can be represent
   <b> Figure: </b>Edges in skeletons are either correctly or incorrectly reconstructed based on the presence of mergers or splits that affect nodes attached to an edge. Colors correspond to segment IDs. From top to bottom: correct edge (both nodes have the same ID), split edge (nodes assigned to different segments), omitted edge (one or two nodes do not have an associated ID), merged edge (node assigned to a segment that covers more than one skeleton).
 </p>
 
+Metrics computed for each ground truth skeleton:
+
+- Number of Splits: Number of segments that a ground truth skeleton is broken into.
+- Number of Merges: Number of segments that are incorrectly merged into a single segment.
+- Percentage of Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
+- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
+- Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
+- Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
 
 ## Usage
 
