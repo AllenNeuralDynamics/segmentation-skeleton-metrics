@@ -8,6 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 import os
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from time import time
@@ -503,7 +504,7 @@ class SkeletonMetric:
         self.merged_edges_cnt = self.init_counter()
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
-        self.projected_run_length = dict()
+        self.projected_run_length = defaultdict(int)
 
         # Count total merges
         if self.fragment_graphs:
@@ -538,7 +539,6 @@ class SkeletonMetric:
         None
 
         """
-        self.projected_run_length[key] = 0
         for label in self.get_node_labels(key):
             if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
                 # Check whether to compute label inverse
