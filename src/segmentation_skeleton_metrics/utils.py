@@ -409,8 +409,11 @@ def load_merged_labels(path):
         Integer IDs read from the text file.
 
     """
-    merged_ids = read_txt(path)
-    return list(map(int, merged_ids)) if len(merged_ids) > 0 else None
+    merged_ids = list()
+    for i, txt in enumerate(read_txt(path)):
+        if i > 0:
+            merged_ids.append(int(txt.split("-")[0]))
+    return merged_ids
 
 
 def load_valid_labels(path):
