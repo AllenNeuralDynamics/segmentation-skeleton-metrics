@@ -9,7 +9,7 @@ Python package for assessing the accuracy of a predicted neuron segmentation by 
 
 ## Details
 
-Ground truth skeletons must be stored as SWC files so that each can be represented as a graph with xyz coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of ground truth skeletons with the corresponding segment ids from the predicted segmentation. Topological mistakes are then detected by examining the labels of the nodes and edges.
+Ground truth skeletons must be stored as SWC files so that each can be represented as a graph with xyz coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of ground truth skeletons with the corresponding segment ids from the predicted segmentation. Topological mistakes are then detected by examining the labels of each edge.
 
 <p>
   <img src="imgs/topological_mistakes.png" width="180" alt="Topological mistakes detected in skeleton">
