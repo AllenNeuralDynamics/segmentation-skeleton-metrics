@@ -514,11 +514,11 @@ class SkeletonMetric:
 
         # Process merges
         for (key_1, key_2), label in self.find_label_intersections():
-            self.process_merge(key_1, label)
-            self.process_merge(key_2, label)
+            self.process_merge(key_1, label, -1)
+            self.process_merge(key_2, label, -1)
 
-        for key, label in self.merged_labels:
-            self.process_merge(key, label, update_merged_labels=False)
+        for key, label, xyz in self.merged_labels:
+            self.process_merge(key, label, xyz, update_merged_labels=False)
 
     def count_merges(self, key, kdtree):
         """
@@ -584,7 +584,7 @@ class SkeletonMetric:
 
                 # Record merge mistake
                 self.merge_cnt[key] += 1
-                self.merged_labels.add((key, equivalent_label))
+                self.merged_labels.add((key, equivalent_label, tuple(xyz)))
                 if self.save_projections:
                     swc_utils.to_zipped_swc(
                         self.zip_writer[key], self.fragment_graphs[label]
@@ -620,7 +620,7 @@ class SkeletonMetric:
                         label_intersections.add((keys, label))
         return label_intersections
 
-    def process_merge(self, key, label, update_merged_labels=True):
+    def process_merge(self, key, label, xyz, update_merged_labels=True):
         """
         Once a merge has been detected that corresponds to "key", every
         node in "self.graphs[key]" with that "label" is
@@ -648,7 +648,7 @@ class SkeletonMetric:
             self.graphs[key].remove_nodes_from(nodes)
             del self.key_to_label_to_nodes[key][label]
             if update_merged_labels:
-                self.merged_labels.add((key, label))
+                self.merged_labels.add((key, label, -1))
 
     def quantify_merges(self):
         """
