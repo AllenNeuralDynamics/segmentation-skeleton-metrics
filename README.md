@@ -31,39 +31,45 @@ Metrics computed for each ground truth skeleton:
 Here is a simple example of evaluating a predicted segmentation. Note that this package supports a number of different input types, see documentation for details. 
 
 ```python
-import os
-
-from aind_segmentation_evaluation.evaluate import run_evaluation
-from aind_segmentation_evaluation.conversions import volume_to_graph
 from tifffile import imread
+from xlwt import Workbook
+
+import numpy as np
+
+from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+
+
+def evaluate():
+    # Initializations
+    pred_labels = imread(pred_labels_path)
+    skeleton_metric = SkeletonMetric(
+        target_swcs_pointer,
+        pred_labels,
+        fragments_pointer=pred_swcs_pointer,
+        output_dir=output_dir,
+    )
+    full_results, avg_results = skeleton_metric.run()
+
+    # Report results
+    print(f"Averaged Results...")
+    for key in avg_results.keys():
+        print(f"   {key}: {round(avg_results[key], 4)}")
+
+    print(f"\nTotal Results...")
+    print("# splits:", np.sum(list(skeleton_metric.split_cnt.values())))
+    print("# merges:", np.sum(list(skeleton_metric.merge_cnt.values())))
 
 
 if __name__ == "__main__":
-
     # Initializations
-    data_dir = "./resources"
-    target_graphs_dir = os.path.join(data_dir, "target_graphs")
-    path_to_target_labels = os.path.join(data_dir, "target_labels.tif")
-    pred_labels = imread(os.path.join(data_dir, "pred_labels.tif"))
-    pred_graphs = volume_to_graph(pred_labels)
+    output_dir = "./"
+    pred_labels_path = "./pred_labels.tif"
+    pred_swcs_pointer = "./pred_swcs.zip"
+    target_swcs_pointer = "./target_swcs.zip"
 
-    # Evaluation
-    stats = run_evaluation(
-        target_graphs_dir,
-        path_to_target_labels,
-        pred_graphs,
-        pred_labels,
-        filetype="tif",
-        output="tif",
-        output_dir=data_dir,
-        permute=[2, 1, 0],
-        scale=[1.101, 1.101, 1.101],
-    )
+    # Run
+    evaluate()
 
-    # Write out results
-    print("Graph-based evaluation...")
-    for key in stats.keys():
-        print("   {}: {}".format(key, stats[key])
 
 ```
 
