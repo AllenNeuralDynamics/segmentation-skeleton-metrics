@@ -73,9 +73,10 @@ if __name__ == "__main__":
 
 ```
 
-<p>
-  <img src="imgs/printouts.png" width="800">
-</p>
+<div style="text-align: center;">
+    <img src="imgs/printouts.png" />
+</div>
+
 
 ## Installation
 To use the software, in the root directory, run
