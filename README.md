@@ -52,8 +52,8 @@ def evaluate():
 
     # Report results
     print(f"Averaged Results...")
-    for key in avg_results.keys():
-        print(f"   {key}: {round(avg_results[key], 4)}")
+    for stat_name in avg_results.keys():
+        print(f"   {stat_name}: {round(avg_results[stat_name], 4)}")
 
     print(f"\nTotal Results...")
     print("# splits:", np.sum(list(skeleton_metric.split_cnt.values())))
