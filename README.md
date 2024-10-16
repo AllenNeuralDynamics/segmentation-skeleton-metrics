@@ -73,10 +73,9 @@ if __name__ == "__main__":
 
 ```
 
-<div style="text-align: center;">
-    <img src="imgs/printouts.png" />
-</div>
-
+<p>
+  <img src="imgs/topological_mistakes.png" width="1200">
+</p>
 
 ## Installation
 To use the software, in the root directory, run
