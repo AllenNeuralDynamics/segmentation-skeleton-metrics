@@ -28,7 +28,7 @@ Metrics computed for each ground truth skeleton:
 
 ## Usage
 
-Here is a simple example of evaluating a predicted segmentation. Note that this package supports a number of different input types, see documentation for details. 
+Here is a simple example of evaluating a predicted segmentation.
 
 ```python
 from tifffile import imread
