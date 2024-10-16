@@ -74,7 +74,7 @@ if __name__ == "__main__":
 ```
 
 <p>
-  <img src="imgs/topological_mistakes.png" width="1200">
+  <img src="imgs/printouts.png" width="1200">
 </p>
 
 ## Installation
