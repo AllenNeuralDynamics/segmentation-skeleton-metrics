@@ -61,7 +61,7 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        gt_pointer : container
+        gt_pointer : dict/str/list[str]
             Pointer to ground truth swcs, see "swc_utils.Reader" for further
             documentation. Note these swc files are assumed to be stored in
             image coordinates.
@@ -73,7 +73,7 @@ class SkeletonMetric:
         connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
             that were merged into a single segment. The default is None.
-        fragments_pointer : container, optional
+        fragments_pointer : dict/str/list[str], optional
             Pointer to fragments (i.e. swcs) corresponding to "pred_labels",
             see "swc_utils.Reader" for further documentation. Note these swc
             files may be stored in either world or image coordinates. If the
