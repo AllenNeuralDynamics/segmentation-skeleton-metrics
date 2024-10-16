@@ -509,8 +509,9 @@ class SkeletonMetric:
         # Count total merges
         if self.fragment_graphs:
             for key, graph in self.graphs.items():
-                kdtree = KDTree(gutils.to_xyz_array(graph))
-                self.count_merges(key, kdtree)
+                if graph.number_of_nodes() > 0:
+                    kdtree = KDTree(gutils.to_xyz_array(graph))
+                    self.count_merges(key, kdtree)
 
         # Process merges
         for (key_1, key_2), label in self.find_label_intersections():
