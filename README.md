@@ -73,10 +73,6 @@ if __name__ == "__main__":
 
 ```
 
-<p>
-  <img src="imgs/printouts.png">
-</p>
-
 
 ## Installation
 To use the software, in the root directory, run
