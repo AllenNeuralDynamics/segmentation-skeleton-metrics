@@ -74,7 +74,7 @@ if __name__ == "__main__":
 ```
 
 <p>
-  <img src="imgs/printouts.png" width="1200">
+  <img src="imgs/printouts.png" width="1000">
 </p>
 
 ## Installation
