@@ -24,7 +24,6 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 from segmentation_skeleton_metrics.graph_utils import to_xyz_array
 
-ANISOTROPY = [0.748, 0.748, 1.0]
 MERGE_DIST_THRESHOLD = 200
 MIN_CNT = 40
 
@@ -64,19 +63,24 @@ class SkeletonMetric:
         ----------
         gt_pointer : container
             Pointer to ground truth swcs, see "swc_utils.Reader" for further
-            documentation.
+            documentation. Note these swc files are assumed to be stored in
+            image coordinates.
         pred_labels : numpy.ndarray or tensorstore.TensorStore
             Predicted segmentation mask.
         anisotropy : list[float], optional
             Image to real-world coordinates scaling factors applied to swc
-            files at "gt_pointer". The default is [1.0, 1.0, 1.0].
+            stored at "fragments_pointer". The default is [1.0, 1.0, 1.0].
         connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
             that were merged into a single segment. The default is None.
         fragments_pointer : container, optional
             Pointer to fragments (i.e. swcs) corresponding to "pred_labels",
-            see "swc_utils.Reader" for further documentation. The default is
-            None.
+            see "swc_utils.Reader" for further documentation. Note these swc
+            files may be stored in either world or image coordinates. If the
+            swcs are stored in world coordinates, then provide the world to
+            image coordinates anisotropy factor. Note the filename of each swc
+            is assumed to "segment_id.swc" where segment_id cooresponds to the
+            segment id from "pred_labels". The default is None. 
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
@@ -99,7 +103,7 @@ class SkeletonMetric:
 
         """
         # Options
-        self.anisotropy = anisotropy
+        self.anisotropy = [1.0 / a_i for a_i in anisotropy]
         self.connections_path = connections_path
         self.output_dir = output_dir
         self.fragments_pointer = fragments_pointer
@@ -111,7 +115,7 @@ class SkeletonMetric:
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
-        self.init_graphs(gt_pointer, anisotropy)
+        self.init_graphs(gt_pointer)
         if self.fragments_pointer:
             self.load_fragments()
 
@@ -146,7 +150,7 @@ class SkeletonMetric:
             self.label_map = None
             self.inverse_label_map = None
 
-    def init_graphs(self, paths, anisotropy):
+    def init_graphs(self, paths):
         """
         Initializes "self.graphs" by iterating over "paths" which corresponds
         to neurons in the ground truth.
@@ -156,9 +160,6 @@ class SkeletonMetric:
         paths : list[str]
             List of paths to swc files which correspond to neurons in the
             ground truth.
-        anisotropy : list[float]
-            Image to real-world coordinates scaling factors applied to swc
-            files.
 
         Returns
         -------
@@ -166,7 +167,7 @@ class SkeletonMetric:
 
         """
         # Read graphs
-        reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
+        reader = swc_utils.Reader(return_graphs=True)
         self.graphs = reader.load(paths)
         self.fragment_graphs = None
 
@@ -319,8 +320,7 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        anisotropy = [1.0 / a_i for a_i in ANISOTROPY]  # hard coded
-        reader = swc_utils.Reader(anisotropy=anisotropy, return_graphs=True)
+        reader = swc_utils.Reader(anisotropy=self.anisotropy, return_graphs=True)
         fragment_graphs = reader.load(self.fragments_pointer)
 
         # Filter fragments
