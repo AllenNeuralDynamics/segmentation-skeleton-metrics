@@ -65,16 +65,15 @@ class Reader:
 
     def load(self, swc_pointer):
         """
-        Load data based on the type and format of the provided "swc_pointer".
+        Load swc files based on the type and format of the provided "swc_pointer".
 
         Parameters
         ----------
         swc_pointer : dict, list, str
-            Must be one of the following: (1) A dictionary for loading from a
-            GCS bucket, (2) list of file paths for loading from local paths,
-            (3) path to one swc file, or (4) path to ".zip" file containing
-            swc files.
-
+            Must be one of the following: (1) gcs directory of zips containing swcs,
+            (2) list of local paths to swcs, (3) local zip containing swcs, (4) path
+            to a single local swc, or (4) path to a local directory of swcs.
+    
         Returns
         -------
         dict
@@ -84,14 +83,17 @@ class Reader:
         """
         if type(swc_pointer) is dict:
             return self.load_from_gcs(swc_pointer)
-        elif type(swc_pointer) is list:
+        if type(swc_pointer) is list:
             return self.load_from_local_paths(swc_pointer)
-        elif type(swc_pointer) is str and ".zip" in swc_pointer:
-            return self.load_from_local_zip(swc_pointer)
-        elif type(swc_pointer) is str and ".swc" in swc_pointer:
-            return self.load_from_local_path(swc_pointer)
-        else:
-            print("SWC Pointer is not Valid!")
+        if type(swc_pointer) is str:
+            if ".zip" in swc_pointer:
+                return self.load_from_local_zip(swc_pointer)
+            if ".swc" in swc_pointer:
+                return self.load_from_local_path(swc_pointer)
+            if os.path.isdir(swc_pointer):
+                paths = utils.list_paths(swc_pointer, extension=".swc")
+                return self.load_from_local_paths(paths)
+        raise Exception("SWC Pointer is not Valid!")
 
     def load_from_local_paths(self, swc_paths):
         """
