@@ -9,7 +9,7 @@ Python package for assessing the accuracy of a predicted neuron segmentation by 
 
 ## Details
 
-We begin with a set of ground truth skeletons stored as individual SWC files, where the "xyz" coordinates correspond to voxels in an image. Each skeleton is loaded and represented as a NetworkX graph that stores the voxel coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of each graph with the corresponding segment IDs from the predicted segmentation. Topological mistakes are then detected by examining the labels of each edge, see figure below for an overview of how splits and merges are detected.
+We begin with a set of ground truth skeletons stored as individual SWC files, where the "xyz" coordinates correspond to voxels in an image. Each ground truth skeleton is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of each graph with the corresponding segment IDs from the predicted segmentation. Topological mistakes are then detected by examining the labels of each edge, see figure below for an overview of how splits and merges are detected.
 
 <p>
   <img src="imgs/topological_mistakes.png" width="180" alt="Topological mistakes detected in skeleton">
