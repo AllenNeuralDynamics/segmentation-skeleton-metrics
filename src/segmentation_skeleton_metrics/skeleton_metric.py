@@ -584,6 +584,7 @@ class SkeletonMetric:
                     equivalent_label = label
 
                 # Record merge mistake
+                xyz = utils.to_world(xyz)
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label, tuple(xyz)))
                 if self.save_projections:
