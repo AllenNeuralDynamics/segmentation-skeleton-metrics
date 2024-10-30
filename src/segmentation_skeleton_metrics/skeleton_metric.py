@@ -320,8 +320,11 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        reader = swc_utils.Reader(anisotropy=self.anisotropy, return_graphs=True)
+        reader = swc_utils.Reader(
+            anisotropy=self.anisotropy, return_graphs=True
+        )
         fragment_graphs = reader.load(self.fragments_pointer)
+        self.fragment_ids = set(fragment_graphs.keys())
 
         # Filter fragments
         self.fragment_graphs = dict()
@@ -521,6 +524,9 @@ class SkeletonMetric:
         for key, label, xyz in self.merged_labels:
             self.process_merge(key, label, xyz, update_merged_labels=False)
 
+        # Write merges to local machine
+        self.save_merged_labels()
+
     def count_merges(self, key, kdtree):
         """
         Counts the number of label merges for a given graph key based on
@@ -669,6 +675,55 @@ class SkeletonMetric:
         for key in self.graphs:
             n_edges = self.graphs[key].graph["n_edges"]
             self.merged_percent[key] = self.merged_edges_cnt[key] / n_edges
+
+    def save_merged_labels(self):
+        """
+        Saves merged labels and their corresponding coordinates to a text
+        file.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        """
+        # Save detected merges
+        prefix = "corrected_" if self.connections_path else ""
+        filename = f"merged_ids-{prefix}segmentation.txt"
+        with open(os.path.join(self.output_dir, filename), "w") as f:
+            f.write(f" Label   -   xyz\n")
+            for _, label, xyz in self.merged_labels:
+                if self.connections_path:
+                    label = self.get_merged_label(label)
+                f.write(f" {label}   -   {xyz}\n")
+
+    def get_merged_label(self, label):
+        """
+        Retrieves the label present in the corrected fragments that
+        corresponds to the given label. Note: the given and retrieved label
+        may differ in the case when two fragments are merged.
+
+        Parameters
+        ----------
+        label : str
+            The label for which to find the corresponding label present in the
+            corrected fragments.
+
+        Returns:
+        -------
+        str or list
+            The first matching label found in "self.fragment_ids" or the
+            original associated labels from "inverse_label_map" if no matches
+            are found.
+
+        """
+        for l in self.inverse_label_map[label]:
+            if l in self.fragment_ids:
+                return l
+        return self.inverse_label_map[label]
 
     # -- Projected Run Lengths --
     def compute_projected_run_lengths(self):

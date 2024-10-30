@@ -17,6 +17,7 @@ dynamic = ["version"]
 dependencies = [
     "networkx",
     "numpy",
+    "pandas",
     "scikit-image",
     "tensorstore",
     "tifffile",

@@ -1,8 +1,8 @@
+import os
+
+import numpy as np
 from tifffile import imread
 from xlwt import Workbook
-
-import os
-import numpy as np
 
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
 
