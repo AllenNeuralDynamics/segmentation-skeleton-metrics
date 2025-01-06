@@ -85,12 +85,3 @@ To use the software, in the root directory, run
 pip install -e .
 ```
 
-To develop the code, run
-```bash
-pip install -e .[dev]
-```
-
-To install this package from PyPI, run
-```bash
-pip install aind-segmentation-evaluation
-```
