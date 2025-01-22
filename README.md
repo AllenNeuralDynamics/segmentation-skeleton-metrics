@@ -67,9 +67,9 @@ def evaluate():
     # Initializations
     pred_labels = imread(pred_labels_path)
     skeleton_metric = SkeletonMetric(
-        target_swcs_pointer,
-        pred_labels,
-        fragments_pointer=pred_swcs_pointer,
+        groundtruth_path,
+        pred_segmentation_path,
+        pred_fragments_path=pred_fragments_path,
         output_dir=output_dir,
     )
     full_results, avg_results = skeleton_metric.run()
@@ -87,9 +87,9 @@ def evaluate():
 if __name__ == "__main__":
     # Initializations
     output_dir = "./"
-    pred_labels_path = "./pred_labels.tif"
-    pred_swcs_pointer = "./pred_swcs.zip"
-    target_swcs_pointer = "./target_swcs.zip"
+    groundtruth_path = "./target_swcs.zip"
+    pred_segmentation_path = "./pred_labels.tif"
+    pred_fragments_path = "./pred_swcs.zip"
 
     # Run
     evaluate()
