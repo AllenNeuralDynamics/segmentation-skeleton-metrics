@@ -5,19 +5,37 @@
 
 [![semantic-release: angular](https://img.shields.io/badge/semantic--release-angular-e10079?logo=semantic-release)](https://github.com/semantic-release/semantic-release)
 
-Python package for assessing the accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. This tool detects topological mistakes (i.e. splits and merges) in a predicted segmentation and then computes several skeleton-based metrics that quantify its topological accuracy.
+Python package that evaluates the topological accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. Topological errors (e.g. splits and merges) are detected by examining skeleton edges and checking if the corresponding nodes belong to the same object in the segmentation. Once the accuracy of each edge has been determined, several skeleton-based metrics are then computed to quantify the topological accuracy.
 
-## Details
-
-We begin with a set of ground truth skeletons stored as individual SWC files, where the "xyz" coordinates correspond to voxels in an image. Each ground truth skeleton is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of each graph with the corresponding segment IDs from the predicted segmentation. Topological mistakes are then detected by examining the labels of each edge, see figure below for an overview of how splits and merges are detected.
-
-<p>
-  <img src="imgs/topological_mistakes.png" width="180" alt="Topological mistakes detected in skeleton">
+<p align="center">
+  <img src="imgs/topological_mistakes.png" width="170" alt="Topological mistakes detected in skeleton">
   <br>
-  <b> Figure: </b>Edges in skeletons are either correctly or incorrectly reconstructed based on the presence of mergers or splits that affect nodes attached to an edge. Colors correspond to segment IDs. From top to bottom: correct edge (both nodes have the same ID), split edge (nodes assigned to different segments), omitted edge (one or two nodes do not have an associated ID), merged edge (node assigned to a segment that covers more than one skeleton).
+  <b> Figure: </b>Edges from skeleton superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple skeletons).
 </p>
 
-Metrics computed for each ground truth skeleton:
+The pipeline to comptue skeleton metrics consists of three main steps:
+
+<blockquote>
+  <p>a. <strong>Label Graphs</strong>: To do...</p>
+  <p>b. <strong>Error Detection</strong>: To do...</p>
+  <p>c. <strong>Compute Metrics</strong>: To do...</p>
+</blockquote>
+<br>
+
+## Method
+
+### Step 1: Label Graphs
+We begin with a set of ground truth skeletons stored as individual SWC files, where the "xyz" coordinates correspond to voxels in an image. Each ground truth skeleton is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of each graph with the corresponding segment IDs from the predicted segmentation.
+
+
+### Step 2: Error Detection
+
+To do...
+
+
+### Step 3: Compute Metrics
+
+To do...
 
 - Number of Splits: Number of segments that a ground truth skeleton is broken into.
 - Number of Merges: Number of segments that are incorrectly merged into a single segment.
@@ -25,6 +43,7 @@ Metrics computed for each ground truth skeleton:
 - Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
 - Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
 - Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
+
 
 ## Usage
 
@@ -85,3 +104,5 @@ To use the software, in the root directory, run
 pip install -e .
 ```
 
+## License
+segmentation-skeleton-metrics is licensed under the MIT License.
