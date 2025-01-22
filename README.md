@@ -22,6 +22,12 @@ The pipeline to comptue skeleton metrics consists of three main steps:
 </blockquote>
 <br>
 
+<p>
+  <img src="imgs/pipeline.png" width="700" alt="pipeline">
+  <br>
+  <b> Figure: </b>Visualization of pipeline to compute skeleton metrics, see Method section for description of each step.
+</p>
+
 ## Method
 
 ### Step 1: Label Graphs
