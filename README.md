@@ -7,12 +7,6 @@
 
 Python package that evaluates the topological accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. Topological errors (e.g. splits and merges) are detected by examining skeleton edges and checking if the corresponding nodes belong to the same object in the segmentation. Once the accuracy of each edge has been determined, several skeleton-based metrics are then computed to quantify the topological accuracy.
 
-<p>
-  <img src="imgs/topological_mistakes.png" width="170" alt="Topological mistakes detected in skeleton">
-  <br>
-  <b> Figure: </b>Edges from skeleton superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple skeletons).
-</p>
-
 The pipeline to comptue skeleton metrics consists of three main steps:
 
 <blockquote>
@@ -23,7 +17,7 @@ The pipeline to comptue skeleton metrics consists of three main steps:
 <br>
 
 <p>
-  <img src="imgs/pipeline.png" width="700" alt="pipeline">
+  <img src="imgs/pipeline.png" width="800" alt="pipeline">
   <br>
   <b> Figure: </b>Visualization of pipeline to compute skeleton metrics, see Method section for description of each step.
 </p>
@@ -38,6 +32,11 @@ We begin with a set of ground truth skeletons stored as individual SWC files, wh
 
 To do...
 
+<p>
+  <img src="imgs/topological_mistakes.png" width="170" alt="Topological mistakes detected in skeleton">
+  <br>
+  <b> Figure: </b>Edges from skeleton superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple skeletons).
+</p>
 
 ### Step 3: Compute Metrics
 
