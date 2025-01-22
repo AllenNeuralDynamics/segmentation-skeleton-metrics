@@ -7,7 +7,7 @@
 
 Python package that evaluates the topological accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. Topological errors (e.g. splits and merges) are detected by examining skeleton edges and checking if the corresponding nodes belong to the same object in the segmentation. Once the accuracy of each edge has been determined, several skeleton-based metrics are then computed to quantify the topological accuracy.
 
-The pipeline to comptue skeleton metrics consists of three main steps:
+The pipeline for computing skeleton metrics consists of three main steps:
 
 <blockquote>
   <p>a. <strong>Label Graphs</strong>: To do...</p>
