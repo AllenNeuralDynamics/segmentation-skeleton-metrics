@@ -374,23 +374,48 @@ def time_writer(t, unit="seconds"):
     return t, unit
 
 
-# -- miscellaneous --
-def to_world(voxel):
+# --- Miscellaneous ---
+def to_physical(voxel, anisotropy):
     """
-    Converts coordinates from voxels to world.
+    Converts a voxel coordinate to a physical coordinate by applying the
+    anisotropy scaling factors.
 
     Parameters
     ----------
-    voxel : numpy.ndarray
-        Coordinate to be converted.
+    voxel : ArrayLike
+        Voxel coordinate to be converted.
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
 
     Returns
     -------
-    tuple
-        Converted coordinates.
+    Tuple[float]
+        Physical coordinate.
 
     """
-    return tuple([voxel[i] * ANISOTROPY[i] for i in range(3)])
+    return tuple([voxel[i] * anisotropy[i] for i in range(3)])
+
+
+def to_voxels(xyz, anisotropy):
+    """
+    Converts coordinate from a physical to voxel space.
+
+    Parameters
+    ----------
+    xyz : ArrayLike
+        Physical coordiante to be converted.
+    anisotropy : ArrayLike
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope.
+
+    Returns
+    -------
+    Tuple[int]
+        Voxel coordinate.
+
+    """
+    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)])
 
 
 def load_merged_labels(path):

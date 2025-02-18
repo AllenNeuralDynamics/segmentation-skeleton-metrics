@@ -7,22 +7,26 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
-from collections import defaultdict
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+from scipy.spatial import KDTree
 from time import time
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
+import os
 import tensorstore as ts
-from scipy.spatial import KDTree
-from tqdm import tqdm
 
-from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import split_detection, swc_utils, utils
-from segmentation_skeleton_metrics.graph_utils import to_xyz_array
+from segmentation_skeleton_metrics import split_detection
+from segmentation_skeleton_metrics.utils import (
+    graph_util as gutil,
+    swc_util,
+    util
+)
+from segmentation_skeleton_metrics.utils.graph_util import to_array
 
 MERGE_DIST_THRESHOLD = 100
 MIN_CNT = 40
@@ -62,7 +66,7 @@ class SkeletonMetric:
         Parameters
         ----------
         gt_pointer : dict/str/list[str]
-            Pointer to ground truth swcs, see "swc_utils.Reader" for further
+            Pointer to ground truth swcs, see "swc_util.Reader" for further
             documentation. Note these swc files are assumed to be stored in
             image coordinates.
         pred_labels : numpy.ndarray or tensorstore.TensorStore
@@ -75,12 +79,12 @@ class SkeletonMetric:
             that were merged into a single segment. The default is None.
         fragments_pointer : dict/str/list[str], optional
             Pointer to fragments (i.e. swcs) corresponding to "pred_labels",
-            see "swc_utils.Reader" for further documentation. Note these swc
+            see "swc_util.Reader" for further documentation. Note these swc
             files may be stored in either world or image coordinates. If the
             swcs are stored in world coordinates, then provide the world to
             image coordinates anisotropy factor. Note the filename of each swc
             is assumed to "segment_id.swc" where segment_id cooresponds to the
-            segment id from "pred_labels". The default is None. 
+            segment id from "pred_labels". The default is None.
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
@@ -103,7 +107,7 @@ class SkeletonMetric:
 
         """
         # Instance attributes
-        self.anisotropy = [1.0 / a for a in anisotropy]
+        self.anisotropy = anisotropy
         self.connections_path = connections_path
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
@@ -142,7 +146,7 @@ class SkeletonMetric:
         """
         if path:
             assert self.valid_labels is not None, "Must provide valid labels!"
-            self.label_map, self.inverse_label_map = utils.init_label_map(
+            self.label_map, self.inverse_label_map = util.init_label_map(
                 path, self.valid_labels
             )
         else:
@@ -166,14 +170,14 @@ class SkeletonMetric:
 
         """
         # Read graphs
-        self.graphs = swc_utils.Reader().load(paths)
+        self.graphs = swc_util.Reader().load(paths)
         self.fragment_graphs = None
 
         # Label nodes
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key in tqdm(self.graphs, desc="Labeling Graphs"):
             self.set_node_labels(key)
-            self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
+            self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
                 self.graphs[key]
             )
 
@@ -318,7 +322,7 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        reader = swc_utils.Reader(anisotropy=self.anisotropy, min_size=40)
+        reader = swc_util.Reader(anisotropy=self.anisotropy, min_size=40)
         fragment_graphs = reader.load(fragments_pointer)
         self.fragment_ids = set(fragment_graphs.keys())
 
@@ -349,13 +353,13 @@ class SkeletonMetric:
         """
         # Initialize output directory
         output_dir = os.path.join(self.output_dir, "projections")
-        utils.mkdir(output_dir)
+        util.mkdir(output_dir)
 
         # Save intial graphs
         self.zip_writer = dict()
         for key in self.graphs.keys():
             self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
-            swc_utils.to_zipped_swc(
+            swc_util.to_zipped_swc(
                 self.zip_writer[key], self.graphs[key],
             )
 
@@ -419,7 +423,7 @@ class SkeletonMetric:
 
                 # Adjust metrics
                 n_edges = subgraph.number_of_edges()
-                rls = gutils.compute_run_lengths(subgraph)
+                rls = gutil.compute_run_lengths(subgraph)
                 self.graphs[key].graph["run_length"] -= np.sum(rls)
                 self.graphs[key].graph["n_edges"] -= n_edges
 
@@ -448,13 +452,13 @@ class SkeletonMetric:
             graph = split_detection.run(graph, self.graphs[key])
 
             # Update graph by removing omits (i.e. nodes labeled 0)
-            self.graphs[key] = gutils.delete_nodes(graph, 0)
-            self.key_to_label_to_nodes[key] = gutils.init_label_to_nodes(
+            self.graphs[key] = gutil.delete_nodes(graph, 0)
+            self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
                 self.graphs[key]
             )
 
         # Report runtime
-        t, unit = utils.time_writer(time() - t0)
+        t, unit = util.time_writer(time() - t0)
         print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def quantify_splits(self):
@@ -478,7 +482,7 @@ class SkeletonMetric:
             n_pred_edges = self.graphs[key].number_of_edges()
             n_target_edges = self.graphs[key].graph["n_edges"]
 
-            self.split_cnt[key] = gutils.count_splits(self.graphs[key])
+            self.split_cnt[key] = gutil.count_splits(self.graphs[key])
             self.omit_cnts[key] = n_target_edges - n_pred_edges
             self.omit_percent[key] = 1 - n_pred_edges / n_target_edges
 
@@ -507,7 +511,7 @@ class SkeletonMetric:
         if self.fragment_graphs:
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
-                    kdtree = KDTree(gutils.to_xyz_array(graph))
+                    kdtree = KDTree(gutil.to_array(graph))
                     self.count_merges(key, kdtree)
 
         # Process merges
@@ -574,8 +578,8 @@ class SkeletonMetric:
         None
 
         """
-        for xyz in to_xyz_array(self.fragment_graphs[label])[::5]:
-            if kdtree.query(xyz)[0] > MERGE_DIST_THRESHOLD:
+        for voxel in to_array(self.fragment_graphs[label])[::2]:
+            if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
                 # Check whether to take inverse of label
                 if self.inverse_label_map:
                     equivalent_label = self.label_map[label]
@@ -583,11 +587,11 @@ class SkeletonMetric:
                     equivalent_label = label
 
                 # Record merge mistake
-                xyz = utils.to_world(xyz)
+                xyz = util.to_world(voxel)
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label, tuple(xyz)))
                 if self.save_projections:
-                    swc_utils.to_zipped_swc(
+                    swc_util.to_zipped_swc(
                         self.zip_writer[key], self.fragment_graphs[label]
                     )
                 return
@@ -871,7 +875,7 @@ class SkeletonMetric:
         total_run_length = 0
         for key in self.graphs:
             run_length = self.get_run_length(key)
-            run_lengths = gutils.compute_run_lengths(self.graphs[key])
+            run_lengths = gutil.compute_run_lengths(self.graphs[key])
             total_run_length += run_length
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
@@ -924,7 +928,7 @@ class SkeletonMetric:
         ]
         return metrics
 
-    # -- Utils --
+    # -- util --
     def init_counter(self):
         """
         Initializes a dictionary that is used to count some type of mistake
@@ -943,7 +947,7 @@ class SkeletonMetric:
         return {key: 0 for key in self.graphs}
 
 
-# -- utils --
+# -- util --
 def find_sites(graphs, get_labels):
     """
     Detects merges between ground truth graphs which are considered to be

@@ -23,22 +23,21 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
 
 """
 
-import os
+
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
     as_completed,
 )
+from google.cloud import storage
 from io import BytesIO, StringIO
+from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
-import numpy as np
-from google.cloud import storage
-from tqdm import tqdm
+import os
 
-from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics.utils import graph_util as gutil, util
 
 
 class Reader:
@@ -88,7 +87,7 @@ class Reader:
                 - swc_zip_dir (str): Path to directory of ZIPs with SWC files.
                 - gcs_dict (dict): Dictionary that contains the keys
                   "bucket_name" and "path" to read from a GCS bucket.
-    
+
         Returns
         -------
         dict
@@ -107,12 +106,12 @@ class Reader:
         # Directory containing...
         if os.path.isdir(swc_pointer):
             # ZIP archives with SWC files
-            paths = utils.list_paths(swc_pointer, extension=".zip")
+            paths = util.list_paths(swc_pointer, extension=".zip")
             if len(paths) > 0:
                 return self.load_from_local_zips(swc_pointer)
 
             # SWC files
-            paths = utils.list_paths(swc_pointer, extension=".swc")
+            paths = util.list_paths(swc_pointer, extension=".swc")
             if len(paths) > 0:
                 return self.load_from_local_paths(paths)
 
@@ -178,7 +177,7 @@ class Reader:
             corresponding graphs.
 
         """
-        content = utils.read_txt(path)
+        content = util.read_txt(path)
         filename = os.path.basename(path)
         return self.process_content(content, filename)
 
@@ -252,7 +251,7 @@ class Reader:
             corresponding graphs.
 
         """
-        content = utils.read_zip(zipfile, path).splitlines()
+        content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
         return self.process_content(content, filename)
 
@@ -274,7 +273,7 @@ class Reader:
         """
         # Initializations
         bucket = storage.Client().bucket(gcs_dict["bucket_name"])
-        zip_paths = utils.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
+        zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
 
         # Main
         pbar = tqdm(total=len(zip_paths), desc="Download Fragments")
@@ -315,7 +314,7 @@ class Reader:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
                 threads = []
-                for f in utils.list_files_in_zip(zip_content):
+                for f in util.list_files_in_zip(zip_content):
                     threads.append(
                         executor.submit(
                             self.load_from_zipped_file, zipfile, f
@@ -355,10 +354,8 @@ class Reader:
             xyz coordinates of an entry from an swc file.
 
         """
-        xyz = np.zeros((3))
-        for i in range(3):
-            xyz[i] = self.anisotropy[i] * (float(xyz_str[i]) + offset[i])
-        return np.round(xyz).astype(int)
+        xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
+        return util.to_voxels(xyz, self.anisotropy)
 
     def get_graph(self, content):
         """
@@ -393,14 +390,14 @@ class Reader:
 
         # Set graph-level attributes
         graph.graph["n_edges"] = graph.number_of_edges()
-        graph.graph["run_length"] = gutils.compute_run_length(graph)
+        graph.graph["run_length"] = gutil.compute_run_length(graph)
         if graph.graph["run_length"] > self.min_size:
             return graph
         else:
             return None
 
 
-# -- write --
+# --- Write ---
 def save(path, xyz_1, xyz_2, color=None):
     """
     Writes an swc file.
@@ -456,7 +453,7 @@ def make_entry(node_id, parent_id, xyz):
         Entry to be written in an swc file.
 
     """
-    x, y, z = tuple(utils.to_world(xyz))
+    x, y, z = tuple(util.to_world(xyz))
     entry = f"{node_id} 2 {x} {y} {z} 3 {parent_id}"
     return entry
 
@@ -491,7 +488,7 @@ def to_zipped_swc(zip_writer, graph, color=None):
         r = 5 if color else 3
         for i, j in nx.dfs_edges(graph):
             # Special Case: Root
-            x, y, z = tuple(utils.to_world(graph.nodes[i]["xyz"]))
+            x, y, z = tuple(util.to_world(graph.nodes[i]["xyz"]))
             if n_entries == 0:
                 parent = -1
                 node_to_idx[i] = 1

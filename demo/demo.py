@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 from tifffile import imread
 from xlwt import Workbook

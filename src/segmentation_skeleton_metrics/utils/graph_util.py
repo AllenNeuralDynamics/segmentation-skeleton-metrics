@@ -14,7 +14,9 @@ import networkx as nx
 import numpy as np
 from scipy.spatial.distance import euclidean as get_dist
 
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics.utils import util
+
+ANISOTROPY = (0.748, 0.748, 1.0)
 
 
 # --- Update graph ---
@@ -151,14 +153,14 @@ def compute_run_length(graph):
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = utils.to_world(graph.nodes[i]["xyz"])
-        xyz_2 = utils.to_world(graph.nodes[j]["xyz"])
+        xyz_1 = util.to_physical(graph.nodes[i]["xyz"], ANISOTROPY)
+        xyz_2 = util.to_physical(graph.nodes[j]["xyz"], ANISOTROPY)
         path_length += get_dist(xyz_1, xyz_2)
     return path_length
 
 
 # -- miscellaneous --
-def to_xyz_array(graph):
+def to_array(graph):
     """
     Converts node coordinates from a graph into a NumPy array.
 
