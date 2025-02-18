@@ -461,4 +461,7 @@ def load_valid_labels(path):
         reconstruction process.
 
     """
-    return set(map(int, read_txt(path)))
+    valid_labels = set()
+    for label_str in read_txt(path):
+        valid_labels.add(int(label_str.split(".")[0]))
+    return valid_labels

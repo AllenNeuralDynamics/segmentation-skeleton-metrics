@@ -26,7 +26,6 @@ from segmentation_skeleton_metrics.utils import (
     swc_util,
     util
 )
-from segmentation_skeleton_metrics.utils.graph_util import to_array
 
 MERGE_DIST_THRESHOLD = 100
 MIN_CNT = 40
@@ -201,13 +200,15 @@ class SkeletonMetric:
             # Assign threads
             threads = []
             for i in self.graphs[key].nodes:
-                voxel = tuple(self.graphs[key].nodes[i]["xyz"])
+                voxel = tuple(self.graphs[key].nodes[i]["voxel"])
                 threads.append(executor.submit(self.get_label, i, voxel))
 
             # Store label
+            pbar = tqdm(total=len(threads), desc="threads finished")
             for thread in as_completed(threads):
                 i, label = thread.result()
                 self.graphs[key].nodes[i].update({"label": label})
+                pbar.update(1)
 
     def get_label(self, i, voxel):
         """
@@ -227,7 +228,7 @@ class SkeletonMetric:
 
         """
         # Read label
-        if type(self.label_mask) is ts.TensorStore:
+        if isinstance(self.label_mask, ts.TensorStore):
             label = int(self.label_mask[voxel].read().result())
         else:
             label = self.label_mask[voxel]
@@ -578,16 +579,16 @@ class SkeletonMetric:
         None
 
         """
-        for voxel in to_array(self.fragment_graphs[label])[::2]:
+        for voxel in gutil.to_array(self.fragment_graphs[label])[::2]:
             if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
-                # Check whether to take inverse of label
+                # Check whether to get inverse of label
                 if self.inverse_label_map:
                     equivalent_label = self.label_map[label]
                 else:
                     equivalent_label = label
 
                 # Record merge mistake
-                xyz = util.to_world(voxel)
+                xyz = util.to_physical(voxel)
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label, tuple(xyz)))
                 if self.save_projections:

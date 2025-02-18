@@ -60,9 +60,7 @@ class Reader:
             (1.0, 1.0, 1.0).
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
-            more than "min_size" nodes are stored in "xyz_coords". The default
-            is 0.
-
+            more than "min_size" nodes are returned.
         Returns
         -------
         None
@@ -157,8 +155,10 @@ class Reader:
 
             # Store results
             graph_dict = dict()
+            pbar = tqdm(total=len(filenames), desc="Label Graph")
             for thread in as_completed(threads):
                 graph_dict.update(thread.result())
+                pbar.update(1)
         return graph_dict
 
     def load_from_local_path(self, path):
@@ -336,7 +336,7 @@ class Reader:
             return {name: graph}
         return dict()
 
-    def read_xyz(self, xyz_str, offset):
+    def read_voxel(self, xyz_str, offset):
         """
         Reads the coordinates from a string, then transforms them to image
         coordinates (if applicable).
@@ -378,13 +378,13 @@ class Reader:
         for line in content:
             if line.startswith("# OFFSET"):
                 parts = line.split()
-                offset = self.read_xyz(parts[2:5])
+                offset = self.read_voxel(parts[2:5])
             if not line.startswith("#"):
                 parts = line.split()
                 child = int(parts[0])
                 parent = int(parts[-1])
-                xyz = self.read_xyz(parts[2:5], offset=offset)
-                graph.add_node(child, xyz=xyz)
+                voxel = self.read_voxel(parts[2:5], offset=offset)
+                graph.add_node(child, voxel=voxel)
                 if parent != -1:
                     graph.add_edge(parent, child)
 
@@ -432,20 +432,20 @@ def save(path, xyz_1, xyz_2, color=None):
         f.write(make_entry(2, 1, xyz_2))
 
 
-def make_entry(node_id, parent_id, xyz):
+def make_entry(node, parent, xyz):
     """
-    Makes an entry to be written in an swc file.
+    Makes an entry to be written in an SWC file.
 
     Parameters
     ----------
     graph : networkx.Graph
         Graph that "node_id" and "parent_id" belong to.
-    node_id : int
-        Node that entry corresponds to.
+    node : int
+        Node ID that entry corresponds to.
     parent_id : int
-         Parent of node "node_id".
-    xyz : ...
-        xyz coordinate of "node_id".
+         Parent ID of the given node.
+    voxel : ...
+        Voxel coordinate of the given node.
 
     Returns
     -------
@@ -453,9 +453,8 @@ def make_entry(node_id, parent_id, xyz):
         Entry to be written in an swc file.
 
     """
-    x, y, z = tuple(util.to_world(xyz))
-    entry = f"{node_id} 2 {x} {y} {z} 3 {parent_id}"
-    return entry
+    x, y, z = tuple(util.to_physical(voxel, (0.748, 0.748, 1.0)))
+    return f"{node} 2 {x} {y} {z} 3 {parent}"
 
 
 def to_zipped_swc(zip_writer, graph, color=None):
@@ -488,7 +487,7 @@ def to_zipped_swc(zip_writer, graph, color=None):
         r = 5 if color else 3
         for i, j in nx.dfs_edges(graph):
             # Special Case: Root
-            x, y, z = tuple(util.to_world(graph.nodes[i]["xyz"]))
+            x, y, z = tuple(util.to_world(graph.nodes[i]["voxel"]))
             if n_entries == 0:
                 parent = -1
                 node_to_idx[i] = 1
