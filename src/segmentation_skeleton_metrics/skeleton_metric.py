@@ -8,9 +8,13 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    as_completed,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+)
 from copy import deepcopy
-from scipy.spatial import KDTree
+from scipy.spatial import distance, KDTree
 from time import time
 from tqdm import tqdm
 from zipfile import ZipFile
@@ -18,11 +22,11 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 import os
-import tensorstore as ts
 
-from segmentation_skeleton_metrics import split_detection
+from segmentation_skeleton_metrics import graph_segmentation_alignment as gsa
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
+    img_util,
     swc_util,
     util
 )
@@ -108,8 +112,8 @@ class SkeletonMetric:
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
 
-        # Load Labels, Graphs, Fragments
-        print("\n(1) Initializations")
+        # Load Data
+        print("\n(1) Load Data")
         assert type(valid_labels) is set if valid_labels else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
@@ -177,7 +181,7 @@ class SkeletonMetric:
                 self.graphs[key]
             )
 
-    def set_node_labels(self, key):
+    def set_node_labels(self, key, batch_size=128):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
         predicted segmentation mask (i.e. "self.label_mask") as a node-level
@@ -195,17 +199,62 @@ class SkeletonMetric:
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = []
-            for i in self.graphs[key].nodes:
-                voxel = tuple(self.graphs[key].nodes[i]["voxel"])
-                threads.append(executor.submit(self.get_label, i, voxel))
+            batch = set()
+            threads = list()
+            visited = set()
+            for i, j in nx.dfs_edges(self.graphs[key]):
+                # Check for new batch
+                if len(batch) == 0:
+                    root = i
+                    batch.add(i)
+                    visited.add(i)
 
-            # Store label
+                # Check whether to submit batch
+                is_node_far = self.dist(key, root, j) > 128
+                is_batch_full = len(batch) >= batch_size
+                if is_node_far or is_batch_full:
+                    threads.append(
+                        executor.submit(self.get_patch_labels, key, batch)
+                    )
+                    batch = set()
+
+                # Visit j
+                if j not in visited:
+                    batch.add(j)
+                    visited.add(j)
+                    if len(batch) == 1:
+                        root = j
+
+            # Submit last thread
+            threads.append(executor.submit(self.get_patch_labels, key, batch))
+
+            # Process results
             for thread in as_completed(threads):
-                i, label = thread.result()
-                self.graphs[key].nodes[i].update({"label": label})
+                node_to_label = thread.result()
+                for i, label in node_to_label.items():
+                    self.graphs[key].nodes[i].update({"label": label})
 
-    def get_label(self, i, voxel):
+    def get_patch_labels(self, key, nodes):
+        # Get bounding box
+        bbox = {"min": [np.inf, np.inf, np.inf], "max": [0, 0, 0]}
+        for i in nodes:
+            voxel = deepcopy(self.graphs[key].nodes[i]["voxel"])
+            for idx in range(3):
+                if voxel[idx] < bbox["min"][idx]:
+                    bbox["min"][idx] = voxel[idx]
+                if voxel[idx] >= bbox["max"][idx]:
+                    bbox["max"][idx] = voxel[idx] + 1
+
+        # Read labels
+        label_patch = self.label_mask.read_with_bbox(bbox)
+        node_to_label = dict()
+        for i in nodes:
+            voxel = self.to_local_voxels(key, i, bbox["min"])
+            label = self.adjust_label(label_patch[voxel])
+            node_to_label[i] = label
+        return node_to_label
+
+    def adjust_label(self, label):
         """
         Gets label of voxel in "self.label_mask".
 
@@ -222,18 +271,11 @@ class SkeletonMetric:
            Label of voxel.
 
         """
-        # Read label
-        if isinstance(self.label_mask, ts.TensorStore):
-            label = int(self.label_mask[voxel].read().result())
-        else:
-            label = self.label_mask[voxel]
-
-        # Check whether to update label
         if self.label_map:
             label = self.get_equivalent_label(label)
         elif self.valid_labels:
             label = 0 if label not in self.valid_labels else label
-        return i, label
+        return label
 
     def get_equivalent_label(self, label):
         """
@@ -443,15 +485,29 @@ class SkeletonMetric:
 
         """
         t0 = time()
-        for key, graph in tqdm(self.graphs.items(), desc="Split Detection:"):
-            # Detection
-            graph = split_detection.run(graph, self.graphs[key])
+        pbar = tqdm(total=len(self.graphs), desc="Split Detection:")
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for key, graph in self.graphs.items():
+                processes.append(
+                       executor.submit(
+                           gsa.correct_graph_misalignments,
+                           key,
+                           graph,
+                       )
+                )
 
-            # Update graph by removing omits (i.e. nodes labeled 0)
-            self.graphs[key] = gutil.delete_nodes(graph, 0)
-            self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
-                self.graphs[key]
-            )
+            # Store results
+            self.split_percent = dict()
+            for process in as_completed(processes):
+                key, graph, split_percent = process.result()
+                self.graphs[key] = gutil.delete_nodes(graph, 0)
+                self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
+                    self.graphs[key]
+                )
+                self.split_percent[key] = split_percent
+                pbar.update(1)
 
         # Report runtime
         t, unit = util.time_writer(time() - t0)
@@ -505,15 +561,19 @@ class SkeletonMetric:
 
         # Count total merges
         if self.fragment_graphs:
+            pbar = tqdm(total=len(self.graphs), desc="Count Merges:")
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
                     kdtree = KDTree(gutil.to_array(graph))
                     self.count_merges(key, kdtree)
+                pbar.update(1)
 
         # Process merges
+        pbar = tqdm(total=len(self.graphs), desc="Compute Percent Merged:")
         for (key_1, key_2), label in self.find_label_intersections():
             self.process_merge(key_1, label, -1)
             self.process_merge(key_2, label, -1)
+            pbar.update(1)
 
         for key, label, xyz in self.merged_labels:
             self.process_merge(key, label, xyz, update_merged_labels=False)
@@ -583,7 +643,7 @@ class SkeletonMetric:
                     equivalent_label = label
 
                 # Record merge mistake
-                xyz = util.to_physical(voxel)
+                xyz = img_util.to_physical(voxel)
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label, tuple(xyz)))
                 if self.save_projections:
@@ -776,6 +836,7 @@ class SkeletonMetric:
             "# splits": generate_result(keys, self.split_cnt),
             "# merges": generate_result(keys, self.merge_cnt),
             "% omit": generate_result(keys, self.omit_percent),
+            "% split": generate_result(keys, self.split_percent),
             "% merged": generate_result(keys, self.merged_percent),
             "edge accuracy": generate_result(keys, self.edge_accuracy),
             "erl": generate_result(keys, self.erl),
@@ -801,6 +862,7 @@ class SkeletonMetric:
             "# splits": self.avg_result(self.split_cnt),
             "# merges": self.avg_result(self.merge_cnt),
             "% omit": self.avg_result(self.omit_percent),
+            "% split": self.avg_result(self.split_percent),
             "% merged": self.avg_result(self.merged_percent),
             "edge accuracy": self.avg_result(self.edge_accuracy),
             "erl": self.avg_result(self.erl),
@@ -925,6 +987,11 @@ class SkeletonMetric:
         return metrics
 
     # -- util --
+    def dist(self, key, i, j):
+        xyz_i = self.graphs[key].nodes[i]["voxel"]
+        xyz_j = self.graphs[key].nodes[j]["voxel"]
+        return distance.euclidean(xyz_i, xyz_j)
+
     def init_counter(self):
         """
         Initializes a dictionary that is used to count some type of mistake
@@ -941,6 +1008,11 @@ class SkeletonMetric:
 
         """
         return {key: 0 for key in self.graphs}
+
+    def to_local_voxels(self, key, i, offset):
+        voxel = np.array(self.graphs[key].nodes[i]["voxel"])
+        offset = np.array(offset)
+        return tuple(voxel - offset)
 
 
 # -- util --

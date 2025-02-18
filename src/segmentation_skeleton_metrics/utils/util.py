@@ -13,10 +13,8 @@ from io import BytesIO
 from zipfile import ZipFile
 
 import networkx as nx
-import tensorstore as ts
 
 ANISOTROPY = [0.748, 0.748, 1.0]
-SUPPORTED_DRIVERS = ["neuroglancer_precomputed", "n5", "zarr"]
 
 
 # -- os utils ---
@@ -130,45 +128,6 @@ def get_id(path):
 
 
 # --- io utils ---
-def open_tensorstore(path, driver):
-    """
-    Opens the tensorstore array stored at "path".
-
-    Parameters
-    ----------
-    path : str
-        Path to directory containing shard files.
-    driver : str
-        Storage driver needed to read data at "path".
-
-    Returns
-    -------
-    dict
-        Sparse arr.
-
-    """
-    assert driver in SUPPORTED_DRIVERS, "Driver is not supported!"
-    arr = ts.open(
-        {
-            "driver": driver,
-            "kvstore": {
-                "driver": "gcs",
-                "bucket": "allen-nd-goog",
-                "path": path,
-            },
-            "context": {
-                "cache_pool": {"total_bytes_limit": 1000000000},
-                "cache_pool#remote": {"total_bytes_limit": 1000000000},
-                "data_copy_concurrency": {"limit": 8},
-            },
-            "recheck_cached_data": "open",
-        }
-    ).result()
-    if driver == "neuroglancer_precomputed":
-        return arr[ts.d["channel"][0]]
-    return arr
-
-
 def read_zip(zip_file, path):
     """
     Reads the content of an swc file from a zip file.
@@ -251,29 +210,6 @@ def list_files_in_zip(zip_content):
 
 
 # -- dict utils --
-def check_edge(edge_list, edge):
-    """
-    Checks if "edge" is in "edge_list".
-
-    Parameters
-    ----------
-    edge_list : list or set
-        List or set of edges.
-    edge : tuple
-        Edge.
-
-    Returns
-    -------
-    bool
-        Indication of whether "edge" is contained in "edge_list".
-
-    """
-    if edge in edge_list or (edge[1], edge[0]) in edge_list:
-        return True
-    else:
-        return False
-
-
 def delete_keys(my_dict, keys):
     """
     Deletes a set of keys from a dictionary.
@@ -375,49 +311,6 @@ def time_writer(t, unit="seconds"):
 
 
 # --- Miscellaneous ---
-def to_physical(voxel, anisotropy):
-    """
-    Converts a voxel coordinate to a physical coordinate by applying the
-    anisotropy scaling factors.
-
-    Parameters
-    ----------
-    voxel : ArrayLike
-        Voxel coordinate to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-
-    Returns
-    -------
-    Tuple[float]
-        Physical coordinate.
-
-    """
-    return tuple([voxel[i] * anisotropy[i] for i in range(3)])
-
-
-def to_voxels(xyz, anisotropy):
-    """
-    Converts coordinate from a physical to voxel space.
-
-    Parameters
-    ----------
-    xyz : ArrayLike
-        Physical coordiante to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-
-    Returns
-    -------
-    Tuple[int]
-        Voxel coordinate.
-
-    """
-    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)])
-
-
 def load_merged_labels(path):
     """
     Loads a list of merged label IDs from a text file.

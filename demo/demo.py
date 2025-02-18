@@ -1,13 +1,13 @@
 import numpy as np
-from tifffile import imread
 from xlwt import Workbook
 
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
 def evaluate():
     # Initializations
-    pred_labels = imread(pred_labels_path)
+    pred_labels = TiffReader(pred_labels_path)
     skeleton_metric = SkeletonMetric(
         target_swcs_pointer,
         pred_labels,

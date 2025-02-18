@@ -37,7 +37,11 @@ from zipfile import ZipFile
 import networkx as nx
 import os
 
-from segmentation_skeleton_metrics.utils import graph_util as gutil, util
+from segmentation_skeleton_metrics.utils import (
+    graph_util as gutil,
+    img_util,
+    util
+)
 
 
 class Reader:
@@ -190,7 +194,7 @@ class Reader:
             for f in filenames:
                 zip_path = os.path.join(zip_dir, f)
                 processes.append(
-                    executor.submit(self.load_from_local_zip, zip_path, False)
+                    executor.submit(self.load_from_local_zip, zip_path)
                 )
 
             # Store results
@@ -222,7 +226,7 @@ class Reader:
             # Assign threads
             threads = list()
             zipfile = ZipFile(zip_path, "r")
-            for f in  [f for f in zipfile.namelist() if f.endswith(".swc")]:
+            for f in [f for f in zipfile.namelist() if f.endswith(".swc")]:
                 threads.append(
                     executor.submit(self.load_from_zipped_file, zipfile, f)
                 )
@@ -355,7 +359,7 @@ class Reader:
 
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
-        return util.to_voxels(xyz, self.anisotropy)
+        return img_util.to_voxels(xyz, self.anisotropy)
 
     def get_graph(self, content):
         """
@@ -431,7 +435,7 @@ def to_zipped_swc(zip_writer, graph, color=None):
         r = 5 if color else 3
         for i, j in nx.dfs_edges(graph):
             # Special Case: Root
-            x, y, z = tuple(util.to_world(graph.nodes[i]["voxel"]))
+            x, y, z = tuple(img_util.to_physical(graph.nodes[i]["voxel"]))
             if n_entries == 0:
                 parent = -1
                 node_to_idx[i] = 1

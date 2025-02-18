@@ -14,7 +14,7 @@ import networkx as nx
 import numpy as np
 from scipy.spatial.distance import euclidean as get_dist
 
-from segmentation_skeleton_metrics.utils import util
+from segmentation_skeleton_metrics.utils import img_util
 
 ANISOTROPY = (0.748, 0.748, 1.0)
 
@@ -153,8 +153,8 @@ def compute_run_length(graph):
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = util.to_physical(graph.nodes[i]["voxel"], ANISOTROPY)
-        xyz_2 = util.to_physical(graph.nodes[j]["voxel"], ANISOTROPY)
+        xyz_1 = img_util.to_physical(graph.nodes[i]["voxel"], ANISOTROPY)
+        xyz_2 = img_util.to_physical(graph.nodes[j]["voxel"], ANISOTROPY)
         path_length += get_dist(xyz_1, xyz_2)
     return path_length
 
