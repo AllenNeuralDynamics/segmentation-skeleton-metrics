@@ -11,8 +11,7 @@ skeletons (i.e. target_graphs) to the predicted segmentation label mask.
 
 import networkx as nx
 
-from segmentation_skeleton_metrics import graph_utils as gutils
-from segmentation_skeleton_metrics import utils
+from segmentation_skeleton_metrics.utils import graph_util as gutil, util
 
 
 def run(target_graph, labeled_graph):
@@ -33,7 +32,7 @@ def run(target_graph, labeled_graph):
         Labeled graph with omit and split edges removed.
 
     """
-    r = gutils.sample_leaf(labeled_graph)
+    r = gutil.sample_leaf(labeled_graph)
     dfs_edges = list(nx.dfs_edges(labeled_graph, source=r))
     while len(dfs_edges) > 0:
         # Visit edge
@@ -94,7 +93,7 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
             # Add nbs to queue
             nbs = target_graph.neighbors(j)
             for k in [k for k in nbs if k not in visited]:
-                if utils.check_edge(dfs_edges, (j, k)):
+                if util.check_edge(dfs_edges, (j, k)):
                     queue.append(k)
                     dfs_edges = remove_edge(dfs_edges, (j, k))
                 elif k == nb:
@@ -103,7 +102,7 @@ def is_zero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
     # Upd zero nodes
     if len(collision_labels) == 1:
         label = collision_labels.pop()
-        labeled_graph = gutils.upd_labels(labeled_graph, visited, label)
+        labeled_graph = gutil.upd_labels(labeled_graph, visited, label)
 
     return dfs_edges, labeled_graph
 
@@ -150,7 +149,7 @@ def is_nonzero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
         visited.add(j)
         if label_j == origin_label and len(queue) == 0:
             # misalignment
-            labeled_graph = gutils.upd_labels(
+            labeled_graph = gutil.upd_labels(
                 labeled_graph, visited, origin_label
             )
             return dfs_edges, labeled_graph
@@ -171,7 +170,7 @@ def is_nonzero_misalignment(target_graph, labeled_graph, dfs_edges, nb, root):
     return dfs_edges, labeled_graph
 
 
-# -- utils --
+# -- util --
 def remove_edge(dfs_edges, edge):
     """
     Checks whether "edge" is in "dfs_edges" and removes it.
