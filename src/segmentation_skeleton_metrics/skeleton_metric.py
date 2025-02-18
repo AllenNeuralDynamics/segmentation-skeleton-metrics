@@ -24,7 +24,7 @@ from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import split_detection, swc_utils, utils
 from segmentation_skeleton_metrics.graph_utils import to_xyz_array
 
-MERGE_DIST_THRESHOLD = 200
+MERGE_DIST_THRESHOLD = 100
 MIN_CNT = 40
 
 
@@ -47,7 +47,7 @@ class SkeletonMetric:
         self,
         gt_pointer,
         pred_labels,
-        anisotropy=[1.0, 1.0, 1.0],
+        anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
         output_dir=None,
@@ -102,11 +102,10 @@ class SkeletonMetric:
         None.
 
         """
-        # Options
-        self.anisotropy = [1.0 / a_i for a_i in anisotropy]
+        # Instance attributes
+        self.anisotropy = [1.0 / a for a in anisotropy]
         self.connections_path = connections_path
         self.output_dir = output_dir
-        self.fragments_pointer = fragments_pointer
         self.preexisting_merges = preexisting_merges
 
         # Load Labels, Graphs, Fragments
@@ -116,8 +115,8 @@ class SkeletonMetric:
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
         self.init_graphs(gt_pointer)
-        if self.fragments_pointer:
-            self.load_fragments()
+        if fragments_pointer:
+            self.load_fragments(fragments_pointer)
 
         # Initialize writer
         self.save_projections = save_projections
@@ -167,8 +166,7 @@ class SkeletonMetric:
 
         """
         # Read graphs
-        reader = swc_utils.Reader(return_graphs=True)
-        self.graphs = reader.load(paths)
+        self.graphs = swc_utils.Reader().load(paths)
         self.fragment_graphs = None
 
         # Label nodes
@@ -303,7 +301,7 @@ class SkeletonMetric:
             return set(self.key_to_label_to_nodes[key].keys())
 
     # -- Load Fragments --
-    def load_fragments(self):
+    def load_fragments(self, fragments_pointer):
         """
         Loads and filters swc files from a local zip. These swc files are
         assumed to be fragments from a predicted segmentation.
@@ -320,10 +318,8 @@ class SkeletonMetric:
 
         """
         # Read fragments
-        reader = swc_utils.Reader(
-            anisotropy=self.anisotropy, return_graphs=True
-        )
-        fragment_graphs = reader.load(self.fragments_pointer)
+        reader = swc_utils.Reader(anisotropy=self.anisotropy, min_size=40)
+        fragment_graphs = reader.load(fragments_pointer)
         self.fragment_ids = set(fragment_graphs.keys())
 
         # Filter fragments
@@ -360,7 +356,7 @@ class SkeletonMetric:
         for key in self.graphs.keys():
             self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
             swc_utils.to_zipped_swc(
-                self.zip_writer[key], self.graphs[key], color="1.0 0.0 0.0"
+                self.zip_writer[key], self.graphs[key],
             )
 
     # -- Main Routine --
@@ -391,7 +387,6 @@ class SkeletonMetric:
 
         # Merge evaluation
         self.detect_merges()
-        self.compute_projected_run_lengths()
         self.quantify_merges()
 
         # Compute metrics
@@ -507,7 +502,6 @@ class SkeletonMetric:
         self.merged_edges_cnt = self.init_counter()
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
-        self.projected_run_length = defaultdict(int)
 
         # Count total merges
         if self.fragment_graphs:
@@ -557,7 +551,6 @@ class SkeletonMetric:
                 # Check if fragment is a merge mistake
                 for label in labels:
                     rl = self.fragment_graphs[label].graph["run_length"]
-                    self.projected_run_length[key] += rl
                     self.is_fragment_merge(key, label, kdtree)
 
     def is_fragment_merge(self, key, label, kdtree):
@@ -725,37 +718,6 @@ class SkeletonMetric:
                 return l
         return self.inverse_label_map[label]
 
-    # -- Projected Run Lengths --
-    def compute_projected_run_lengths(self):
-        """
-        Computes the projected run length for each graph in "self.graphs".
-        First, we detect fragments from "self.fragments_pointer" that are
-        sufficiently close (as determined by projection distances) to the
-        given graph. The projected run length is the sum of the path lengths
-        of fragments that were detected.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        # Initializations
-        self.run_length_ratio = dict()
-        self.target_run_length = dict()
-
-        # Compute run lengths
-        for key in self.graphs:
-            target_rl = self.get_run_length(key)
-            projected_rl = self.projected_run_length[key]
-
-            self.projected_run_length[key] = projected_rl
-            self.target_run_length[key] = target_rl
-            self.run_length_ratio[key] = projected_rl / target_rl
-
     # -- Compute Metrics --
     def compile_results(self):
         """
@@ -816,9 +778,6 @@ class SkeletonMetric:
             "% omit": generate_result(keys, self.omit_percent),
             "% merged": generate_result(keys, self.merged_percent),
             "edge accuracy": generate_result(keys, self.edge_accuracy),
-            "projected_rl": generate_result(keys, self.projected_run_length),
-            "target_rl": generate_result(keys, self.target_run_length),
-            "rl_ratio": generate_result(keys, self.run_length_ratio),
             "erl": generate_result(keys, self.erl),
             "normalized erl": generate_result(keys, self.normalized_erl),
         }
@@ -844,9 +803,6 @@ class SkeletonMetric:
             "% omit": self.avg_result(self.omit_percent),
             "% merged": self.avg_result(self.merged_percent),
             "edge accuracy": self.avg_result(self.edge_accuracy),
-            "projected_rl": self.avg_result(self.projected_run_length),
-            "target_rl": self.avg_result(self.target_run_length),
-            "rl_ratio": self.avg_result(self.run_length_ratio),
             "erl": self.avg_result(self.erl),
             "normalized erl": self.avg_result(self.normalized_erl),
         }

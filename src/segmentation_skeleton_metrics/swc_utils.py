@@ -5,6 +5,22 @@ Created on Wed June 5 16:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+
+Routines for working with SWC files.
+
+An SWC file is a text-based file format used to represent the directed
+graphical structure of a neuron. It contains a series of nodes such that each
+has the following attributes:
+    "id" (int): node ID
+    "type" (int): node type (e.g. soma, axon, dendrite)
+    "x" (float): x coordinate
+    "y" (float): y coordinate
+    "z" (float): z coordinate
+    "pid" (int): node ID of parent
+
+Note: Each uncommented line in an SWC file corresponds to a node and contains
+      these attributes in the same order.
+
 """
 
 import os
@@ -24,35 +40,29 @@ from tqdm import tqdm
 from segmentation_skeleton_metrics import graph_utils as gutils
 from segmentation_skeleton_metrics import utils
 
-ANISOTROPY = [0.748, 0.748, 1.0]
-
 
 class Reader:
     """
-    Class that reads swc files that are stored as (1) local directory of swcs,
-    (2) gcs directory of zips containing swcs, (3) local zip containing swcs.
+    Class that reads SWC files stored in a (1) local directory, (2) local ZIP
+    archive, (3) local directory of ZIP archives or (4) GCS directory of ZIP
+    archives.
 
     """
 
-    def __init__(
-        self, anisotropy=[1.0, 1.0, 1.0], min_size=0, return_graphs=False
-    ):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0), min_size=0):
         """
         Initializes a Reader object that loads swc files.
 
         Parameters
         ----------
-        anisotropy : list[float], optional
+        anisotropy : Tuple[float], optional
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
-            [1.0, 1.0, 1.0].
+            (1.0, 1.0, 1.0).
         min_size : int, optional
             Threshold on the number of nodes in swc file. Only swc files with
             more than "min_size" nodes are stored in "xyz_coords". The default
             is 0.
-        return_graphs : bool, optional
-            Indication of whether to return contents of swc file in the form
-            of a graph. The default is False.
 
         Returns
         -------
@@ -61,105 +71,139 @@ class Reader:
         """
         self.anisotropy = anisotropy
         self.min_size = min_size
-        self.return_graphs = return_graphs
 
+    # --- Load Data ---
     def load(self, swc_pointer):
         """
-        Load swc files based on the type and format of the provided "swc_pointer".
+        Load SWCs files based on the type pointer provided.
 
         Parameters
         ----------
         swc_pointer : dict, list, str
-            Must be one of the following: (1) gcs directory of zips containing swcs,
-            (2) list of local paths to swcs, (3) local zip containing swcs, (4) path
-            to a single local swc, or (4) path to a local directory of swcs.
+            Object that points to SWC files to be read, must be one of:
+                - swc_dir (str): Path to directory containing SWC files.
+                - swc_path (str): Path to single SWC file.
+                - swc_path_list (List[str]): List of paths to SWC files.
+                - swc_zip (str): Path to a ZIP archive containing SWC files.
+                - swc_zip_dir (str): Path to directory of ZIPs with SWC files.
+                - gcs_dict (dict): Dictionary that contains the keys
+                  "bucket_name" and "path" to read from a GCS bucket.
     
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the xyz coordinates or graph read
-            from that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
-        if type(swc_pointer) is dict:
+        # GCS bucket containing ZIP archives with SWC files
+        if isinstance(swc_pointer, dict):
             return self.load_from_gcs(swc_pointer)
-        if type(swc_pointer) is list:
+
+        # List of paths to SWC files
+        if isinstance(swc_pointer, list):
             return self.load_from_local_paths(swc_pointer)
-        if type(swc_pointer) is str:
+
+        # Directory containing...
+        if os.path.isdir(swc_pointer):
+            # ZIP archives with SWC files
+            paths = utils.list_paths(swc_pointer, extension=".zip")
+            if len(paths) > 0:
+                return self.load_from_local_zips(swc_pointer)
+
+            # SWC files
+            paths = utils.list_paths(swc_pointer, extension=".swc")
+            if len(paths) > 0:
+                return self.load_from_local_paths(paths)
+
+            raise Exception("Directory is invalid!")
+
+        # Path to...
+        if isinstance(swc_pointer, str):
+            # ZIP archive with SWC files
             if ".zip" in swc_pointer:
                 return self.load_from_local_zip(swc_pointer)
+
+            # Path to single SWC file
             if ".swc" in swc_pointer:
                 return self.load_from_local_path(swc_pointer)
-            if os.path.isdir(swc_pointer):
-                paths = utils.list_paths(swc_pointer, extension=".swc")
-                return self.load_from_local_paths(paths)
-        raise Exception("SWC Pointer is not Valid!")
+
+            raise Exception("Path is invalid!")
+
+        raise Exception("SWC Pointer is inValid!")
 
     def load_from_local_paths(self, swc_paths):
         """
-        Reads swc files from local machine, then returns either the xyz
-        coordinates or graphs.
+        Reads list of SWC files stored on the local machine.
 
         Paramters
         ---------
         swc_paths : list
-            List of paths to swc files stored on the local machine.
+            List of paths to SWC files stored on the local machine.
 
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the xyz coordinates or graph read
-            from that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
             for path in swc_paths:
-                processes.append(
+                threads.append(
                     executor.submit(self.load_from_local_path, path)
                 )
 
             # Store results
-            swc_dicts = dict()
-            for process in as_completed(processes):
-                swc_dicts.update(process.result())
-        return swc_dicts
+            graph_dict = dict()
+            for thread in as_completed(threads):
+                graph_dict.update(thread.result())
+        return graph_dict
 
     def load_from_local_path(self, path):
         """
-        Reads a single swc file from local machine, then returns either the
-        xyz coordinates or graphs.
+        Reads a single SWC file from local machine.
 
         Paramters
         ---------
         path : str
-            Path to swc file stored on the local machine.
+            Path to SWC file stored on the local machine.
 
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the xyz coordinates or graph read
-            from that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
         content = utils.read_txt(path)
-        if len(content) > self.min_size:
-            key = utils.get_id(path)
-            if self.return_graphs:
-                result = self.get_graph(content)
-                result.graph["filename"] = os.path.basename(path)
-            else:
-                result = self.get_coords(content)
-            return {key: result}
-        else:
-            return dict()
+        filename = os.path.basename(path)
+        return self.process_content(content, filename)
 
-    def load_from_local_zip(self, zip_path):
+    def load_from_local_zips(self, zip_dir):
+        filenames = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
+        pbar = tqdm(total=len(filenames), desc="Load SWCs")
+        with ProcessPoolExecutor() as executor:
+            # Assign threads
+            processes = list()
+            for f in filenames:
+                zip_path = os.path.join(zip_dir, f)
+                processes.append(
+                    executor.submit(self.load_from_local_zip, zip_path, False)
+                )
+
+            # Store results
+            graph_dict = dict()
+            for process in as_completed(processes):
+                graph_dict.update(process.result())
+                pbar.update(1)
+        return graph_dict
+
+    def load_from_local_zip(self, zip_path, verbose=True):
         """
-        Reads swc files from zip on the local machine, then returns either the
-        xyz coordinates or graph. Note this routine is hard coded for computing
-        projected run length.
+        Reads SWC files from zip on the local machine.
 
         Paramters
         ---------
@@ -171,49 +215,70 @@ class Reader:
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
-        swc_dict = dict()
-        with ZipFile(zip_path, "r") as zip:
-            swc_files = [f for f in zip.namelist() if f.endswith(".swc")]
-            for f in tqdm(swc_files, desc="Loading Fragments"):
-                # Check whether to store content
-                content = utils.read_zip(zip, f).splitlines()
-                if len(content) > self.min_size:
-                    key = utils.get_id(f)
-                    if self.return_graphs:
-                        swc_dict[key] = self.get_graph(content)
-                        swc_dict[key].graph["filename"] = f
-                    else:
-                        swc_dict[key] = self.get_coords(content)
-        return swc_dict
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            zipfile = ZipFile(zip_path, "r")
+            for f in  [f for f in zipfile.namelist() if f.endswith(".swc")]:
+                threads.append(
+                    executor.submit(self.load_from_zipped_file, zipfile, f)
+                )
 
-    def load_from_gcs(self, gcs_dict):
+            # Store results
+            graph_dict = dict()
+            for thread in as_completed(threads):
+                graph_dict.update(thread.result())
+        return graph_dict
+
+    def load_from_zipped_file(self, zipfile, path):
         """
-        Reads swc files from a GCS bucket.
+        Reads swc file stored at "path" which points to a file in a zip.
 
         Parameters
         ----------
-        gcs_dict : dict
-            Dictionary where keys are "bucket_name" and "path".
+        zipfile : ZipFile
+            Zip containing swc file to be read.
+        path : str
+            Path to swc file to be read.
 
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
+
+        """
+        content = utils.read_zip(zipfile, path).splitlines()
+        filename = os.path.basename(path)
+        return self.process_content(content, filename)
+
+    def load_from_gcs(self, gcs_dict):
+        """
+        Reads ZIP archives containing SWC files stored in a GCS bucket.
+
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary with the keys are "bucket_name" and "path".
+
+        Returns
+        -------
+        dict
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
         # Initializations
         bucket = storage.Client().bucket(gcs_dict["bucket_name"])
         zip_paths = utils.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
-        print("Downloading swc files from cloud...")
-        print("# zip files:", len(zip_paths))
 
         # Main
-        with ProcessPoolExecutor() as executor:
+        pbar = tqdm(total=len(zip_paths), desc="Download Fragments")
+        with ProcessPoolExecutor(max_workers=1) as executor:
             # Assign processes
             processes = []
             for path in zip_paths:
@@ -223,10 +288,11 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = dict()
-            for process in tqdm(as_completed(processes)):
-                swc_dicts.update(process.result())
-        return swc_dicts
+            graph_dict = dict()
+            for process in as_completed(processes):
+                graph_dict.update(process.result())
+                pbar.update(1)
+        return graph_dict
 
     def load_from_cloud_zip(self, zip_content):
         """
@@ -241,86 +307,35 @@ class Reader:
         Returns
         -------
         dict
-            Dictionary that maps an swc_id to the the xyz coordinates read from
-            that swc file.
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
 
         """
-        with ZipFile(BytesIO(zip_content)) as zip_file:
+        with ZipFile(BytesIO(zip_content)) as zipfile:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
                 threads = []
                 for f in utils.list_files_in_zip(zip_content):
                     threads.append(
                         executor.submit(
-                            self.load_from_cloud_zipped_file, zip_file, f
+                            self.load_from_zipped_file, zipfile, f
                         )
                     )
 
                 # Process results
-                swc_dicts = dict()
+                graph_dict = dict()
                 for thread in as_completed(threads):
-                    swc_dicts.update(thread.result())
-        return swc_dicts
+                    graph_dict.update(thread.result())
+        return graph_dict
 
-    def load_from_cloud_zipped_file(self, zip_file, path):
-        """
-        Reads swc file stored at "path" which points to a file in a zip.
-
-        Parameters
-        ----------
-        zip_file : ZipFile
-            Zip containing swc file to be read.
-        path : str
-            Path to swc file to be read.
-
-        Returns
-        -------
-        dict
-            Dictionary that maps an swc_id to the the xyz coordinates or graph
-            read from that swc file.
-
-        """
-        content = utils.read_zip(zip_file, path).splitlines()
-        if len(content) > self.min_size:
-            key = utils.get_id(path)
-            if self.return_graphs:
-                graph = self.get_graph(content)
-                graph.graph["filename"] = os.path.basename(path)
-                return {key: graph}
-            else:
-                return {key: self.get_coords(content)}
-        else:
-            return dict()
-
-    def get_coords(self, content):
-        """
-        Gets the xyz coords from the an swc file that has been read and stored
-        as "content".
-
-        Parameters
-        ----------
-        content : list[str]
-            Entries from swc where each item is the text string from an swc.
-        anisotropy : list[float]
-            Image to world scaling factors applied to xyz coordinates to
-            account for anisotropy of the microscope.
-
-        Returns
-        -------
-        numpy.ndarray
-            xyz coords from an swc file.
-
-        """
-        coords_list = []
-        offset = [0, 0, 0]
-        for line in content:
-            if line.startswith("# OFFSET"):
-                parts = line.split()
-                offset = self.read_xyz(parts[2:5], offset)
-            if not line.startswith("#"):
-                parts = line.split()
-                coords_list.append(self.read_xyz(parts[2:5], offset))
-        return np.array(coords_list)
+    # -- Process Data ---
+    def process_content(self, content, filename):
+        graph = self.get_graph(content)
+        if graph is not None:
+            graph.graph["filename"] = filename
+            name, _ = os.path.splitext(filename)
+            return {name: graph}
+        return dict()
 
     def read_xyz(self, xyz_str, offset):
         """
@@ -379,7 +394,10 @@ class Reader:
         # Set graph-level attributes
         graph.graph["n_edges"] = graph.number_of_edges()
         graph.graph["run_length"] = gutils.compute_run_length(graph)
-        return graph
+        if graph.graph["run_length"] > self.min_size:
+            return graph
+        else:
+            return None
 
 
 # -- write --
@@ -439,7 +457,7 @@ def make_entry(node_id, parent_id, xyz):
 
     """
     x, y, z = tuple(utils.to_world(xyz))
-    entry = f"{node_id} 2 {x} {y} {z} 8 {parent_id}"
+    entry = f"{node_id} 2 {x} {y} {z} 3 {parent_id}"
     return entry
 
 
