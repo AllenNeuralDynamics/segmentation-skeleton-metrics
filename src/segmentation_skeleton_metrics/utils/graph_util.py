@@ -153,8 +153,8 @@ def compute_run_length(graph):
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = util.to_physical(graph.nodes[i]["xyz"], ANISOTROPY)
-        xyz_2 = util.to_physical(graph.nodes[j]["xyz"], ANISOTROPY)
+        xyz_1 = util.to_physical(graph.nodes[i]["voxel"], ANISOTROPY)
+        xyz_2 = util.to_physical(graph.nodes[j]["voxel"], ANISOTROPY)
         path_length += get_dist(xyz_1, xyz_2)
     return path_length
 
@@ -167,7 +167,7 @@ def to_array(graph):
     Parameters
     ----------
     graph : networkx.Graph
-        Graph that contains nodes with "xyz" attributes.
+        Graph that contains nodes with "voxel" attributes.
 
     Returns
     -------
@@ -175,8 +175,8 @@ def to_array(graph):
         Array where each row represents the 3D coordinates of a node.
 
     """
-    xyz_coords = nx.get_node_attributes(graph, "xyz")
-    return np.array([xyz_coords[i] for i in graph.nodes])
+    voxels = nx.get_node_attributes(graph, "voxel")
+    return np.array([voxels[i] for i in graph.nodes])
 
 
 def sample_leaf(graph):
