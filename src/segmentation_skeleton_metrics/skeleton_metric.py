@@ -64,26 +64,23 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        gt_pointer : dict/str/list[str]
+        gt_pointer : Any
             Pointer to ground truth swcs, see "swc_util.Reader" for further
-            documentation. Note these swc files are assumed to be stored in
+            documentation. Note these SWC files are assumed to be stored in
             image coordinates.
-        pred_labels : numpy.ndarray or tensorstore.TensorStore
+        pred_labels : ArrayLike
             Predicted segmentation mask.
-        anisotropy : list[float], optional
-            Image to real-world coordinates scaling factors applied to swc
-            stored at "fragments_pointer". The default is [1.0, 1.0, 1.0].
+        anisotropy : Tuple[float], optional
+            Image to physical coordinate scaling factors applied to SWC files
+            stored at "fragments_pointer". The default is (1.0, 1.0, 1.0).
         connections_path : str, optional
             Path to a txt file containing pairs of segment ids of segments
             that were merged into a single segment. The default is None.
-        fragments_pointer : dict/str/list[str], optional
-            Pointer to fragments (i.e. swcs) corresponding to "pred_labels",
-            see "swc_util.Reader" for further documentation. Note these swc
-            files may be stored in either world or image coordinates. If the
-            swcs are stored in world coordinates, then provide the world to
-            image coordinates anisotropy factor. Note the filename of each swc
-            is assumed to "segment_id.swc" where segment_id cooresponds to the
-            segment id from "pred_labels". The default is None.
+        fragments_pointer : Any, optional
+            Pointer to SWC files corresponding to "pred_labels", see
+            "swc_util.Reader" for further documentation. Note that these SWC
+            file may be stored in physical coordiantes, but the anisotropy
+            scaling factors must be provided. The default is None.
         output_dir : str, optional
             Path to directory that mistake sites are written to. The default
             is None.
@@ -168,7 +165,7 @@ class SkeletonMetric:
         None
 
         """
-        # Read graphs
+        # Build graphs
         self.graphs = swc_util.Reader().load(paths)
         self.fragment_graphs = None
 
@@ -204,11 +201,9 @@ class SkeletonMetric:
                 threads.append(executor.submit(self.get_label, i, voxel))
 
             # Store label
-            pbar = tqdm(total=len(threads), desc="threads finished")
             for thread in as_completed(threads):
                 i, label = thread.result()
                 self.graphs[key].nodes[i].update({"label": label})
-                pbar.update(1)
 
     def get_label(self, i, voxel):
         """

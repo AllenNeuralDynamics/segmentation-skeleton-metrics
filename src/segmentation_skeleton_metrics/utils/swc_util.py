@@ -155,7 +155,7 @@ class Reader:
 
             # Store results
             graph_dict = dict()
-            pbar = tqdm(total=len(filenames), desc="Label Graph")
+            pbar = tqdm(total=len(threads), desc="Load SWCs")
             for thread in as_completed(threads):
                 graph_dict.update(thread.result())
                 pbar.update(1)
@@ -200,7 +200,7 @@ class Reader:
                 pbar.update(1)
         return graph_dict
 
-    def load_from_local_zip(self, zip_path, verbose=True):
+    def load_from_local_zip(self, zip_path):
         """
         Reads SWC files from zip on the local machine.
 
@@ -376,9 +376,12 @@ class Reader:
         graph = nx.Graph()
         offset = [0, 0, 0]
         for line in content:
+            # Check for offset
             if line.startswith("# OFFSET"):
                 parts = line.split()
                 offset = self.read_voxel(parts[2:5])
+
+            # Check for entry
             if not line.startswith("#"):
                 parts = line.split()
                 child = int(parts[0])
@@ -398,65 +401,6 @@ class Reader:
 
 
 # --- Write ---
-def save(path, xyz_1, xyz_2, color=None):
-    """
-    Writes an swc file.
-
-    Parameters
-    ----------
-    path : str
-        Path on local machine that swc file will be written to.
-    xyz_1 : ...
-        ...
-    xyz_2 : ...
-        ...
-    color : str, optional
-        Color of nodes. The default is None.
-
-    Returns
-    -------
-    None.
-
-    """
-    with open(path, "w") as f:
-        # Preamble
-        if color is not None:
-            f.write("# COLOR " + color)
-        else:
-            f.write("# id, type, z, y, x, r, pid")
-        f.write("\n")
-
-        # Entries
-        f.write(make_entry(1, -1, xyz_1))
-        f.write("\n")
-        f.write(make_entry(2, 1, xyz_2))
-
-
-def make_entry(node, parent, xyz):
-    """
-    Makes an entry to be written in an SWC file.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that "node_id" and "parent_id" belong to.
-    node : int
-        Node ID that entry corresponds to.
-    parent_id : int
-         Parent ID of the given node.
-    voxel : ...
-        Voxel coordinate of the given node.
-
-    Returns
-    -------
-    entry : str
-        Entry to be written in an swc file.
-
-    """
-    x, y, z = tuple(util.to_physical(voxel, (0.748, 0.748, 1.0)))
-    return f"{node} 2 {x} {y} {z} 3 {parent}"
-
-
 def to_zipped_swc(zip_writer, graph, color=None):
     """
     Writes a graph to an swc file that is to be stored in a zip.
