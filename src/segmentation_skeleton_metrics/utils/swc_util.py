@@ -281,7 +281,7 @@ class Reader:
 
         # Main
         pbar = tqdm(total=len(zip_paths), desc="Download Fragments")
-        with ProcessPoolExecutor(max_workers=1) as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = []
             for path in zip_paths:
