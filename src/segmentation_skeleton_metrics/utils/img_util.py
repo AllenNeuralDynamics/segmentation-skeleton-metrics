@@ -14,9 +14,7 @@ from skimage.color import label2rgb
 from tifffile import imread
 
 import numpy as np
-import s3fs
 import tensorstore as ts
-import zarr
 
 from deep_neurographs.utils import util
 
@@ -300,45 +298,6 @@ class TiffReader(ImageReader):
 
         """
         self.img = imread(self.img_path)
-
-
-class ZarrReader(ImageReader):
-    """
-    Class that reads image with Zarr library.
-
-    """
-
-    def __init__(self, img_path):
-        """
-        Constructs a Zarr image reader.
-
-        Parameters
-        ----------
-        img_path : str
-            Path to image.
-
-        Returns
-        -------
-        None
-
-        """
-        super().__init__(img_path)
-
-    def _load_image(self):
-        """
-        Loads image using the Zarr library.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        store = s3fs.S3Map(root=self.img_path, s3=s3fs.S3FileSystem(anon=True))
-        self.img = zarr.open(store, mode="r")
 
 
 def get_start_end(voxel, shape, from_center=True):
