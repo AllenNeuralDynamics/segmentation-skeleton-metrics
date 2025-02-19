@@ -172,7 +172,6 @@ class Reader:
             threads = list()
             pbar = tqdm(total=len(paths), desc="Read SWCs")
             for path in paths:
-                #self.load_from_local_path(path)
                 threads.append(
                     executor.submit(self.load_from_local_path, path)
                 )

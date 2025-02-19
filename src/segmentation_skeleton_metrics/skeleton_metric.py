@@ -115,12 +115,12 @@ class SkeletonMetric:
         # Load ground truth
         print("\n(1) Load Ground Truth")
         assert type(valid_labels) is set if valid_labels else True
+        self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
         self.init_graphs(gt_pointer)
 
         print("\n(2) Load Prediction")
-        self.label_mask = pred_labels
         if fragments_pointer:
             self.load_fragments(fragments_pointer)
         else:
