@@ -12,9 +12,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
-from copy import deepcopy
 from scipy.spatial import distance, KDTree
-from time import time
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -118,7 +116,7 @@ class SkeletonMetric:
 
         # Load data
         self.label_mask = pred_labels
-        self.load_groundtruth(gt_pointer)
+        self.load_groundtruth(gt_pointer, valid_labels)
         self.load_fragments(fragments_pointer)
 
         # Initialize writer
@@ -127,7 +125,7 @@ class SkeletonMetric:
             self.init_zip_writer()
 
     # --- Load Data ---
-    def load_groundtruth(self, swc_pointer):
+    def load_groundtruth(self, swc_pointer, valid_labels):
         """
         Initializes "self.graphs" by iterating over "paths" which corresponds
         to neurons in the ground truth.
@@ -149,16 +147,13 @@ class SkeletonMetric:
             anisotropy=self.anisotropy,
             label_mask=self.label_mask,
             use_anisotropy=False,
+            valid_labels=valid_labels,
         )
         self.graphs = graph_builder.run(swc_pointer)
 
         # Label nodes
-        self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key in tqdm(self.graphs, desc="Labeling Graphs"):
             self.label_graphs(key)
-            self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
-                self.graphs[key]
-            )
 
     def load_fragments(self, swc_pointer):
         print("\n(2) Load Fragments")
@@ -220,10 +215,12 @@ class SkeletonMetric:
             threads.append(executor.submit(self.get_patch_labels, key, batch))
 
             # Process results
+            n_nodes = self.graphs[key].number_of_nodes()
+            self.graphs[key].graph["label"] = np.zeros((n_nodes), dtype=int)
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
-                    self.graphs[key].nodes[i].update({"label": label})
+                    self.graphs[key].graph["label"][i] = label
 
     def get_patch_labels(self, key, nodes):
         # Get bounding box
@@ -287,11 +284,11 @@ class SkeletonMetric:
         """
         if inverse_bool:
             output = set()
-            for l in self.key_to_label_to_nodes[key].keys():
+            for l in self.graphs[key].get_labels():
                 output = output.union(self.label_handler.inverse_mapping[l])
             return output
         else:
-            return set(self.key_to_label_to_nodes[key].keys())
+            return self.graphs[key].get_labels()
 
     def init_zip_writer(self):
         """
@@ -372,9 +369,9 @@ class SkeletonMetric:
         """
         for label in self.preexisting_merges:
             label = self.label_map[label] if self.label_map else label
-            if label in self.key_to_label_to_nodes[key].keys():
+            if label in self.graphs[key].get_labels():
                 # Extract subgraph
-                nodes = deepcopy(self.key_to_label_to_nodes[key][label])
+                nodes = self.graphs[key].nodes_with_label(label)
                 subgraph = self.graphs[key].subgraph(nodes)
 
                 # Adjust metrics
@@ -385,7 +382,6 @@ class SkeletonMetric:
 
                 # Update graph
                 self.graphs[key].remove_nodes_from(nodes)
-                del self.key_to_label_to_nodes[key][label]
 
     # -- Split Detection --
     def detect_splits(self):
@@ -402,7 +398,6 @@ class SkeletonMetric:
         None
 
         """
-        t0 = time()
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
         with ProcessPoolExecutor() as executor:
             # Assign processes
@@ -420,16 +415,9 @@ class SkeletonMetric:
             self.split_percent = dict()
             for process in as_completed(processes):
                 key, graph, split_percent = process.result()
-                self.graphs[key] = gutil.delete_nodes(graph, 0)
-                self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
-                    self.graphs[key]
-                )
+                self.graphs[key] = gutil.remove_nodes(graph, 0)
                 self.split_percent[key] = split_percent
                 pbar.update(1)
-
-        # Report runtime
-        t, unit = util.time_writer(time() - t0)
-        print(f"Runtime: {round(t, 2)} {unit}\n")
 
     def quantify_splits(self):
         """
@@ -449,9 +437,11 @@ class SkeletonMetric:
         self.omit_cnts = dict()
         self.omit_percent = dict()
         for key in self.graphs:
+            # Get counts
             n_pred_edges = self.graphs[key].number_of_edges()
             n_target_edges = self.graphs[key].graph["n_edges"]
 
+            # Compute stats
             self.split_cnt[key] = gutil.count_splits(self.graphs[key])
             self.omit_cnts[key] = n_target_edges - n_pred_edges
             self.omit_percent[key] = 1 - n_pred_edges / n_target_edges
@@ -517,7 +507,8 @@ class SkeletonMetric:
 
         """
         for label in self.get_node_labels(key):
-            if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
+            nodes = self.graphs[key].nodes_with_label(label)
+            if len(nodes) > MIN_CNT:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_graphs:
                         self.is_fragment_merge(key, label, kdtree)
@@ -581,8 +572,8 @@ class SkeletonMetric:
                 keys = frozenset((key_1, key_2))
                 if key_1 != key_2 and keys not in visited:
                     visited.add(keys)
-                    labels_1 = self.get_node_labels(key_1)
-                    labels_2 = self.get_node_labels(key_2)
+                    labels_1 = set(self.graphs[key_1].get_labels())
+                    labels_2 = set(self.graphs[key_2].get_labels())
                     for label in labels_1.intersection(labels_2):
                         label_intersections.add((keys, label))
         return label_intersections
@@ -605,15 +596,14 @@ class SkeletonMetric:
         None
 
         """
-        if label in self.key_to_label_to_nodes[key]:
+        if label in self.graphs[key].get_labels():
             # Compute metrics
-            nodes = list(self.key_to_label_to_nodes[key][label])
+            nodes = self.graphs[key].nodes_with_label(label)
             subgraph = self.graphs[key].subgraph(nodes)
             self.merged_edges_cnt[key] += subgraph.number_of_edges()
 
             # Update self
             self.graphs[key].remove_nodes_from(nodes)
-            del self.key_to_label_to_nodes[key][label]
             if update_merged_labels:
                 self.merged_labels.add((key, label, -1))
 

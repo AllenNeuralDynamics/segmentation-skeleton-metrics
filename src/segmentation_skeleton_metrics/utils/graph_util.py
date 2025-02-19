@@ -15,6 +15,7 @@ import networkx as nx
 import numpy as np
 from scipy.spatial import distance
 
+from segmentation_skeleton_metrics.skeleton_graph import SkeletonGraph
 from segmentation_skeleton_metrics.utils import img_util, swc_util, util
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
@@ -28,11 +29,13 @@ class GraphBuilder:
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
+        valid_labels=None,
     ):
         # Instance attributes
         self.anisotropy = anisotropy
         self.label_mask = label_mask
         self.selected_ids = selected_ids
+        self.valid_labels = valid_labels
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
@@ -62,9 +65,9 @@ class GraphBuilder:
     def _process_swc_dict(self, swc_id):
         if self.selected_ids:
             segment_id = get_segment_id(swc_id)
-            if segment_id not in self.selected_ids:
-                return False
-        return True
+            return True if segment_id in self.selected_ids else False
+        else:
+            return True
 
     def to_graph(self, swc_dict):
         """
@@ -87,7 +90,7 @@ class GraphBuilder:
         voxels = np.array(swc_dict["voxel"], dtype=np.int32)
 
         # Build graph
-        graph = nx.Graph()
+        graph = SkeletonGraph()
         id_lookup = dict()
         run_length = 0
         for i in range(len(swc_dict["id"])):
@@ -202,23 +205,7 @@ class LabelHandler:
 
     # --- Main ---
     def get(self, label):
-        """
-        Gets label of voxel in "self.label_mask".
-
-        Parameters
-        ----------
-        i : int
-            Node ID.
-        voxel : numpy.ndarray
-            Image coordinate of voxel to be read.
-
-        Returns
-        -------
-        int
-           Label of voxel.
-
-        """
-        if len(self.mapping) > 0:
+        if self.use_mapping():
             return self.mapping.get(label, 0)
         elif self.valid_labels:
             return 0 if label not in self.valid_labels else label
@@ -232,14 +219,14 @@ class LabelHandler:
 
 
 # --- Update graph ---
-def delete_nodes(graph, target_label):
+def remove_nodes(graph, target_label):
     """
-    Deletes nodes in "graph" whose label is "target_label".
+    Deletes nodes in the given graph whose label is "target_label".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph to be searched and edited.
+        Graph with a graph-level attribute called "label".
     target_label : int
         Label to be deleted from graph.
 
@@ -249,36 +236,8 @@ def delete_nodes(graph, target_label):
         Updated graph.
 
     """
-    delete_nodes = []
-    for i in graph.nodes:
-        label = graph.nodes[i]["label"]
-        if label == target_label:
-            delete_nodes.append(i)
-    graph.remove_nodes_from(delete_nodes)
-    return graph
-
-
-def upd_labels(graph, nodes, label):
-    """
-    Updates the label of each node in "nodes" with "label".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be updated.
-    nodes : list
-        List of nodes to be updated.
-    label : int
-        New label of each node in "nodes".
-
-    Returns
-    -------
-    networkx.Graph
-        Updated graph.
-
-    """
-    for i in nodes:
-        graph.nodes[i].update({"label": label})
+    nodes = np.where(graph.graph["label"] == target_label)[0]
+    graph.remove_nodes_from(nodes)
     return graph
 
 

@@ -181,7 +181,7 @@ class Reader:
         with ProcessPoolExecutor() as executor:
             # Assign threads
             processes = list()
-            for f in zip_names:
+            for f in zip_names[0:250]:  # TEMP
                 zip_path = os.path.join(zip_dir, f)
                 processes.append(
                     executor.submit(self.load_from_local_zip, zip_path)

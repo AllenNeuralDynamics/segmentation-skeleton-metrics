@@ -45,8 +45,8 @@ def run(process_id, graph):
             continue
 
         # Visit edge
-        label_i = graph.nodes[i]["label"]
-        label_j = graph.nodes[j]["label"]
+        label_i = int(graph.graph["label"][i])
+        label_j = int(graph.graph["label"][j])
         if is_split(label_i, label_j):
             graph.remove_edge(i, j)
             split_cnt += 1
@@ -91,12 +91,13 @@ def check_misalignment(graph, visited_edges, nb, root):
     while len(queue) > 0:
         # Visit node
         j = queue.popleft()
-        if graph.nodes[j]["label"] != 0:
-            label_collisions.add(graph.nodes[j]["label"])
+        label_j = int(graph.graph["label"][j])
+        if label_j != 0:
+            label_collisions.add(label_j)
         visited.add(j)
 
         # Update queue
-        if graph.nodes[j]["label"] == 0:
+        if label_j == 0:
             for k in graph.neighbors(j):
                 if k not in visited:
                     if frozenset({j, k}) not in visited_edges or k == nb:
@@ -106,7 +107,7 @@ def check_misalignment(graph, visited_edges, nb, root):
     # Upd zero nodes
     if len(label_collisions) == 1:
         label = label_collisions.pop()
-        graph = gutil.upd_labels(graph, visited, label)
+        upd_labels(graph, visited, label)
 
 
 # -- Helpers --
@@ -128,3 +129,26 @@ def is_split(a, b):
 
     """
     return (a > 0 and b > 0) and (a != b)
+
+
+def upd_labels(graph, nodes, label):
+    """
+    Updates the label of each node in "nodes" with "label".
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be updated.
+    nodes : list
+        List of nodes to be updated.
+    label : int
+        New label of each node in "nodes".
+
+    Returns
+    -------
+    networkx.Graph
+        Updated graph.
+
+    """
+    for i in nodes:
+        graph.graph["label"][i] = label
