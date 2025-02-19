@@ -23,7 +23,7 @@ import networkx as nx
 import numpy as np
 import os
 
-from segmentation_skeleton_metrics import graph_segmentation_alignment as gsa
+from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
     img_util,
@@ -112,26 +112,20 @@ class SkeletonMetric:
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
 
-        # Load ground truth
-        print("\n(1) Load Ground Truth")
-        assert type(valid_labels) is set if valid_labels else True
+        # Load data
+        assert isinstance(valid_labels, set) if valid_labels else True
         self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
-        self.init_graphs(gt_pointer)
-
-        print("\n(2) Load Prediction")
-        if fragments_pointer:
-            self.load_fragments(fragments_pointer)
-        else:
-            self.fragment_graphs = None
+        self.load_groundtruth(gt_pointer)
+        self.load_fragments(fragments_pointer)
 
         # Initialize writer
         self.save_projections = save_projections
         if self.save_projections:
             self.init_zip_writer()
 
-    # -- Initialize and Label Graphs --
+    # --- Load Data ---
     def init_label_map(self, path):
         """
         Initializes a dictionary that maps a label to its equivalent label in
@@ -157,7 +151,7 @@ class SkeletonMetric:
             self.label_map = None
             self.inverse_label_map = None
 
-    def init_graphs(self, paths):
+    def load_groundtruth(self, swc_pointer):
         """
         Initializes "self.graphs" by iterating over "paths" which corresponds
         to neurons in the ground truth.
@@ -174,8 +168,13 @@ class SkeletonMetric:
 
         """
         # Build graphs
-        swc_dicts = swc_util.Reader().load(paths)
-        self.graphs = self.build_graphs(swc_dicts)
+        print("\n(1) Load Ground Truth")
+        graph_builder = gutil.GraphBuilder(
+            anisotropy=self.anisotropy,
+            label_mask=self.label_mask,
+            use_anisotropy=False,
+        )
+        self.graphs = graph_builder.run(swc_pointer)
 
         # Label nodes
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
@@ -185,23 +184,18 @@ class SkeletonMetric:
                 self.graphs[key]
             )
 
-    def build_graphs(self, swc_dicts):
-        graphs = dict()
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
-            for swc_dict in swc_dicts:
-                processes.append(
-                    executor.submit(gutil.to_graph, swc_dict)
-                )
+    def load_fragments(self, swc_pointer):
+        print("\n(2) Load Fragments")
+        if swc_pointer:
+            graph_builder = gutil.GraphBuilder(
+                anisotropy=self.anisotropy,
+                selected_ids=self.get_all_node_labels(),
+                use_anisotropy=True,
+            )
+            self.fragment_graphs = graph_builder.run(swc_pointer)
+        else:
+            self.fragment_graphs = None
 
-            # Store results
-            pbar = tqdm(total=len(processes), desc="Build Graphs")
-            for process in as_completed(processes):
-                graphs.update(process.result())
-                pbar.update(1)
-        return graphs
-            
     def label_graphs(self, key, batch_size=128):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
@@ -259,7 +253,7 @@ class SkeletonMetric:
         # Get bounding box
         bbox = {"min": [np.inf, np.inf, np.inf], "max": [0, 0, 0]}
         for i in nodes:
-            voxel = deepcopy(self.graphs[key].graph["voxel"][i])
+            voxel = self.graphs[key].graph["voxel"][i]
             for idx in range(3):
                 if voxel[idx] < bbox["min"][idx]:
                     bbox["min"][idx] = voxel[idx]
@@ -362,39 +356,6 @@ class SkeletonMetric:
             return output
         else:
             return set(self.key_to_label_to_nodes[key].keys())
-
-    # -- Load Fragments --
-    def load_fragments(self, fragments_pointer):
-        """
-        Loads and filters swc files from a local zip. These swc files are
-        assumed to be fragments from a predicted segmentation.
-
-        Parameters
-        ----------
-        zip_path : str
-            Path to the local zip file containing the fragments
-
-        Returns
-        -------
-        dict
-            Dictionary that maps an swc id to the fragment graph.
-
-        """
-        # Read SWC files
-        reader = swc_util.Reader(anisotropy=self.anisotropy)
-        swc_dicts = deque(reader.load(fragments_pointer))
-
-        # Filter SWC files
-        filtered_swc_dicts = list()
-        labels = self.get_all_node_labels()
-        while len(swc_dicts) > 0:
-            swc_dict = swc_dicts.popleft()
-            swc_id = int(swc_dict["swc_id"])
-            if swc_id in labels:
-                swc_dict["swc_id"] = swc_id
-                filtered_swc_dicts.append(swc_dict)
-        self.fragment_graphs = self.build_graphs(filtered_swc_dicts)
-        print("# Fragments:", len(self.fragment_graphs))
 
     def init_zip_writer(self):
         """
@@ -513,7 +474,7 @@ class SkeletonMetric:
             for key, graph in self.graphs.items():
                 processes.append(
                        executor.submit(
-                           gsa.correct_graph_misalignments,
+                           split_detection.run,
                            key,
                            graph,
                        )

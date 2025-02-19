@@ -85,8 +85,6 @@ class Reader:
                 - swc_path_list (List[str]): List of paths to SWC files.
                 - swc_zip (str): Path to a ZIP archive containing SWC files.
                 - swc_zip_dir (str): Path to directory of ZIPs with SWC files.
-                - gcs_dict (dict): Dictionary that contains the keys
-                  "bucket_name" and "path" to read from a GCS bucket.
 
         Returns
         -------
@@ -95,10 +93,6 @@ class Reader:
             corresponding graphs.
 
         """
-        # GCS bucket containing ZIP archives with SWC files
-        if isinstance(swc_pointer, dict):
-            return self.load_from_gcs(swc_pointer)
-
         # List of paths to SWC files
         if isinstance(swc_pointer, list):
             return self.load_from_local_paths(swc_pointer)
@@ -260,78 +254,6 @@ class Reader:
         filename = os.path.basename(path)
         return self.parse(content, filename)
 
-    def load_from_gcs(self, gcs_dict):
-        """
-        Reads ZIP archives containing SWC files stored in a GCS bucket.
-
-        Parameters
-        ----------
-        gcs_dict : dict
-            Dictionary with the keys are "bucket_name" and "path".
-
-        Returns
-        -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
-
-        """
-        # Initializations
-        bucket = storage.Client().bucket(gcs_dict["bucket_name"])
-        zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
-
-        # Main
-        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = []
-            for path in zip_paths:
-                zip_content = bucket.blob(path).download_as_bytes()
-                processes.append(
-                    executor.submit(self.load_from_cloud_zip, zip_content)
-                )
-
-            # Store results
-            swc_dicts = list()
-            for process in as_completed(processes):
-                swc_dicts.append(process.result())
-                pbar.update(1)
-        return swc_dicts
-
-    def load_from_cloud_zip(self, zip_content):
-        """
-        Reads swc files from a zip that has been downloaded from a cloud
-        bucket.
-
-        Parameters
-        ----------
-        zip_content : ...
-            content of a zip file.
-
-        Returns
-        -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
-
-        """
-        with ZipFile(BytesIO(zip_content)) as zipfile:
-            with ThreadPoolExecutor() as executor:
-                # Assign threads
-                threads = []
-                for f in util.list_files_in_zip(zip_content):
-                    threads.append(
-                        executor.submit(
-                            self.load_from_zipped_file, zipfile, f
-                        )
-                    )
-
-                # Process results
-                swc_dicts = list()
-                for thread in as_completed(threads):
-                    swc_dicts.append(thread.result())
-        return swc_dicts
-
     # -- Process Text ---
     def parse(self, content, filename):
         """
@@ -358,7 +280,7 @@ class Reader:
             "id": np.zeros((len(content)), dtype=int),
             "pid": np.zeros((len(content)), dtype=int),
             "voxel": np.zeros((len(content), 3), dtype=np.int32),
-            "swc_id": swc_id.split(".")[0],
+            "swc_id": swc_id,
         }
 
         # Parse content
@@ -465,14 +387,3 @@ def to_zipped_swc(zip_writer, graph, color=None):
 
         # Finish
         zip_writer.writestr(graph.graph["filename"], text_buffer.getvalue())
-
-        
-"""
-    def process_content(self, content, filename):
-        graph = self.get_graph(content)
-        if graph is not None:
-            graph.graph["filename"] = filename
-            name, _ = os.path.splitext(filename)
-            return {name: graph}
-        return dict()
-"""

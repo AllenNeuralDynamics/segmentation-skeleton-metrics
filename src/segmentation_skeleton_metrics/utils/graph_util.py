@@ -9,62 +9,111 @@ Created on Wed Aug 15 12:00:00 2023
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
+from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
 from scipy.spatial import distance
 
-from segmentation_skeleton_metrics.utils import img_util
+from segmentation_skeleton_metrics.utils import img_util, swc_util
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
 
 
-def to_graph(swc_dict):
-    """
-    Builds a graph from a dictionary that contains the contents of an SWC
-    file.
+class GraphBuilder:
+    
+    def __init__(
+        self,
+        anisotropy=(1.0, 1.0, 1.0),
+        label_mask=None,
+        selected_ids=None,
+        use_anisotropy=True,
+    ):
+        # Instance attributes
+        self.anisotropy = anisotropy
+        self.label_mask = label_mask
+        self.selected_ids = selected_ids
 
-    Parameters
-    ----------
-    swc_dict : dict
-        ...
+        # Reader
+        anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
+        self.swc_reader = swc_util.Reader(anisotropy)
 
-    Returns
-    -------
-    networkx.Graph
-        Graph built from an SWC file.
+    def run(self, swc_pointer):
+        self._build_graphs_from_swcs(swc_pointer)
+        self._label_graphs_with_segmentation()
+        return self.graphs
 
-    """
-    # Initializations
-    old_to_new = dict()
-    run_length = 0
-    voxels = np.zeros((len(swc_dict["id"]), 3), dtype=np.int32)
+    # --- Build Graphs ---
+    def _build_graphs_from_swcs(self, swc_pointer):
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for swc_dict in self.swc_reader.load(swc_pointer):
+                if self._process_swc_dict(swc_dict["swc_id"]):
+                    processes.append(executor.submit(self.to_graph, swc_dict))
 
-    # Build graph
-    graph = nx.Graph()
-    for i in range(len(swc_dict["id"])):            
-        # Get node id
-        old_id = swc_dict["id"][i]
-        old_to_new[old_id] = i
+            # Store results
+            self.graphs = dict()
+            pbar = tqdm(total=len(processes), desc="Build Graphs")
+            for process in as_completed(processes):
+                self.graphs.update(process.result())
+                pbar.update(1)
 
-        # Update graph
-        voxels[i] = swc_dict["voxel"][i]
-        if swc_dict["pid"][i] != -1:
-            # Add edge
-            parent = old_to_new[swc_dict["pid"][i]]
-            graph.add_edge(i, parent)
+    def _process_swc_dict(self, swc_id):
+        if self.selected_ids:
+            segment_id = get_segment_id(swc_id)
+            if segment_id not in self.selected_ids:
+                return False
+        return True
 
-            # Update run length
-            xyz_i = voxels[i] * ANISOTROPY
-            xyz_p = voxels[parent] * ANISOTROPY
-            run_length += distance.euclidean(xyz_i, xyz_p)
+    def to_graph(self, swc_dict):
+        """
+        Builds a graph from a dictionary that contains the contents of an SWC
+        file.
 
-    # Set graph-level attributes
-    graph.graph["n_edges"] = graph.number_of_edges()
-    graph.graph["run_length"] = run_length
-    graph.graph["voxel"] = voxels
-    return {swc_dict["swc_id"]: graph}
+        Parameters
+        ----------
+        swc_dict : dict
+            ...
 
+        Returns
+        -------
+        networkx.Graph
+            Graph built from an SWC file.
+
+        """
+        # Extract data from swc_dict
+        ids = swc_dict["id"]
+        voxels = np.array(swc_dict["voxel"], dtype=np.int32)
+
+        # Build graph
+        graph = nx.Graph()
+        id_lookup = dict()
+        run_length = 0
+        for i in range(len(swc_dict["id"])):
+            id_lookup[ids[i]] = i
+            if swc_dict["pid"][i] != -1:
+                # Add edge
+                parent = id_lookup[swc_dict["pid"][i]]
+                graph.add_edge(i, parent)
+
+                # Update run length
+                xyz_i = voxels[i] * self.anisotropy
+                xyz_p = voxels[parent] * self.anisotropy
+                run_length += distance.euclidean(xyz_i, xyz_p)
+
+        # Set graph-level attributes
+        graph.graph["n_edges"] = graph.number_of_edges()
+        graph.graph["run_length"] = run_length
+        graph.graph["voxel"] = voxels
+        return {swc_dict["swc_id"]: graph}
+
+    # --- Label Graphs ---
+    def _label_graphs_with_segmentation(self):
+        pass
+
+    def _label_graph(self, key):
+        pass
 
 # --- Update graph ---
 def delete_nodes(graph, target_label):
@@ -206,7 +255,11 @@ def compute_run_length(graph):
     return path_length
 
 
-# -- miscellaneous --
+# -- Miscellaneous --
+def get_segment_id(swc_id):
+    return int(swc_id.split(".")[0])
+
+    
 def sample_leaf(graph):
     """
     Samples leaf node from "graph".

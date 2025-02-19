@@ -16,7 +16,7 @@ import networkx as nx
 from segmentation_skeleton_metrics.utils import graph_util as gutil
 
 
-def correct_graph_misalignments(process_id, graph):
+def run(process_id, graph):
     """
     Adjusts misalignments between ground truth graph and segmentation mask.
 
