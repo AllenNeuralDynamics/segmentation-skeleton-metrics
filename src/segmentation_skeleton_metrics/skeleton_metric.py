@@ -7,7 +7,6 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-from collections import deque
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
@@ -112,11 +111,13 @@ class SkeletonMetric:
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
 
+        # Label handler
+        self.label_handler = gutil.LabelHandler(
+            connections_path=connections_path, valid_labels=valid_labels
+        )
+
         # Load data
-        assert isinstance(valid_labels, set) if valid_labels else True
         self.label_mask = pred_labels
-        self.valid_labels = valid_labels
-        self.init_label_map(connections_path)
         self.load_groundtruth(gt_pointer)
         self.load_fragments(fragments_pointer)
 
@@ -126,31 +127,6 @@ class SkeletonMetric:
             self.init_zip_writer()
 
     # --- Load Data ---
-    def init_label_map(self, path):
-        """
-        Initializes a dictionary that maps a label to its equivalent label in
-        the case where "connections_path" is provided.
-
-        Parameters
-        ----------
-        path : str
-            Path to a txt file containing pairs of segment ids of segments
-            that were merged into a single segment.
-
-        Returns
-        -------
-        None
-
-        """
-        if path:
-            assert self.valid_labels is not None, "Must provide valid labels!"
-            self.label_map, self.inverse_label_map = util.init_label_map(
-                path, self.valid_labels
-            )
-        else:
-            self.label_map = None
-            self.inverse_label_map = None
-
     def load_groundtruth(self, swc_pointer):
         """
         Initializes "self.graphs" by iterating over "paths" which corresponds
@@ -265,49 +241,9 @@ class SkeletonMetric:
         node_to_label = dict()
         for i in nodes:
             voxel = self.to_local_voxels(key, i, bbox["min"])
-            label = self.adjust_label(label_patch[voxel])
+            label = self.label_handler.get(label_patch[voxel])
             node_to_label[i] = label
         return node_to_label
-
-    def adjust_label(self, label):
-        """
-        Gets label of voxel in "self.label_mask".
-
-        Parameters
-        ----------
-        i : int
-            Node ID.
-        voxel : numpy.ndarray
-            Image coordinate of voxel to be read.
-
-        Returns
-        -------
-        int
-           Label of voxel.
-
-        """
-        if self.label_map:
-            label = self.get_equivalent_label(label)
-        elif self.valid_labels:
-            label = 0 if label not in self.valid_labels else label
-        return label
-
-    def get_equivalent_label(self, label):
-        """
-        Gets the equivalence class label corresponding to "label".
-
-        Parameters
-        ----------
-        label : int
-            Label to be checked.
-
-        Returns
-        -------
-        label
-            Equivalence class label.
-
-        """
-        return self.label_map[label] if label in self.label_map else 0
 
     def get_all_node_labels(self):
         """
@@ -324,7 +260,7 @@ class SkeletonMetric:
 
         """
         all_labels = set()
-        inverse_bool = True if self.inverse_label_map else False
+        inverse_bool = self.label_handler.use_mapping()
         for key in self.graphs:
             labels = self.get_node_labels(key, inverse_bool=inverse_bool)
             all_labels = all_labels.union(labels)
@@ -352,7 +288,7 @@ class SkeletonMetric:
         if inverse_bool:
             output = set()
             for l in self.key_to_label_to_nodes[key].keys():
-                output = output.union(self.inverse_label_map[l])
+                output = output.union(self.label_handler.inverse_mapping[l])
             return output
         else:
             return set(self.key_to_label_to_nodes[key].keys())
@@ -404,7 +340,7 @@ class SkeletonMetric:
         self.detect_splits()
         self.quantify_splits()
 
-        # Check whether to delete prexisting merges
+        # Check for prexisting merges
         if self.preexisting_merges:
             for key in self.graphs:
                 self.adjust_metrics(key)
@@ -467,7 +403,7 @@ class SkeletonMetric:
 
         """
         t0 = time()
-        pbar = tqdm(total=len(self.graphs), desc="Split Detection:")
+        pbar = tqdm(total=len(self.graphs), desc="Split Detection")
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
@@ -543,7 +479,7 @@ class SkeletonMetric:
 
         # Count total merges
         if self.fragment_graphs:
-            pbar = tqdm(total=len(self.graphs), desc="Count Merges:")
+            pbar = tqdm(total=len(self.graphs), desc="Merge Detection")
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
                     kdtree = KDTree(graph.graph["voxel"])
@@ -582,14 +518,7 @@ class SkeletonMetric:
         """
         for label in self.get_node_labels(key):
             if len(self.key_to_label_to_nodes[key][label]) > MIN_CNT:
-                # Check whether to compute label inverse
-                if self.inverse_label_map:
-                    labels = deepcopy(self.inverse_label_map[label])
-                else:
-                    labels = [label]
-
-                # Check if fragment is a merge mistake
-                for label in labels:
+                for label in self.label_handler.get_class(label):
                     if label in self.fragment_graphs:
                         self.is_fragment_merge(key, label, kdtree)
 
@@ -616,16 +545,13 @@ class SkeletonMetric:
         """
         for voxel in self.fragment_graphs[label].graph["voxel"]:
             if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
-                # Check whether to get inverse of label
-                if self.inverse_label_map:
-                    equivalent_label = self.label_map[label]
-                else:
-                    equivalent_label = label
-
-                # Record merge mistake
+                # Log merge mistake
+                equiv_label = self.label_handler.get(label)
                 xyz = img_util.to_physical(voxel, self.anisotropy)
                 self.merge_cnt[key] += 1
-                self.merged_labels.add((key, equivalent_label, tuple(xyz)))
+                self.merged_labels.add((key, equiv_label, tuple(xyz)))
+
+                # Save merged fragment (if applicable)
                 if self.save_projections and label in self.fragment_graphs:
                     swc_util.to_zipped_swc(
                         self.zip_writer[key], self.fragment_graphs[label]
@@ -729,7 +655,7 @@ class SkeletonMetric:
         with open(os.path.join(self.output_dir, filename), "w") as f:
             f.write(f" Label   -   xyz\n")
             for _, label, xyz in self.merged_labels:
-                if self.connections_path:
+                if self.label_handler.use_mapping():
                     label = self.get_merged_label(label)
                 f.write(f" {label}   -   {xyz}\n")
 
@@ -749,11 +675,11 @@ class SkeletonMetric:
         -------
         str or list
             The first matching label found in "self.fragment_graphs.keys()" or
-            the original associated labels from "inverse_label_map" if no 
+            the original associated labels from "inverse_label_map" if no
             matches are found.
 
         """
-        for l in self.inverse_label_map[label]:
+        for l in self.label_handler.get_class(label):
             if l in self.fragment_graphs.keys():
                 return l
         return self.inverse_label_map[label]
@@ -852,8 +778,8 @@ class SkeletonMetric:
 
     def avg_result(self, stats):
         """
-        Averages the values computed across "self.graphs" for
-        a given metric stored in "stats".
+        Averages the values computed across "self.graphs" for a given metric
+        stored in "stats".
 
         Parameters
         ----------

@@ -7,14 +7,11 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-import os
-import shutil
 from io import BytesIO
 from zipfile import ZipFile
 
-import networkx as nx
-
-ANISOTROPY = [0.748, 0.748, 1.0]
+import os
+import shutil
 
 
 # -- os utils ---
@@ -209,107 +206,6 @@ def list_files_in_zip(zip_content):
         return zip_file.namelist()
 
 
-# -- dict utils --
-def delete_keys(my_dict, keys):
-    """
-    Deletes a set of keys from a dictionary.
-
-    Parameters
-    ----------
-    my_dict : dict
-        Dictionary to be updated.
-    keys : container
-        Keys to be deleted
-
-    Returns
-    -------
-    dict
-        Updated dictionary.
-
-    """
-    for key in keys:
-        del my_dict[key]
-    return my_dict
-
-
-# -- build label graph --
-def init_label_map(connections_path, labels):
-    label_to_class = {0: 0}
-    class_to_labels = {0: [0]}
-    labels_graph = build_labels_graph(connections_path, labels)
-    for i, component in enumerate(nx.connected_components(labels_graph)):
-        i += 1
-        class_to_labels[i] = set()
-        for label in component:
-            label_to_class[label] = i
-            class_to_labels[i].add(label)
-    return label_to_class, class_to_labels
-
-
-def build_labels_graph(connections_path, labels):
-    """
-    Builds a graph from a list of labels and connection data. The nodes are
-    initialized from the provided list of labels, then edges are added between
-    nodes based on a list of connections specified in a file.
-
-    Parameters
-    ----------
-    connections_path : str
-        The file path to a text file containing connections. Each line should
-        represent a connection between two swc ids.
-    labels : iterable
-        An iterable containing the IDs of the nodes to be added to the graph.
-
-    Returns
-    -------
-    networkx.Graph
-        Graph with nodes that represent labels and edges are based on the
-        connections read from the "connections_path".
-
-    """
-    labels_graph = nx.Graph()
-    labels_graph.add_nodes_from(labels)
-    for line in read_txt(connections_path):
-        ids = line.split(",")
-        id_1 = int(ids[0])
-        id_2 = int(ids[1])
-        assert id_1 in labels_graph.nodes
-        assert id_2 in labels_graph.nodes
-        labels_graph.add_edge(id_1, id_2)
-    return labels_graph
-
-
-# -- runtime --
-def time_writer(t, unit="seconds"):
-    """
-    Converts runtime "t" to its proper unit.
-
-    Parameters
-    ----------
-    t : float
-        Runtime to be converted.
-    unit : str, optional
-        Unit of "t". The default is "seconds".
-
-    Returns
-    -------
-    float
-        Converted runtime.
-    str
-        Unit of "t"
-
-    """
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
-
-
 # --- Miscellaneous ---
 def load_merged_labels(path):
     """
@@ -358,3 +254,33 @@ def load_valid_labels(path):
     for label_str in read_txt(path):
         valid_labels.add(int(label_str.split(".")[0]))
     return valid_labels
+
+
+def time_writer(t, unit="seconds"):
+    """
+    Converts runtime "t" to its proper unit.
+
+    Parameters
+    ----------
+    t : float
+        Runtime to be converted.
+    unit : str, optional
+        Unit of "t". The default is "seconds".
+
+    Returns
+    -------
+    float
+        Converted runtime.
+    str
+        Unit of "t"
+
+    """
+    assert unit in ["seconds", "minutes", "hours"]
+    upd_unit = {"seconds": "minutes", "minutes": "hours"}
+    if t < 60 or unit == "hours":
+        return t, unit
+    else:
+        t /= 60
+        unit = upd_unit[unit]
+        t, unit = time_writer(t, unit=unit)
+    return t, unit

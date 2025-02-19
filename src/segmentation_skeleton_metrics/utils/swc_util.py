@@ -29,8 +29,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
-from google.cloud import storage
-from io import BytesIO, StringIO
+from io import StringIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -38,11 +37,7 @@ import networkx as nx
 import numpy as np
 import os
 
-from segmentation_skeleton_metrics.utils import (
-    graph_util as gutil,
-    img_util,
-    util
-)
+from segmentation_skeleton_metrics.utils import img_util, util
 
 
 class Reader:

@@ -10,11 +10,12 @@ Helper routines for reading and processing images.
 """
 
 from abc import ABC, abstractmethod
-from skimage.color import label2rgb
 from tifffile import imread
 
 import numpy as np
 import tensorstore as ts
+
+from segmentation_skeleton_metrics.utils import util
 
 
 class ImageReader(ABC):
@@ -124,25 +125,6 @@ class ImageReader(ABC):
 
         """
         return self.img[voxel]
-
-    def read_profile(self, spec):
-        """
-        Reads an intensity profile from an image (i.e. image profile).
-
-        Parameters
-        ----------
-        spec : dict
-            Dictionary with the bounding box of the image patch to be read and
-            voxel coordinates of the profile path.
-
-        Returns
-        -------
-        List[float]
-            Image profile.
-
-        """
-        img_patch = normalize(self.read_with_bbox(spec["bbox"]))
-        return [img_patch[v] for v in map(tuple, spec["profile_path"])]
 
     def shape(self):
         """
