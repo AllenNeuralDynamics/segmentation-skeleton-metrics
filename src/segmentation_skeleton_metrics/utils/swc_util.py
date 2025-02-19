@@ -35,6 +35,7 @@ from tqdm import tqdm
 from zipfile import ZipFile
 
 import networkx as nx
+import numpy as np
 import os
 
 from segmentation_skeleton_metrics.utils import (
@@ -52,7 +53,7 @@ class Reader:
 
     """
 
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0), min_size=0):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
         """
         Initializes a Reader object that loads swc files.
 
@@ -62,16 +63,13 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             (1.0, 1.0, 1.0).
-        min_size : int, optional
-            Threshold on the number of nodes in swc file. Only swc files with
-            more than "min_size" nodes are returned.
+
         Returns
         -------
         None
 
         """
         self.anisotropy = anisotropy
-        self.min_size = min_size
 
     # --- Load Data ---
     def load(self, swc_pointer):
@@ -133,38 +131,6 @@ class Reader:
 
         raise Exception("SWC Pointer is inValid!")
 
-    def load_from_local_paths(self, swc_paths):
-        """
-        Reads list of SWC files stored on the local machine.
-
-        Paramters
-        ---------
-        swc_paths : list
-            List of paths to SWC files stored on the local machine.
-
-        Returns
-        -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
-
-        """
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            threads = list()
-            for path in swc_paths:
-                threads.append(
-                    executor.submit(self.load_from_local_path, path)
-                )
-
-            # Store results
-            graph_dict = dict()
-            pbar = tqdm(total=len(threads), desc="Load SWCs")
-            for thread in as_completed(threads):
-                graph_dict.update(thread.result())
-                pbar.update(1)
-        return graph_dict
-
     def load_from_local_path(self, path):
         """
         Reads a single SWC file from local machine.
@@ -183,26 +149,62 @@ class Reader:
         """
         content = util.read_txt(path)
         filename = os.path.basename(path)
-        return self.process_content(content, filename)
+        return self.parse(content, filename)
+
+    def load_from_local_paths(self, paths):
+        """
+        Reads list of SWC files stored on the local machine.
+
+        Paramters
+        ---------
+        swc_paths : list
+            List of paths to SWC files stored on the local machine.
+
+        Returns
+        -------
+        dict
+            Dictionary whose keys are filnames of SWC files and values are the
+            corresponding graphs.
+
+        """
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            threads = list()
+            pbar = tqdm(total=len(paths), desc="Read SWCs")
+            for path in paths:
+                #self.load_from_local_path(path)
+                threads.append(
+                    executor.submit(self.load_from_local_path, path)
+                )
+
+            # Store results
+            swc_dicts = list()
+            for thread in as_completed(threads):
+                swc_dicts.append(thread.result())
+                pbar.update(1)
+        return swc_dicts
 
     def load_from_local_zips(self, zip_dir):
-        filenames = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
-        pbar = tqdm(total=len(filenames), desc="Load SWCs")
+        # Initializations
+        zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
+        pbar = tqdm(total=len(zip_names), desc="Read SWCs")
+
+        # Main
         with ProcessPoolExecutor() as executor:
             # Assign threads
             processes = list()
-            for f in filenames:
+            for f in zip_names:
                 zip_path = os.path.join(zip_dir, f)
                 processes.append(
                     executor.submit(self.load_from_local_zip, zip_path)
                 )
 
             # Store results
-            graph_dict = dict()
+            swc_dicts = list()
             for process in as_completed(processes):
-                graph_dict.update(process.result())
+                swc_dicts.extend(process.result())
                 pbar.update(1)
-        return graph_dict
+        return swc_dicts
 
     def load_from_local_zip(self, zip_path):
         """
@@ -232,10 +234,10 @@ class Reader:
                 )
 
             # Store results
-            graph_dict = dict()
+            swc_dicts = list()
             for thread in as_completed(threads):
-                graph_dict.update(thread.result())
-        return graph_dict
+                swc_dicts.append(thread.result())
+        return swc_dicts
 
     def load_from_zipped_file(self, zipfile, path):
         """
@@ -257,7 +259,7 @@ class Reader:
         """
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
-        return self.process_content(content, filename)
+        return self.parse(content, filename)
 
     def load_from_gcs(self, gcs_dict):
         """
@@ -280,7 +282,7 @@ class Reader:
         zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
 
         # Main
-        pbar = tqdm(total=len(zip_paths), desc="Download Fragments")
+        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = []
@@ -291,11 +293,11 @@ class Reader:
                 )
 
             # Store results
-            graph_dict = dict()
+            swc_dicts = list()
             for process in as_completed(processes):
-                graph_dict.update(process.result())
+                swc_dicts.append(process.result())
                 pbar.update(1)
-        return graph_dict
+        return swc_dicts
 
     def load_from_cloud_zip(self, zip_content):
         """
@@ -326,19 +328,75 @@ class Reader:
                     )
 
                 # Process results
-                graph_dict = dict()
+                swc_dicts = list()
                 for thread in as_completed(threads):
-                    graph_dict.update(thread.result())
-        return graph_dict
+                    swc_dicts.append(thread.result())
+        return swc_dicts
 
-    # -- Process Data ---
-    def process_content(self, content, filename):
-        graph = self.get_graph(content)
-        if graph is not None:
-            graph.graph["filename"] = filename
-            name, _ = os.path.splitext(filename)
-            return {name: graph}
-        return dict()
+    # -- Process Text ---
+    def parse(self, content, filename):
+        """
+        Parses an SWC file to extract the content which is stored in a dict.
+        Note that node_ids from SWC are reindex from 0 to n-1 where n is the
+        number of nodes in the SWC file.
+
+        Parameters
+        ----------
+        content : List[str]
+            List of strings such that each is a line from an SWC file.
+
+        Returns
+        -------
+        dict
+            Dictionaries whose keys and values are the attribute names
+            and values from an SWC file.
+
+        """
+        # Initializations
+        swc_id, _ = os.path.splitext(filename)
+        content, offset = self.process_content(content)
+        swc_dict = {
+            "id": np.zeros((len(content)), dtype=int),
+            "pid": np.zeros((len(content)), dtype=int),
+            "voxel": np.zeros((len(content), 3), dtype=np.int32),
+            "swc_id": swc_id.split(".")[0],
+        }
+
+        # Parse content
+        for i, line in enumerate(content):
+            parts = line.split()
+            swc_dict["id"][i] = parts[0]
+            swc_dict["pid"][i] = parts[-1]
+            swc_dict["voxel"][i] = self.read_voxel(parts[2:5], offset)
+        return swc_dict
+
+    def process_content(self, content):
+        """
+        Processes lines of text from an SWC file, extracting an offset
+        value and returning the remaining content starting from the line
+        immediately after the last commented line.
+
+        Parameters
+        ----------
+        content : List[str]
+            List of strings such that each is a line from an SWC file.
+
+        Returns
+        -------
+        List[str]
+            A list of strings representing the lines of text starting from the
+            line immediately after the last commented line.
+        List[int]
+            Offset used to shift coordinates.
+
+        """
+        offset = (0, 0, 0)
+        for i, line in enumerate(content):
+            if line.startswith("# OFFSET"):
+                parts = line.split()
+                offset = self.read_voxel(parts[2:5])
+            if not line.startswith("#"):
+                return content[i:], offset
 
     def read_voxel(self, xyz_str, offset):
         """
@@ -354,57 +412,14 @@ class Reader:
 
         Returns
         -------
-        numpy.ndarray
-            xyz coordinates of an entry from an swc file.
+        Tuple[int]
+            xyz coordinates of an entry from an SWC file.
 
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
 
-    def get_graph(self, content):
-        """
-        Reads an swc file and builds an undirected graph from it.
 
-        Parameters
-        ----------
-        path : str
-            Path to swc file to be read.
-
-        Returns
-        -------
-        networkx.Graph
-            Graph built from an swc file.
-
-        """
-        # Build Gaph
-        graph = nx.Graph()
-        offset = [0, 0, 0]
-        for line in content:
-            # Check for offset
-            if line.startswith("# OFFSET"):
-                parts = line.split()
-                offset = self.read_voxel(parts[2:5])
-
-            # Check for entry
-            if not line.startswith("#"):
-                parts = line.split()
-                child = int(parts[0])
-                parent = int(parts[-1])
-                voxel = self.read_voxel(parts[2:5], offset=offset)
-                graph.add_node(child, voxel=voxel)
-                if parent != -1:
-                    graph.add_edge(parent, child)
-
-        # Set graph-level attributes
-        graph.graph["n_edges"] = graph.number_of_edges()
-        graph.graph["run_length"] = gutil.compute_run_length(graph)
-        if graph.graph["run_length"] > self.min_size:
-            return graph
-        else:
-            return None
-
-
-# --- Write ---
 def to_zipped_swc(zip_writer, graph, color=None):
     """
     Writes a graph to an swc file that is to be stored in a zip.
@@ -451,3 +466,14 @@ def to_zipped_swc(zip_writer, graph, color=None):
 
         # Finish
         zip_writer.writestr(graph.graph["filename"], text_buffer.getvalue())
+
+        
+"""
+    def process_content(self, content, filename):
+        graph = self.get_graph(content)
+        if graph is not None:
+            graph.graph["filename"] = filename
+            name, _ = os.path.splitext(filename)
+            return {name: graph}
+        return dict()
+"""

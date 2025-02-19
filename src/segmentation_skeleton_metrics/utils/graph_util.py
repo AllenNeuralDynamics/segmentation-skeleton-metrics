@@ -12,11 +12,58 @@ from random import sample
 
 import networkx as nx
 import numpy as np
-from scipy.spatial.distance import euclidean as get_dist
+from scipy.spatial import distance
 
 from segmentation_skeleton_metrics.utils import img_util
 
-ANISOTROPY = (0.748, 0.748, 1.0)
+ANISOTROPY = np.array([0.748, 0.748, 1.0])
+
+
+def to_graph(swc_dict):
+    """
+    Builds a graph from a dictionary that contains the contents of an SWC
+    file.
+
+    Parameters
+    ----------
+    swc_dict : dict
+        ...
+
+    Returns
+    -------
+    networkx.Graph
+        Graph built from an SWC file.
+
+    """
+    # Initializations
+    old_to_new = dict()
+    run_length = 0
+    voxels = np.zeros((len(swc_dict["id"]), 3), dtype=np.int32)
+
+    # Build graph
+    graph = nx.Graph()
+    for i in range(len(swc_dict["id"])):            
+        # Get node id
+        old_id = swc_dict["id"][i]
+        old_to_new[old_id] = i
+
+        # Update graph
+        voxels[i] = swc_dict["voxel"][i]
+        if swc_dict["pid"][i] != -1:
+            # Add edge
+            parent = old_to_new[swc_dict["pid"][i]]
+            graph.add_edge(i, parent)
+
+            # Update run length
+            xyz_i = voxels[i] * ANISOTROPY
+            xyz_p = voxels[parent] * ANISOTROPY
+            run_length += distance.euclidean(xyz_i, xyz_p)
+
+    # Set graph-level attributes
+    graph.graph["n_edges"] = graph.number_of_edges()
+    graph.graph["run_length"] = run_length
+    graph.graph["voxel"] = voxels
+    return {swc_dict["swc_id"]: graph}
 
 
 # --- Update graph ---
@@ -153,32 +200,13 @@ def compute_run_length(graph):
     """
     path_length = 0
     for i, j in nx.dfs_edges(graph):
-        xyz_1 = img_util.to_physical(graph.nodes[i]["voxel"], ANISOTROPY)
-        xyz_2 = img_util.to_physical(graph.nodes[j]["voxel"], ANISOTROPY)
-        path_length += get_dist(xyz_1, xyz_2)
+        xyz_i = img_util.to_physical(graph.graph["voxel"][i], ANISOTROPY)
+        xyz_j = img_util.to_physical(graph.graph["voxel"][j], ANISOTROPY)
+        path_length += distance.euclidean(xyz_i, xyz_j)
     return path_length
 
 
 # -- miscellaneous --
-def to_array(graph):
-    """
-    Converts node coordinates from a graph into a NumPy array.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph that contains nodes with "voxel" attributes.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array where each row represents the 3D coordinates of a node.
-
-    """
-    voxels = nx.get_node_attributes(graph, "voxel")
-    return np.array([voxels[i] for i in graph.nodes])
-
-
 def sample_leaf(graph):
     """
     Samples leaf node from "graph".

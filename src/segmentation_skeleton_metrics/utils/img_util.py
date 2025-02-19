@@ -16,8 +16,6 @@ from tifffile import imread
 import numpy as np
 import tensorstore as ts
 
-from deep_neurographs.utils import util
-
 
 class ImageReader(ABC):
     """
@@ -328,98 +326,6 @@ def get_start_end(voxel, shape, from_center=True):
         start = voxel
         end = [voxel[i] + shape[i] for i in range(3)]
     return start, end
-
-
-# -- Operations --
-def normalize(img):
-    """
-    Normalizes an image so that the minimum and maximum intensity values are 0
-    and 1.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to be normalized.
-
-    Returns
-    -------
-    numpy.ndarray
-        Normalized image.
-
-    """
-    img -= np.min(img)
-    return img / max(1, np.max(img))
-
-
-def get_mip(img, axis=0):
-    """
-    Compute the maximum intensity projection (MIP) of "img" along "axis".
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. The default is 0.
-
-    Returns
-    -------
-    numpy.ndarray
-        MIP of "img".
-
-    """
-    return np.max(img, axis=axis)
-
-
-def get_labels_mip(img, axis=0):
-    """
-    Compute the maximum intensity projection (MIP) of a segmentation along
-    "axis". This routine differs from "get_mip" because it retuns an RGB
-    image.
-
-    Parameters
-    ----------
-    img : numpy.ndarray
-        Image to compute MIP of.
-    axis : int, optional
-        Projection axis. The default is 0.
-
-    Returns
-    -------
-    numpy.ndarray
-        MIP of "img".
-
-    """
-    mip = get_mip(img, axis=axis)
-    mip = label2rgb(mip)
-    return (255 * mip).astype(np.uint8)
-
-
-def get_profile(img_reader, spec, profile_id):
-    """
-    Gets the image profile for a given proposal.
-
-    Parameters
-    ----------
-    img_reader : ImageReader
-        Image reader.
-    spec : dict
-        Dictionary that contains the image bounding box and coordinates of the
-        image profile path.
-    profile_id : Frozenset[int]
-        Identifier of profile.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps an id (e.g. node, edge, or proposal) to its image
-        profile.
-
-    """
-    profile = img_reader.read_profile(spec)
-    avg, std = util.get_avg_std(profile)
-    profile.extend([avg, std])
-    return {profile_id: profile}
 
 
 # --- Coordinate Conversions ---

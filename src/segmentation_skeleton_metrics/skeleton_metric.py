@@ -7,7 +7,7 @@ Created on Wed Dec 21 19:00:00 2022
 
 """
 
-
+from collections import deque
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
@@ -31,7 +31,7 @@ from segmentation_skeleton_metrics.utils import (
     util
 )
 
-MERGE_DIST_THRESHOLD = 100
+MERGE_DIST_THRESHOLD = 200
 MIN_CNT = 40
 
 
@@ -112,15 +112,19 @@ class SkeletonMetric:
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
 
-        # Load Data
-        print("\n(1) Load Data")
+        # Load ground truth
+        print("\n(1) Load Ground Truth")
         assert type(valid_labels) is set if valid_labels else True
-        self.label_mask = pred_labels
         self.valid_labels = valid_labels
         self.init_label_map(connections_path)
         self.init_graphs(gt_pointer)
+
+        print("\n(2) Load Prediction")
+        self.label_mask = pred_labels
         if fragments_pointer:
             self.load_fragments(fragments_pointer)
+        else:
+            self.fragment_graphs = None
 
         # Initialize writer
         self.save_projections = save_projections
@@ -160,7 +164,7 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        paths : list[str]
+        paths : List[str]
             List of paths to swc files which correspond to neurons in the
             ground truth.
 
@@ -170,18 +174,35 @@ class SkeletonMetric:
 
         """
         # Build graphs
-        self.graphs = swc_util.Reader().load(paths)
-        self.fragment_graphs = None
+        swc_dicts = swc_util.Reader().load(paths)
+        self.graphs = self.build_graphs(swc_dicts)
 
         # Label nodes
         self.key_to_label_to_nodes = dict()  # {id: {label: nodes}}
         for key in tqdm(self.graphs, desc="Labeling Graphs"):
-            self.set_node_labels(key)
+            self.label_graphs(key)
             self.key_to_label_to_nodes[key] = gutil.init_label_to_nodes(
                 self.graphs[key]
             )
 
-    def set_node_labels(self, key, batch_size=128):
+    def build_graphs(self, swc_dicts):
+        graphs = dict()
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for swc_dict in swc_dicts:
+                processes.append(
+                    executor.submit(gutil.to_graph, swc_dict)
+                )
+
+            # Store results
+            pbar = tqdm(total=len(processes), desc="Build Graphs")
+            for process in as_completed(processes):
+                graphs.update(process.result())
+                pbar.update(1)
+        return graphs
+            
+    def label_graphs(self, key, batch_size=128):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
         predicted segmentation mask (i.e. "self.label_mask") as a node-level
@@ -238,7 +259,7 @@ class SkeletonMetric:
         # Get bounding box
         bbox = {"min": [np.inf, np.inf, np.inf], "max": [0, 0, 0]}
         for i in nodes:
-            voxel = deepcopy(self.graphs[key].nodes[i]["voxel"])
+            voxel = deepcopy(self.graphs[key].graph["voxel"][i])
             for idx in range(3):
                 if voxel[idx] < bbox["min"][idx]:
                     bbox["min"][idx] = voxel[idx]
@@ -359,20 +380,20 @@ class SkeletonMetric:
             Dictionary that maps an swc id to the fragment graph.
 
         """
-        # Read fragments
-        reader = swc_util.Reader(anisotropy=self.anisotropy, min_size=40)
-        fragment_graphs = reader.load(fragments_pointer)
-        self.fragment_ids = set(fragment_graphs.keys())
+        # Read SWC files
+        reader = swc_util.Reader(anisotropy=self.anisotropy)
+        swc_dicts = deque(reader.load(fragments_pointer))
 
-        # Filter fragments
-        self.fragment_graphs = dict()
-        for label in self.get_all_node_labels():
-            if label in fragment_graphs:
-                self.fragment_graphs[label] = fragment_graphs[label]
-            else:
-                self.fragment_graphs[label] = nx.Graph(
-                    filename=f"{label}.swc", run_length=0, n_edges=1
-                )
+        # Filter SWC files
+        filtered_swc_dicts = list()
+        labels = self.get_all_node_labels()
+        while len(swc_dicts) > 0:
+            swc_dict = swc_dicts.popleft()
+            swc_id = int(swc_dict["swc_id"])
+            if swc_id in labels:
+                swc_dict["swc_id"] = swc_id
+                filtered_swc_dicts.append(swc_dict)
+        self.fragment_graphs = self.build_graphs(filtered_swc_dicts)
         print("# Fragments:", len(self.fragment_graphs))
 
     def init_zip_writer(self):
@@ -416,7 +437,7 @@ class SkeletonMetric:
             ...
 
         """
-        print("\n(2) Evaluation")
+        print("\n(3) Evaluation")
 
         # Split evaluation
         self.detect_splits()
@@ -564,16 +585,14 @@ class SkeletonMetric:
             pbar = tqdm(total=len(self.graphs), desc="Count Merges:")
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
-                    kdtree = KDTree(gutil.to_array(graph))
+                    kdtree = KDTree(graph.graph["voxel"])
                     self.count_merges(key, kdtree)
                 pbar.update(1)
 
         # Process merges
-        pbar = tqdm(total=len(self.graphs), desc="Compute Percent Merged:")
         for (key_1, key_2), label in self.find_label_intersections():
             self.process_merge(key_1, label, -1)
             self.process_merge(key_2, label, -1)
-            pbar.update(1)
 
         for key, label, xyz in self.merged_labels:
             self.process_merge(key, label, xyz, update_merged_labels=False)
@@ -610,8 +629,8 @@ class SkeletonMetric:
 
                 # Check if fragment is a merge mistake
                 for label in labels:
-                    rl = self.fragment_graphs[label].graph["run_length"]
-                    self.is_fragment_merge(key, label, kdtree)
+                    if label in self.fragment_graphs:
+                        self.is_fragment_merge(key, label, kdtree)
 
     def is_fragment_merge(self, key, label, kdtree):
         """
@@ -634,7 +653,7 @@ class SkeletonMetric:
         None
 
         """
-        for voxel in gutil.to_array(self.fragment_graphs[label])[::2]:
+        for voxel in self.fragment_graphs[label].graph["voxel"]:
             if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
                 # Check whether to get inverse of label
                 if self.inverse_label_map:
@@ -643,10 +662,10 @@ class SkeletonMetric:
                     equivalent_label = label
 
                 # Record merge mistake
-                xyz = img_util.to_physical(voxel)
+                xyz = img_util.to_physical(voxel, self.anisotropy)
                 self.merge_cnt[key] += 1
                 self.merged_labels.add((key, equivalent_label, tuple(xyz)))
-                if self.save_projections:
+                if self.save_projections and label in self.fragment_graphs:
                     swc_util.to_zipped_swc(
                         self.zip_writer[key], self.fragment_graphs[label]
                     )
@@ -768,13 +787,13 @@ class SkeletonMetric:
         Returns:
         -------
         str or list
-            The first matching label found in "self.fragment_ids" or the
-            original associated labels from "inverse_label_map" if no matches
-            are found.
+            The first matching label found in "self.fragment_graphs.keys()" or
+            the original associated labels from "inverse_label_map" if no 
+            matches are found.
 
         """
         for l in self.inverse_label_map[label]:
-            if l in self.fragment_ids:
+            if l in self.fragment_graphs.keys():
                 return l
         return self.inverse_label_map[label]
 
@@ -988,8 +1007,8 @@ class SkeletonMetric:
 
     # -- util --
     def dist(self, key, i, j):
-        xyz_i = self.graphs[key].nodes[i]["voxel"]
-        xyz_j = self.graphs[key].nodes[j]["voxel"]
+        xyz_i = self.graphs[key].graph["voxel"][i]
+        xyz_j = self.graphs[key].graph["voxel"][j]
         return distance.euclidean(xyz_i, xyz_j)
 
     def init_counter(self):
@@ -1010,7 +1029,7 @@ class SkeletonMetric:
         return {key: 0 for key in self.graphs}
 
     def to_local_voxels(self, key, i, offset):
-        voxel = np.array(self.graphs[key].nodes[i]["voxel"])
+        voxel = np.array(self.graphs[key].graph["voxel"][i])
         offset = np.array(offset)
         return tuple(voxel - offset)
 
