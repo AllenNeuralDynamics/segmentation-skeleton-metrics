@@ -352,7 +352,7 @@ class Reader:
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
 
-    
+
 # --- Helpers ---
 def to_zipped_swc(zip_writer, graph, color=None):
     """

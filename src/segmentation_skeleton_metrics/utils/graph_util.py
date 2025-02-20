@@ -6,18 +6,15 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed, ProcessPoolExecutor
 from random import sample
 from scipy.spatial import distance
 from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-import sys
 
-from segmentation_skeleton_metrics.utils import img_util, swc_util, util
-
-ANISOTROPY = np.array([0.748, 0.748, 1.0])
+from segmentation_skeleton_metrics.utils import swc_util, util
 
 
 class GraphBuilder:
@@ -42,7 +39,9 @@ class GraphBuilder:
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
-        self.swc_reader = swc_util.Reader(anisotropy, selected_ids=selected_ids)
+        self.swc_reader = swc_util.Reader(
+            anisotropy, selected_ids=selected_ids
+        )
 
     def run(self, swc_pointer):
         graphs = self._build_graphs_from_swcs(swc_pointer)
@@ -51,13 +50,12 @@ class GraphBuilder:
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
-        with ThreadPoolExecutor() as executor:
+        with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
             swc_dicts = self.swc_reader.load(swc_pointer)
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
-                #if self._process_swc_dict(swc_dict["swc_id"]):
                 processes.append(executor.submit(self.to_graph, swc_dict))
 
             # Store results
@@ -97,9 +95,8 @@ class GraphBuilder:
 
         # Build graph
         if not self.coords_only:
-            #graph.set_nodes()
+            graph.set_nodes()
             id_lookup = dict()
-            run_length = 0
             for i, id_i in enumerate(swc_dict["id"]):
                 id_lookup[id_i] = i
                 if swc_dict["pid"][i] != -1:

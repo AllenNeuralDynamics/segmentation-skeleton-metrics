@@ -156,7 +156,7 @@ class SkeletonMetric:
     def load_fragments(self, swc_pointer):
         print("\n(2) Load Fragments")
         if swc_pointer:
-            coords_only = False #not self.save_projections
+            coords_only = False  #not self.save_projections
             graph_builder = gutil.GraphBuilder(
                 anisotropy=self.anisotropy,
                 coords_only=coords_only,
@@ -551,7 +551,7 @@ class SkeletonMetric:
         for key in self.fragment_graphs:
             if label == util.get_segment_id(key):
                 return self.fragment_graphs[key]
-        
+
     def find_label_intersections(self):
         """
         Detects merges between ground truth graphs, namely distinct graphs that
@@ -873,7 +873,6 @@ class SkeletonMetric:
         xyz_1 = img_util.to_physical(voxel_1, self.anisotropy)
         xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
         return distance.euclidean(xyz_1, xyz_2)
-        
 
     def init_counter(self):
         """
