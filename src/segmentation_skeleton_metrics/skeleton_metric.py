@@ -28,7 +28,6 @@ from segmentation_skeleton_metrics.utils import (
     util
 )
 
-MERGE_DIST_THRESHOLD = 200
 MIN_CNT = 40
 
 
@@ -165,8 +164,14 @@ class SkeletonMetric:
                 use_anisotropy=True,
             )
             self.fragment_graphs = graph_builder.run(swc_pointer)
+            self.set_fragment_ids()
         else:
             self.fragment_graphs = None
+
+    def set_fragment_ids(self):
+        self.fragment_ids = set()
+        for key in self.fragment_graphs:
+            self.fragment_ids.add(util.get_segment_id(key))
 
     def label_graphs(self, key, batch_size=64):
         """
@@ -197,7 +202,7 @@ class SkeletonMetric:
                     visited.add(i)
 
                 # Check whether to submit batch
-                is_node_far = self.dist(key, root, j) > 128
+                is_node_far = self.graphs[key].dist(root, j) > 128
                 is_batch_full = len(batch) >= batch_size
                 if is_node_far or is_batch_full:
                     threads.append(
@@ -482,7 +487,7 @@ class SkeletonMetric:
         """
         Counts the number of label merges for a given graph key based on
         whether the fragment graph corresponding to a label has a node that is
-        more that MERGE_DIST_THRESHOLD-ums away from the nearest point in
+        more that 200ums away from the nearest point in
         "kdtree".
 
         Parameters
@@ -501,15 +506,15 @@ class SkeletonMetric:
             nodes = self.graphs[key].nodes_with_label(label)
             if len(nodes) > MIN_CNT:
                 for label in self.label_handler.get_class(label):
-                    if label in self.fragment_graphs:
+                    if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
 
     def is_fragment_merge(self, key, label, kdtree):
         """
         Determines whether fragment corresponding to "label" is falsely merged
         to graph corresponding to "key". A fragment is said to be merged if
-        there is a node in the fragment more than MERGE_DIST_THRESHOLD-ums
-        away from the nearest point in "kdtree".
+        there is a node in the fragment more than 200ums away from the nearest
+        point in "kdtree".
 
         Parameters
         ----------
@@ -525,8 +530,10 @@ class SkeletonMetric:
         None
 
         """
-        for voxel in self.fragment_graphs[label].voxels:
-            if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
+        fragment_graph = self.find_graph_from_label(label)
+        for voxel in fragment_graph.voxels:
+            gt_voxel = util.kdtree_query(kdtree, voxel)
+            if self.physical_dist(gt_voxel, voxel) > 150:
                 # Log merge mistake
                 equiv_label = self.label_handler.get(label)
                 xyz = img_util.to_physical(voxel, self.anisotropy)
@@ -538,8 +545,13 @@ class SkeletonMetric:
                     swc_util.to_zipped_swc(
                         self.zip_writer[key], self.fragment_graphs[label]
                     )
-                return
+                break
 
+    def find_graph_from_label(self, label):
+        for key in self.fragment_graphs:
+            if label == util.get_segment_id(key):
+                return self.fragment_graphs[key]
+        
     def find_label_intersections(self):
         """
         Detects merges between ground truth graphs, namely distinct graphs that
@@ -857,10 +869,11 @@ class SkeletonMetric:
         return metrics
 
     # -- util --
-    def dist(self, key, i, j):
-        xyz_i = self.graphs[key].voxels[i]
-        xyz_j = self.graphs[key].voxels[j]
-        return distance.euclidean(xyz_i, xyz_j)
+    def physical_dist(self, voxel_1, voxel_2):
+        xyz_1 = img_util.to_physical(voxel_1, self.anisotropy)
+        xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
+        return distance.euclidean(xyz_1, xyz_2)
+        
 
     def init_counter(self):
         """

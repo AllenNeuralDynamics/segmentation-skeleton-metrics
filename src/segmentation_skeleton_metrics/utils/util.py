@@ -242,6 +242,42 @@ def load_valid_labels(path):
     return valid_labels
 
 
+def kdtree_query(kdtree, xyz):
+    """
+    Gets the xyz coordinates of the nearest neighbor of "xyz" from "kdtree".
+
+    Parameters
+    ----------
+    xyz : tuple
+        xyz coordinate to be queried.
+
+    Returns
+    -------
+    tuple
+        xyz coordinate of the nearest neighbor of "xyz".
+
+    """
+    _, idx = kdtree.query(xyz)
+    return tuple(kdtree.data[idx])
+
+
+def sample_once(my_container):
+    """
+    Samples a single element from "my_container".
+
+    Parameters
+    ----------
+    my_container : container
+        Container to be sampled from.
+
+    Returns
+    -------
+    sample
+
+    """
+    return sample(my_container, 1)[0]
+
+
 def time_writer(t, unit="seconds"):
     """
     Converts runtime "t" to its proper unit.
@@ -270,20 +306,3 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
-
-
-def sample_once(my_container):
-    """
-    Samples a single element from "my_container".
-
-    Parameters
-    ----------
-    my_container : container
-        Container to be sampled from.
-
-    Returns
-    -------
-    sample
-
-    """
-    return sample(my_container, 1)[0]

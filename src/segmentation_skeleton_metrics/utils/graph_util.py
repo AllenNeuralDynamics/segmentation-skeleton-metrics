@@ -145,6 +145,9 @@ class SkeletonGraph(nx.Graph):
 
     # --- Computation ---
     def dist(self, i, j):
+        return distance.euclidean(self.voxels[i], self.voxels[j])
+
+    def physical_dist(self, i, j):
         xyz_i = self.voxels[i] * self.anisotropy
         xyz_j = self.voxels[j] * self.anisotropy
         return distance.euclidean(xyz_i, xyz_j)
@@ -184,7 +187,7 @@ class SkeletonGraph(nx.Graph):
     def run_length_from(self, root):
         run_length = 0
         for i, j in nx.dfs_edges(self, source=root):
-            run_length += self.dist(i, j)
+            run_length += self.physical_dist(i, j)
         return run_length
 
 
