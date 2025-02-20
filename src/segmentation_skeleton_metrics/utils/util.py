@@ -106,25 +106,6 @@ def list_paths(directory, extension=None):
     return paths
 
 
-def get_id(path):
-    """
-    Gets segment id of the swc file at "path".
-
-    Parameters
-    ----------
-    path : str
-        Path to an swc file
-
-    Return
-    ------
-    int or str
-        Segment id of swc file.
-
-    """
-    filename = os.path.basename(path).split(".")[0]
-    return int(filename) if filename.isdigit() else filename
-
-
 # --- io utils ---
 def read_zip(zip_file, path):
     """
@@ -208,6 +189,10 @@ def list_files_in_zip(zip_content):
 
 
 # --- Miscellaneous ---
+def get_segment_id(filename):
+    return int(filename.split(".")[0])
+
+
 def load_merged_labels(path):
     """
     Loads a list of merged label IDs from a text file.

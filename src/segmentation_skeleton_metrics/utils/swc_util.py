@@ -261,7 +261,7 @@ class Reader:
 
     def confirm_load(self, filename):
         if len(self.selected_ids) > 0:
-            segment_id = get_segment_id(filename)
+            segment_id = util.get_segment_id(filename)
             return True if segment_id in self.selected_ids else False
         else:
             return True
@@ -354,10 +354,6 @@ class Reader:
 
     
 # --- Helpers ---
-def get_segment_id(filename):
-    return int(filename.split(".")[0])
-
-
 def to_zipped_swc(zip_writer, graph, color=None):
     """
     Writes a graph to an swc file that is to be stored in a zip.
