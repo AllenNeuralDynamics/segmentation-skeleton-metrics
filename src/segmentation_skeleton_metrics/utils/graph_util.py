@@ -7,13 +7,11 @@ Created on Wed Aug 15 12:00:00 2023
 
 """
 from concurrent.futures import as_completed, ProcessPoolExecutor
-from random import sample
-from scipy.spatial import distance
 from tqdm import tqdm
 
 import networkx as nx
-import numpy as np
 
+from segmentation_skeleton_metrics.skeleton_graph import SkeletonGraph
 from segmentation_skeleton_metrics.utils import swc_util, util
 
 
@@ -116,78 +114,6 @@ class GraphBuilder:
         pass
 
 
-class SkeletonGraph(nx.Graph):
-
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
-        # Call parent class
-        super(SkeletonGraph, self).__init__()
-
-        # Instance attributes
-        self.anisotropy = anisotropy
-        self.run_length = 0
-
-    def set_nodes(self):
-        num_nodes = len(self.voxels)
-        self.add_nodes_from(np.arange(num_nodes))
-
-    def set_voxels(self, voxels):
-        self.voxels = np.array(voxels, dtype=np.int32)
-
-    # --- Getters ---
-    def get_labels(self):
-        return np.unique(self.graph["label"])
-
-    def nodes_with_label(self, label):
-        return np.where(self.graph["label"] == label)[0]
-
-    # --- Computation ---
-    def dist(self, i, j):
-        return distance.euclidean(self.voxels[i], self.voxels[j])
-
-    def physical_dist(self, i, j):
-        xyz_i = self.voxels[i] * self.anisotropy
-        xyz_j = self.voxels[j] * self.anisotropy
-        return distance.euclidean(xyz_i, xyz_j)
-
-    def get_bbox(self, nodes):
-        bbox_min = np.inf * np.ones(3)
-        bbox_max = np.zeros(3)
-        for i in nodes:
-            bbox_min = np.minimum(bbox_min, self.voxels[i])
-            bbox_max = np.maximum(bbox_max, self.voxels[i] + 1)
-        return {"min": bbox_min.astype(int), "max": bbox_max.astype(int)}
-
-    def run_lengths(self):
-        """
-        Computes the path length of each connected component.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be parsed.
-
-        Returns
-        -------
-        run_lengths : numpy.ndarray
-            Array containing run lengths of each connected component in "graph".
-
-        """
-        run_lengths = []
-        if self.number_of_nodes() > 0:
-            for nodes in nx.connected_components(self):
-                root = util.sample_once(nodes)
-                run_lengths.append(self.run_length_from(root))
-        else:
-            run_lengths.append(0)
-        return np.array(run_lengths)
-
-    def run_length_from(self, root):
-        run_length = 0
-        for i, j in nx.dfs_edges(self, source=root):
-            run_length += self.physical_dist(i, j)
-        return run_length
-
-
 class LabelHandler:
     def __init__(self, connections_path=None, valid_labels=None):
         """
@@ -286,29 +212,6 @@ class LabelHandler:
         return True if len(self.mapping) > 0 else False
 
 
-# --- Update graph ---
-def remove_nodes(graph, target_label):
-    """
-    Deletes nodes in the given graph whose label is "target_label".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph with a graph-level attribute called "label".
-    target_label : int
-        Label to be deleted from graph.
-
-    Returns
-    -------
-    networkx.Graph
-        Updated graph.
-
-    """
-    nodes = np.where(graph.graph["label"] == target_label)[0]
-    graph.remove_nodes_from(nodes)
-    return graph
-
-
 # -- Miscellaneous --
 def count_splits(graph):
     """
@@ -330,22 +233,3 @@ def count_splits(graph):
 
 def get_segment_id(swc_id):
     return int(swc_id.split(".")[0])
-
-
-def sample_leaf(graph):
-    """
-    Samples leaf node from "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be sampled from.
-
-    Returns
-    -------
-    int
-        Leaf node of "graph"
-
-    """
-    leafs = [i for i in graph.nodes if graph.degree[i] == 1]
-    return sample(leafs, 1)[0]

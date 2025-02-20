@@ -221,12 +221,11 @@ class SkeletonMetric:
             threads.append(executor.submit(self.get_patch_labels, key, batch))
 
             # Process results
-            n_nodes = self.graphs[key].number_of_nodes()
-            self.graphs[key].graph["label"] = np.zeros((n_nodes), dtype=int)
+            self.graphs[key].set_labels()
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
-                    self.graphs[key].graph["label"][i] = label
+                    self.graphs[key].labels[i] = label
 
     def get_patch_labels(self, key, nodes):
         bbox = self.graphs[key].get_bbox(nodes)
@@ -411,7 +410,7 @@ class SkeletonMetric:
             self.split_percent = dict()
             for process in as_completed(processes):
                 key, graph, split_percent = process.result()
-                self.graphs[key] = gutil.remove_nodes(graph, 0)
+                self.graphs[key] = graph
                 self.split_percent[key] = split_percent
                 pbar.update(1)
 

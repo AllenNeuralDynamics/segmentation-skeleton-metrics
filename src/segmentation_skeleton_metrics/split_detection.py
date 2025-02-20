@@ -13,8 +13,6 @@ from collections import deque
 
 import networkx as nx
 
-from segmentation_skeleton_metrics.utils import graph_util as gutil
-
 
 def run(process_id, graph):
     """
@@ -33,7 +31,7 @@ def run(process_id, graph):
     """
     # Initializations
     split_cnt = 0
-    source = gutil.sample_leaf(graph)
+    source = get_leaf(graph)
     dfs_edges = deque(list(nx.dfs_edges(graph, source=source)))
     visited_edges = set()
 
@@ -45,8 +43,8 @@ def run(process_id, graph):
             continue
 
         # Visit edge
-        label_i = int(graph.graph["label"][i])
-        label_j = int(graph.graph["label"][j])
+        label_i = int(graph.labels[i])
+        label_j = int(graph.labels[j])
         if is_split(label_i, label_j):
             graph.remove_edge(i, j)
             split_cnt += 1
@@ -56,6 +54,7 @@ def run(process_id, graph):
 
     # Finish
     split_percent = split_cnt / graph.graph["n_edges"]
+    graph.remove_nodes_with_label(0)
     return process_id, graph, split_percent
 
 
@@ -91,7 +90,7 @@ def check_misalignment(graph, visited_edges, nb, root):
     while len(queue) > 0:
         # Visit node
         j = queue.popleft()
-        label_j = int(graph.graph["label"][j])
+        label_j = int(graph.labels[j])
         if label_j != 0:
             label_collisions.add(label_j)
         visited.add(j)
@@ -107,7 +106,7 @@ def check_misalignment(graph, visited_edges, nb, root):
     # Upd zero nodes
     if len(label_collisions) == 1:
         label = label_collisions.pop()
-        upd_labels(graph, visited, label)
+        graph.upd_labels(visited, label)
 
 
 # -- Helpers --
@@ -131,24 +130,21 @@ def is_split(a, b):
     return (a > 0 and b > 0) and (a != b)
 
 
-def upd_labels(graph, nodes, label):
+def get_leaf(graph):
     """
-    Updates the label of each node in "nodes" with "label".
+    Gets a leaf node from "graph".
 
     Parameters
     ----------
     graph : networkx.Graph
-        Graph to be updated.
-    nodes : list
-        List of nodes to be updated.
-    label : int
-        New label of each node in "nodes".
+        Graph to be sampled from.
 
     Returns
     -------
-    networkx.Graph
-        Updated graph.
+    int
+        Leaf node of "graph"
 
     """
-    for i in nodes:
-        graph.graph["label"][i] = label
+    for i in graph.nodes:
+        if graph.degree[i] == 1:
+            return i
