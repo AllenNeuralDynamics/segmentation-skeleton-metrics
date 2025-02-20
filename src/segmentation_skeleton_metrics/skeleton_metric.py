@@ -108,6 +108,7 @@ class SkeletonMetric:
         self.connections_path = connections_path
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
+        self.save_projections = save_projections
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -116,16 +117,15 @@ class SkeletonMetric:
 
         # Load data
         self.label_mask = pred_labels
-        self.load_groundtruth(gt_pointer, valid_labels)
+        self.load_groundtruth(gt_pointer)
         self.load_fragments(fragments_pointer)
 
         # Initialize writer
-        self.save_projections = save_projections
         if self.save_projections:
             self.init_zip_writer()
 
     # --- Load Data ---
-    def load_groundtruth(self, swc_pointer, valid_labels):
+    def load_groundtruth(self, swc_pointer):
         """
         Initializes "self.graphs" by iterating over "paths" which corresponds
         to neurons in the ground truth.
@@ -147,7 +147,6 @@ class SkeletonMetric:
             anisotropy=self.anisotropy,
             label_mask=self.label_mask,
             use_anisotropy=False,
-            valid_labels=valid_labels,
         )
         self.graphs = graph_builder.run(swc_pointer)
 
@@ -158,8 +157,10 @@ class SkeletonMetric:
     def load_fragments(self, swc_pointer):
         print("\n(2) Load Fragments")
         if swc_pointer:
+            coords_only = False #not self.save_projections
             graph_builder = gutil.GraphBuilder(
                 anisotropy=self.anisotropy,
+                coords_only=coords_only,
                 selected_ids=self.get_all_node_labels(),
                 use_anisotropy=True,
             )
@@ -167,7 +168,7 @@ class SkeletonMetric:
         else:
             self.fragment_graphs = None
 
-    def label_graphs(self, key, batch_size=128):
+    def label_graphs(self, key, batch_size=64):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
         predicted segmentation mask (i.e. "self.label_mask") as a node-level
