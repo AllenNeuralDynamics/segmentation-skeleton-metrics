@@ -6,7 +6,7 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from random import sample
 from scipy.spatial import distance
 from tqdm import tqdm
@@ -29,20 +29,20 @@ class GraphBuilder:
     def __init__(
         self,
         anisotropy=(1.0, 1.0, 1.0),
+        coords_only=False,
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
-        valid_labels=None,
     ):
         # Instance attributes
         self.anisotropy = anisotropy
+        self.coords_only = coords_only
         self.label_mask = label_mask
         self.selected_ids = selected_ids
-        self.valid_labels = valid_labels
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
-        self.swc_reader = swc_util.Reader(anisotropy)
+        self.swc_reader = swc_util.Reader(anisotropy, selected_ids=selected_ids)
 
     def run(self, swc_pointer):
         graphs = self._build_graphs_from_swcs(swc_pointer)
@@ -51,14 +51,14 @@ class GraphBuilder:
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
-        with ProcessPoolExecutor() as executor:
+        with ThreadPoolExecutor() as executor:
             # Assign processes
             processes = list()
             swc_dicts = self.swc_reader.load(swc_pointer)
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
-                if self._process_swc_dict(swc_dict["swc_id"]):
-                    processes.append(executor.submit(self.to_graph, swc_dict))
+                #if self._process_swc_dict(swc_dict["swc_id"]):
+                processes.append(executor.submit(self.to_graph, swc_dict))
 
             # Store results
             graphs = dict()
@@ -96,17 +96,19 @@ class GraphBuilder:
         graph.set_voxels(swc_dict["voxel"])
 
         # Build graph
-        id_lookup = dict()
-        run_length = 0
-        for i, id_i in enumerate(swc_dict["id"]):
-            id_lookup[id_i] = i
-            if swc_dict["pid"][i] != -1:
-                parent = id_lookup[swc_dict["pid"][i]]
-                graph.add_edge(i, parent)
-                graph.run_length += graph.dist(i, parent)
+        if not self.coords_only:
+            #graph.set_nodes()
+            id_lookup = dict()
+            run_length = 0
+            for i, id_i in enumerate(swc_dict["id"]):
+                id_lookup[id_i] = i
+                if swc_dict["pid"][i] != -1:
+                    parent = id_lookup[swc_dict["pid"][i]]
+                    graph.add_edge(i, parent)
+                    graph.run_length += graph.dist(i, parent)
 
-        # Set graph-level attributes
-        graph.graph["n_edges"] = graph.number_of_edges()
+            # Set graph-level attributes
+            graph.graph["n_edges"] = graph.number_of_edges()
         return {swc_dict["swc_id"]: graph}
 
     # --- Label Graphs ---
@@ -126,6 +128,10 @@ class SkeletonGraph(nx.Graph):
         # Instance attributes
         self.anisotropy = anisotropy
         self.run_length = 0
+
+    def set_nodes(self):
+        num_nodes = len(self.voxels)
+        self.add_nodes_from(np.arange(num_nodes))
 
     def set_voxels(self, voxels):
         self.voxels = np.array(voxels, dtype=np.int32)

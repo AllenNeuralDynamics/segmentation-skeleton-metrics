@@ -48,7 +48,7 @@ class Reader:
 
     """
 
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None):
         """
         Initializes a Reader object that loads swc files.
 
@@ -65,6 +65,7 @@ class Reader:
 
         """
         self.anisotropy = anisotropy
+        self.selected_ids = selected_ids or set()
 
     # --- Load Data ---
     def load(self, swc_pointer):
@@ -138,7 +139,10 @@ class Reader:
         """
         content = util.read_txt(path)
         filename = os.path.basename(path)
-        return self.parse(content, filename)
+        if self.confirm_load(filename):
+            return self.parse(content, filename)
+        else:
+            return None
 
     def load_from_local_paths(self, paths):
         """
@@ -161,9 +165,11 @@ class Reader:
             threads = list()
             pbar = tqdm(total=len(paths), desc="Read SWCs")
             for path in paths:
-                threads.append(
-                    executor.submit(self.load_from_local_path, path)
-                )
+                filename = os.path.basename(path)
+                if self.confirm_load(filename):
+                    threads.append(
+                        executor.submit(self.load_from_local_path, path)
+                    )
 
             # Store results
             swc_dicts = deque()
@@ -216,10 +222,14 @@ class Reader:
             # Assign threads
             threads = list()
             zipfile = ZipFile(zip_path, "r")
-            for f in [f for f in zipfile.namelist() if f.endswith(".swc")]:
-                threads.append(
-                    executor.submit(self.load_from_zipped_file, zipfile, f)
-                )
+            filesnames = [f for f in zipfile.namelist() if f.endswith(".swc")]
+            for filename in filesnames:
+                if self.confirm_load(filename):
+                    threads.append(
+                        executor.submit(
+                            self.load_from_zipped_file, zipfile, filename
+                        )
+                    )
 
             # Store results
             swc_dicts = deque()
@@ -248,6 +258,13 @@ class Reader:
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
         return self.parse(content, filename)
+
+    def confirm_load(self, filename):
+        if len(self.selected_ids) > 0:
+            segment_id = get_segment_id(filename)
+            return True if segment_id in self.selected_ids else False
+        else:
+            return True
 
     # -- Process Text ---
     def parse(self, content, filename):
@@ -334,6 +351,11 @@ class Reader:
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
+
+    
+# --- Helpers ---
+def get_segment_id(filename):
+    return int(filename.split(".")[0])
 
 
 def to_zipped_swc(zip_writer, graph, color=None):
