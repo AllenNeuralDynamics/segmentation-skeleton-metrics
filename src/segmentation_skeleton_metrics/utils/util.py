@@ -8,6 +8,7 @@ Created on Wed Dec 21 19:00:00 2022
 """
 
 from io import BytesIO
+from random import sample
 from zipfile import ZipFile
 
 import os
@@ -284,3 +285,20 @@ def time_writer(t, unit="seconds"):
         unit = upd_unit[unit]
         t, unit = time_writer(t, unit=unit)
     return t, unit
+
+
+def sample_once(my_container):
+    """
+    Samples a single element from "my_container".
+
+    Parameters
+    ----------
+    my_container : container
+        Container to be sampled from.
+
+    Returns
+    -------
+    sample
+
+    """
+    return sample(my_container, 1)[0]

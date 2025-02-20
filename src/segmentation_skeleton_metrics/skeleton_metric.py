@@ -223,17 +223,7 @@ class SkeletonMetric:
                     self.graphs[key].graph["label"][i] = label
 
     def get_patch_labels(self, key, nodes):
-        # Get bounding box
-        bbox = {"min": [np.inf, np.inf, np.inf], "max": [0, 0, 0]}
-        for i in nodes:
-            voxel = self.graphs[key].graph["voxel"][i]
-            for idx in range(3):
-                if voxel[idx] < bbox["min"][idx]:
-                    bbox["min"][idx] = voxel[idx]
-                if voxel[idx] >= bbox["max"][idx]:
-                    bbox["max"][idx] = voxel[idx] + 1
-
-        # Read labels
+        bbox = self.graphs[key].get_bbox(nodes)
         label_patch = self.label_mask.read_with_bbox(bbox)
         node_to_label = dict()
         for i in nodes:
@@ -472,7 +462,7 @@ class SkeletonMetric:
             pbar = tqdm(total=len(self.graphs), desc="Merge Detection")
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
-                    kdtree = KDTree(graph.graph["voxel"])
+                    kdtree = KDTree(graph.voxels)
                     self.count_merges(key, kdtree)
                 pbar.update(1)
 
@@ -534,7 +524,7 @@ class SkeletonMetric:
         None
 
         """
-        for voxel in self.fragment_graphs[label].graph["voxel"]:
+        for voxel in self.fragment_graphs[label].voxels:
             if kdtree.query(voxel)[0] > MERGE_DIST_THRESHOLD:
                 # Log merge mistake
                 equiv_label = self.label_handler.get(label)
@@ -828,9 +818,9 @@ class SkeletonMetric:
         self.wgts = dict()
         total_run_length = 0
         for key in self.graphs:
-            run_length = self.get_run_length(key)
-            run_lengths = gutil.compute_run_lengths(self.graphs[key])
+            run_length = self.graphs[key].run_length
             total_run_length += run_length
+            run_lengths = self.graphs[key].run_lengths()
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
             self.erl[key] = np.sum(wgt * run_lengths)
@@ -839,23 +829,6 @@ class SkeletonMetric:
 
         for key in self.graphs:
             self.wgts[key] = self.wgts[key] / total_run_length
-
-    def get_run_length(self, key):
-        """
-        Gets the path length of "self.graphs[key]".
-
-        Parameters
-        ----------
-        key : str
-            ID of graph in "self.graphs".
-
-        Returns
-        -------
-        float
-            Run length of "self.graphs[key]".
-
-        """
-        return self.graphs[key].graph["run_length"]
 
     def list_metrics(self):
         """
@@ -884,8 +857,8 @@ class SkeletonMetric:
 
     # -- util --
     def dist(self, key, i, j):
-        xyz_i = self.graphs[key].graph["voxel"][i]
-        xyz_j = self.graphs[key].graph["voxel"][j]
+        xyz_i = self.graphs[key].voxels[i]
+        xyz_j = self.graphs[key].voxels[j]
         return distance.euclidean(xyz_i, xyz_j)
 
     def init_counter(self):
@@ -906,7 +879,7 @@ class SkeletonMetric:
         return {key: 0 for key in self.graphs}
 
     def to_local_voxels(self, key, i, offset):
-        voxel = np.array(self.graphs[key].graph["voxel"][i])
+        voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
 

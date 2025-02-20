@@ -23,7 +23,7 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
 
 """
 
-
+from collections import deque
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -166,7 +166,7 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
+            swc_dicts = deque()
             for thread in as_completed(threads):
                 swc_dicts.append(thread.result())
                 pbar.update(1)
@@ -188,7 +188,7 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
+            swc_dicts = deque()
             for process in as_completed(processes):
                 swc_dicts.extend(process.result())
                 pbar.update(1)
@@ -222,7 +222,7 @@ class Reader:
                 )
 
             # Store results
-            swc_dicts = list()
+            swc_dicts = deque()
             for thread in as_completed(threads):
                 swc_dicts.append(thread.result())
         return swc_dicts

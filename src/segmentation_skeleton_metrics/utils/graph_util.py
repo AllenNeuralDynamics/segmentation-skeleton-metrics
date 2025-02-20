@@ -8,19 +8,23 @@ Created on Wed Aug 15 12:00:00 2023
 """
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
+from scipy.spatial import distance
 from tqdm import tqdm
 
 import networkx as nx
 import numpy as np
-from scipy.spatial import distance
+import sys
 
-from segmentation_skeleton_metrics.skeleton_graph import SkeletonGraph
 from segmentation_skeleton_metrics.utils import img_util, swc_util, util
 
 ANISOTROPY = np.array([0.748, 0.748, 1.0])
 
 
 class GraphBuilder:
+    """
+    A class that builds and processes graphs from SWC files.
+
+    """
 
     def __init__(
         self,
@@ -41,25 +45,28 @@ class GraphBuilder:
         self.swc_reader = swc_util.Reader(anisotropy)
 
     def run(self, swc_pointer):
-        self._build_graphs_from_swcs(swc_pointer)
-        self._label_graphs_with_segmentation()
-        return self.graphs
+        graphs = self._build_graphs_from_swcs(swc_pointer)
+        graphs = self._label_graphs_with_segmentation(graphs)
+        return graphs
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
         with ProcessPoolExecutor() as executor:
             # Assign processes
             processes = list()
-            for swc_dict in self.swc_reader.load(swc_pointer):
+            swc_dicts = self.swc_reader.load(swc_pointer)
+            while len(swc_dicts) > 0:
+                swc_dict = swc_dicts.pop()
                 if self._process_swc_dict(swc_dict["swc_id"]):
                     processes.append(executor.submit(self.to_graph, swc_dict))
 
             # Store results
-            self.graphs = dict()
+            graphs = dict()
             pbar = tqdm(total=len(processes), desc="Build Graphs")
             for process in as_completed(processes):
-                self.graphs.update(process.result())
+                graphs.update(process.result())
                 pbar.update(1)
+        return graphs
 
     def _process_swc_dict(self, swc_id):
         if self.selected_ids:
@@ -84,39 +91,95 @@ class GraphBuilder:
             Graph built from an SWC file.
 
         """
-        # Extract data from swc_dict
-        ids = swc_dict["id"]
-        voxels = np.array(swc_dict["voxel"], dtype=np.int32)
+        # Initialize graph
+        graph = SkeletonGraph(anisotropy=self.anisotropy)
+        graph.set_voxels(swc_dict["voxel"])
 
         # Build graph
-        graph = SkeletonGraph()
         id_lookup = dict()
         run_length = 0
-        for i in range(len(swc_dict["id"])):
-            id_lookup[ids[i]] = i
+        for i, id_i in enumerate(swc_dict["id"]):
+            id_lookup[id_i] = i
             if swc_dict["pid"][i] != -1:
-                # Add edge
                 parent = id_lookup[swc_dict["pid"][i]]
                 graph.add_edge(i, parent)
-
-                # Update run length
-                xyz_i = voxels[i] * self.anisotropy
-                xyz_p = voxels[parent] * self.anisotropy
-                run_length += distance.euclidean(xyz_i, xyz_p)
+                graph.run_length += graph.dist(i, parent)
 
         # Set graph-level attributes
         graph.graph["n_edges"] = graph.number_of_edges()
-        graph.graph["run_length"] = run_length
-        graph.graph["voxel"] = voxels
         return {swc_dict["swc_id"]: graph}
 
     # --- Label Graphs ---
-    def _label_graphs_with_segmentation(self):
-        if self.label_mask is not None:
-            pass
+    def _label_graphs_with_segmentation(self, graphs):
+        return graphs
 
     def _label_graph(self, key):
         pass
+
+
+class SkeletonGraph(nx.Graph):
+
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
+        # Call parent class
+        super(SkeletonGraph, self).__init__()
+
+        # Instance attributes
+        self.anisotropy = anisotropy
+        self.run_length = 0
+
+    def set_voxels(self, voxels):
+        self.voxels = np.array(voxels, dtype=np.int32)
+
+    # --- Getters ---
+    def get_labels(self):
+        return np.unique(self.graph["label"])
+
+    def nodes_with_label(self, label):
+        return np.where(self.graph["label"] == label)[0]
+
+    # --- Computation ---
+    def dist(self, i, j):
+        xyz_i = self.voxels[i] * self.anisotropy
+        xyz_j = self.voxels[j] * self.anisotropy
+        return distance.euclidean(xyz_i, xyz_j)
+
+    def get_bbox(self, nodes):
+        bbox_min = np.inf * np.ones(3)
+        bbox_max = np.zeros(3)
+        for i in nodes:
+            bbox_min = np.minimum(bbox_min, self.voxels[i])
+            bbox_max = np.maximum(bbox_max, self.voxels[i] + 1)
+        return {"min": bbox_min.astype(int), "max": bbox_max.astype(int)}
+
+    def run_lengths(self):
+        """
+        Computes the path length of each connected component.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be parsed.
+
+        Returns
+        -------
+        run_lengths : numpy.ndarray
+            Array containing run lengths of each connected component in "graph".
+
+        """
+        run_lengths = []
+        if self.number_of_nodes() > 0:
+            for nodes in nx.connected_components(self):
+                root = util.sample_once(nodes)
+                run_lengths.append(self.run_length_from(root))
+        else:
+            run_lengths.append(0)
+        return np.array(run_lengths)
+
+    def run_length_from(self, root):
+        run_length = 0
+        for i, j in nx.dfs_edges(self, source=root):
+            run_length += self.dist(i, j)
+        return run_length
 
 
 class LabelHandler:
@@ -241,54 +304,6 @@ def remove_nodes(graph, target_label):
 
 
 # -- Miscellaneous --
-def compute_run_lengths(graph):
-    """
-    Computes the path length of each connected component in "graph".
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be parsed.
-
-    Returns
-    -------
-    run_lengths : numpy.ndarray
-        Array containing run lengths of each connected component in "graph".
-
-    """
-    run_lengths = []
-    if graph.number_of_nodes():
-        for nodes in nx.connected_components(graph):
-            subgraph = graph.subgraph(nodes)
-            run_lengths.append(compute_run_length(subgraph))
-    else:
-        run_lengths.append(0)
-    return np.array(run_lengths)
-
-
-def compute_run_length(graph):
-    """
-    Computes path length of graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be parsed.
-
-    Returns
-    -------
-    path_length : float
-        Path length of graph.
-
-    """
-    path_length = 0
-    for i, j in nx.dfs_edges(graph):
-        xyz_i = img_util.to_physical(graph.graph["voxel"][i], ANISOTROPY)
-        xyz_j = img_util.to_physical(graph.graph["voxel"][j], ANISOTROPY)
-        path_length += distance.euclidean(xyz_i, xyz_j)
-    return path_length
-
-
 def count_splits(graph):
     """
     Counts the number of splits in "graph".
