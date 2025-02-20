@@ -6,7 +6,6 @@ Created on Wed Aug 15 12:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 """
-from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from random import sample
 from tqdm import tqdm
@@ -241,29 +240,7 @@ def remove_nodes(graph, target_label):
     return graph
 
 
-def init_label_to_nodes(graph):
-    """
-    Initializes a dictionary that maps a label to nodes with that label.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps a label to nodes with that label.
-
-    """
-    label_to_nodes = defaultdict(set)
-    node_to_label = nx.get_node_attributes(graph, "label")
-    for i, label in node_to_label.items():
-        label_to_nodes[label].add(i)
-    return label_to_nodes
-
-
-# -- eval tools --
+# -- Miscellaneous --
 def compute_run_lengths(graph):
     """
     Computes the path length of each connected component in "graph".
@@ -327,45 +304,11 @@ def count_splits(graph):
         Number of splits in "graph".
 
     """
-    return max(len(list(nx.connected_components(graph))) - 1, 0)
+    return max(nx.number_connected_components(graph) - 1, 0)
 
 
-# -- Miscellaneous --
 def get_segment_id(swc_id):
     return int(swc_id.split(".")[0])
-
-
-def get_node_labels(graphs):
-    """
-    Creates a dictionary that maps a graph id to the set of unique labels of
-    nodes in that graph.
-
-    Parameters
-    ----------
-    graphs : dict
-        Graphs to be searched.
-
-    Returns
-    -------
-    dict
-        Dictionary that maps a graph id to the set of unique labels of nodes
-        in that graph.
-
-    """
-    with ProcessPoolExecutor() as executor:
-        # Assign processes
-        processes = list()
-        for key, graph in graphs.items():
-            processes.append(
-                executor.submit(init_label_to_nodes, graph, True, key)
-            )
-
-        # Store results
-        graph_to_labels = dict()
-        for cnt, process in enumerate(as_completed(processes)):
-            key, label_to_nodes = process.result()
-            graph_to_labels[key] = set(label_to_nodes.keys())
-    return graph_to_labels
 
 
 def sample_leaf(graph):
