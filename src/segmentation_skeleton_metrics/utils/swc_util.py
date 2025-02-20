@@ -25,9 +25,9 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
 
 from collections import deque
 from concurrent.futures import (
+    as_completed,
     ProcessPoolExecutor,
     ThreadPoolExecutor,
-    as_completed,
 )
 from io import StringIO
 from tqdm import tqdm

@@ -220,7 +220,7 @@ class SkeletonMetric:
             threads.append(executor.submit(self.get_patch_labels, key, batch))
 
             # Process results
-            self.graphs[key].set_labels()
+            self.graphs[key].init_labels()
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():

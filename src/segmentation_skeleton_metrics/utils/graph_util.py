@@ -89,7 +89,7 @@ class GraphBuilder:
         """
         # Initialize graph
         graph = SkeletonGraph(anisotropy=self.anisotropy)
-        graph.set_voxels(swc_dict["voxel"])
+        graph.init_voxels(swc_dict["voxel"])
 
         # Build graph
         if not self.coords_only:
