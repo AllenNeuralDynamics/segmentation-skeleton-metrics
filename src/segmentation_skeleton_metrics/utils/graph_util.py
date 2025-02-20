@@ -16,7 +16,7 @@ from segmentation_skeleton_metrics.utils import swc_util, util
 
 class GraphBuilder:
     """
-    A class that builds and processes graphs from SWC files.
+    A class that builds and processes graphs constructed from SWC files.
 
     """
 
@@ -32,7 +32,6 @@ class GraphBuilder:
         self.anisotropy = anisotropy
         self.coords_only = coords_only
         self.label_mask = label_mask
-        self.selected_ids = selected_ids
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
@@ -47,28 +46,30 @@ class GraphBuilder:
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
-            swc_dicts = self.swc_reader.load(swc_pointer)
+        # Initializations
+        swc_dicts = self.swc_reader.load(swc_pointer)
+        pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
+
+        # Main
+        graphs = dict()
+        if len(swc_dicts) > 10 ** 4:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
-                processes.append(executor.submit(self.to_graph, swc_dict))
-
-            # Store results
-            graphs = dict()
-            pbar = tqdm(total=len(processes), desc="Build Graphs")
-            for process in as_completed(processes):
-                graphs.update(process.result())
+                graphs.update(self.to_graph(swc_dict))
                 pbar.update(1)
-        return graphs
-
-    def _process_swc_dict(self, swc_id):
-        if self.selected_ids:
-            segment_id = get_segment_id(swc_id)
-            return True if segment_id in self.selected_ids else False
         else:
-            return True
+            with ProcessPoolExecutor() as executor:
+                # Assign processes
+                processes = list()
+                while len(swc_dicts) > 0:
+                    swc_dict = swc_dicts.pop()
+                    processes.append(executor.submit(self.to_graph, swc_dict))
+
+                # Store results
+                for process in as_completed(processes):
+                    graphs.update(process.result())
+                    pbar.update(1)
+        return graphs
 
     def to_graph(self, swc_dict):
         """
