@@ -56,41 +56,44 @@ To do...
 Here is a simple example of evaluating a predicted segmentation.
 
 ```python
-from tifffile import imread
+import numpy as np
 from xlwt import Workbook
 
-import numpy as np
-
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
 def evaluate():
     # Initializations
-    pred_labels = imread(pred_labels_path)
+    pred_labels = TiffReader(pred_labels_path)
     skeleton_metric = SkeletonMetric(
-        groundtruth_path,
-        pred_segmentation_path,
-        pred_fragments_path=pred_fragments_path,
+        groundtruth_pointer,
+        pred_labels,
+        fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
     full_results, avg_results = skeleton_metric.run()
 
     # Report results
-    print(f"Averaged Results...")
-    for stat_name in avg_results.keys():
-        print(f"   {stat_name}: {round(avg_results[stat_name], 4)}")
+    print(f"\nAveraged Results...")
+    for key in avg_results.keys():
+        print(f"   {key}: {round(avg_results[key], 4)}")
 
     print(f"\nTotal Results...")
     print("# splits:", np.sum(list(skeleton_metric.split_cnt.values())))
     print("# merges:", np.sum(list(skeleton_metric.merge_cnt.values())))
 
+    # Save results
+    path = f"{output_dir}/evaluation_results.xls"
+    save_results(path, full_results)
+
 
 if __name__ == "__main__":
     # Initializations
     output_dir = "./"
-    groundtruth_path = "./target_swcs.zip"
-    pred_segmentation_path = "./pred_labels.tif"
-    pred_fragments_path = "./pred_swcs.zip"
+    pred_labels_path = "./pred_labels.tif"
+    fragments_pointer = "./pred_swcs.zip"
+    groundtruth_pointer = "./target_swcs.zip"
 
     # Run
     evaluate()
