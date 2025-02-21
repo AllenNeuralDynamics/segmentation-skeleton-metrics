@@ -30,11 +30,12 @@ We start with a set of ground truth graphs stored as individual SWC files, where
 
 Note: Misalignments between the ground truth graphs and prediction segmentation are detected and corrected.
 
-<div style="text-align: center;">
+<p align="center">
   <img src="imgs/misalignment-example.png" width="300" alt="misalignment-example">
   <br>
-  <b> Figure: </b> Example of a misalignment between a ground truth graph and predicted segmentation.
-</div>
+  <b>Figure:</b> Node 3 is an example of a misalignment between a ground truth graph and predicted segmentation.
+</p>
+
 
 ### Step 2: Error Detection
 
