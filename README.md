@@ -26,8 +26,7 @@ The pipeline for computing skeleton metrics consists of three main steps:
 
 ### Step 1: Label Graphs
 
-We begin with a set of ground truth skeletons stored as individual SWC files, where the "xyz" coordinates correspond to voxels in an image. Each ground truth skeleton is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The evaluation is performed by first labeling the nodes of each graph with the corresponding segment IDs from the predicted segmentation.
-
+We start with a set of ground truth skeletons stored as individual SWC files, where the "xyz" attribute represents voxel coordinates in an image. Each ground truth skeleton is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The first step is to label the nodes of each graph with the corresponding segment IDs from the predicted segmentation.
 
 ### Step 2: Error Detection
 
