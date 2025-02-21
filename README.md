@@ -44,7 +44,7 @@ To do...
 <p>
   <img src="imgs/topological_mistakes.png" width="170" alt="Topological mistakes detected in skeleton">
   <br>
-  <b> Figure: </b>Edges from skeleton superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple skeletons).
+  <b> Figure: </b>Edges from graph superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple graphs).
 </p>
 
 ### Step 3: Compute Metrics
