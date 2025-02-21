@@ -5,6 +5,9 @@ Created on Wed Dec 21 19:00:00 2022
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+
+Code for helper routines.
+
 """
 
 from io import BytesIO

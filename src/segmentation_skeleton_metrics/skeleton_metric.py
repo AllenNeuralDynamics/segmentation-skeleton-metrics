@@ -27,7 +27,7 @@ from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
     img_util,
-    util
+    util,
 )
 
 
@@ -46,12 +46,19 @@ class SkeletonMetric:
         (7) Expected Run Length (ERL)
         (8) Normalized ERL
 
+    Class attributes
+    ----------------
+    merge_dist : float
+        ...
+    min_label_cnt : int
+        ...
+
     """
 
     def __init__(
         self,
         gt_pointer,
-        pred_labels,
+        label_mask,
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
@@ -70,7 +77,7 @@ class SkeletonMetric:
             Pointer to ground truth SWC files, see "swc_util.Reader" for
             documentation. These SWC files are assumed to be stored in voxel
             coordinates.
-        pred_labels : ArrayLike
+        label_mask : ArrayLike
             Predicted segmentation mask.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
@@ -79,7 +86,7 @@ class SkeletonMetric:
             Path to a txt file containing pairs of segment IDs that represents
             fragments that were merged. The default is None.
         fragments_pointer : Any, optional
-            Pointer to SWC files corresponding to "pred_labels", see
+            Pointer to SWC files corresponding to "label_mask", see
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
@@ -114,7 +121,7 @@ class SkeletonMetric:
         )
 
         # Load data
-        self.label_mask = pred_labels
+        self.label_mask = label_mask
         self.load_groundtruth(gt_pointer)
         self.load_fragments(fragments_pointer)
 
@@ -125,14 +132,12 @@ class SkeletonMetric:
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer):
         """
-        Initializes "self.graphs" by iterating over "paths" which corresponds
-        to neurons in the ground truth.
+        Loads ground truth graphs and initializes the "graphs" attribute.
 
         Parameters
         ----------
-        paths : List[str]
-            List of paths to swc files which correspond to neurons in the
-            ground truth.
+        swc_pointer : Any
+            Pointer to ground truth SWC files.
 
         Returns
         -------
@@ -153,6 +158,20 @@ class SkeletonMetric:
             self.label_graphs(key)
 
     def load_fragments(self, swc_pointer):
+        """
+        Loads fragments generated from the segmentation and initializes the
+        "fragment_graphs" attribute.
+
+        Parameters
+        ----------
+        swc_pointer : Any
+            Pointer to predicted SWC files if provided.
+
+        Returns
+        -------
+        None
+
+        """
         print("\n(2) Load Fragments")
         if swc_pointer:
             graph_builder = gutil.GraphBuilder(
@@ -166,20 +185,28 @@ class SkeletonMetric:
             self.fragment_graphs = None
 
     def set_fragment_ids(self):
+        """
+        Sets the "fragment_ids" attribute by extracting unique segment IDs
+        from the "fragment_graphs" keys.
+
+        Returns
+        -------
+        None
+
+        """
         self.fragment_ids = set()
         for key in self.fragment_graphs:
             self.fragment_ids.add(util.get_segment_id(key))
 
-    def label_graphs(self, key, batch_size=128):
+    def label_graphs(self, key):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
-        predicted segmentation mask (i.e. "self.label_mask") as a node-level
-        attribute called "label".
+        "self.label_mask") as a node-level attribute called "labels".
 
         Parameters
         ----------
-        graph : networkx.Graph
-            Graph that represents a neuron from the ground truth.
+        key : str
+            Unique identifier of graph to be labeled.
 
         Returns
         -------
@@ -192,15 +219,15 @@ class SkeletonMetric:
             threads = list()
             visited = set()
             for i, j in nx.dfs_edges(self.graphs[key]):
-                # Check for new batch
+                # Check if starting new batch
                 if len(batch) == 0:
                     root = i
                     batch.add(i)
                     visited.add(i)
 
                 # Check whether to submit batch
-                is_node_far = self.graphs[key].dist(root, j) > batch_size
-                is_batch_full = len(batch) >= batch_size
+                is_node_far = self.graphs[key].dist(root, j) > 128
+                is_batch_full = len(batch) >= 128
                 if is_node_far or is_batch_full:
                     threads.append(
                         executor.submit(self.get_patch_labels, key, batch)
@@ -214,10 +241,10 @@ class SkeletonMetric:
                     if len(batch) == 1:
                         root = j
 
-            # Submit last thread
+            # Submit last batch
             threads.append(executor.submit(self.get_patch_labels, key, batch))
 
-            # Process results
+            # Store results
             self.graphs[key].init_labels()
             for thread in as_completed(threads):
                 node_to_label = thread.result()
@@ -225,6 +252,22 @@ class SkeletonMetric:
                     self.graphs[key].labels[i] = label
 
     def get_patch_labels(self, key, nodes):
+        """
+        Gets the labels for a given set of nodes within a specified patch of
+        the label mask.
+
+        Parameters
+        ----------
+        key : str
+            Unique identifier of graph to be labeled.
+        nodes : list
+            A list of node IDs for which the labels are to be retrieved.
+
+        Returns
+        -------
+        dict
+            A dictionary mapping node IDs to their respective labels.
+        """
         bbox = self.graphs[key].get_bbox(nodes)
         label_patch = self.label_mask.read_with_bbox(bbox)
         node_to_label = dict()
@@ -234,9 +277,10 @@ class SkeletonMetric:
             node_to_label[i] = label
         return node_to_label
 
+    # --------- HERE
     def get_all_node_labels(self):
         """
-        Gets the a set of all unique labels from all graphs in "self.graphs".
+        Gets the a set of unique labels from all graphs in "self.graphs".
 
         Parameters
         ----------
@@ -244,8 +288,8 @@ class SkeletonMetric:
 
         Returns
         -------
-        set
-            Set containing all unique labels from all graphs.
+        Set[int]
+            Set containing unique labels from all graphs.
 
         """
         all_labels = set()
@@ -257,21 +301,22 @@ class SkeletonMetric:
 
     def get_node_labels(self, key, inverse_bool=False):
         """
-        Gets the set of labels of nodes in the graph corresponding to "key".
+        Gets the set of labels for nodes in the graph corresponding to the
+        given key.
 
         Parameters
         ----------
         key : str
-            ID of graph in "self.graphs".
+            Unique identifier of graph from which to retrieve the node labels.
         inverse_bool : bool
-            Indication of whether to return original labels from
-            "self.labels_mask" in the case where labels were remapped. The
-            default is False.
+            Indication of whether to return the labels (from "labels_mask") or
+            a remapping of these labels in the case when "connections_path" is
+            provided. The default is False.
 
         Returns
         -------
-        set
-            Labels contained in the graph corresponding to "key".
+        Set[int]
+            Labels corresponding to nodes in the graph identified by "key".
 
         """
         if inverse_bool:
@@ -332,14 +377,13 @@ class SkeletonMetric:
         self.quantify_merges()
 
         # Compute metrics
-        full_results, avg_results = self.compile_results()
-        return full_results, avg_results
+        return self.compile_results()
 
     # -- Split Detection --
     def detect_splits(self):
         """
-        Detects splits in the predicted segmentation, then deletes node and
-        edges in "self.graphs" that correspond to a split.
+        Detects split and omit edges in the labeled ground truth graphs, then
+        removes omit nodes.
 
         Parameters
         ----------
@@ -356,11 +400,7 @@ class SkeletonMetric:
             processes = list()
             for key, graph in self.graphs.items():
                 processes.append(
-                       executor.submit(
-                           split_detection.run,
-                           key,
-                           graph,
-                       )
+                    executor.submit(split_detection.run, key, graph)
                 )
 
             # Store results
@@ -373,8 +413,8 @@ class SkeletonMetric:
 
     def quantify_splits(self):
         """
-        Counts the number of splits, number of omit edges, and percent of omit
-        edges for each graph in "self.graphs".
+        Counts the number of splits, number of omit edges, and omit edge ratio
+        in the labeled ground truth graphs.
 
         Parameters
         ----------
@@ -401,6 +441,8 @@ class SkeletonMetric:
     # -- Merge Detection --
     def detect_merges(self):
         """
+        --> HERE
+
         Detects merges in the predicted segmentation, then deletes node and
         edges in "self.graphs" that correspond to a merge.
 
@@ -419,7 +461,7 @@ class SkeletonMetric:
         self.merged_percent = self.init_counter()
         self.merged_labels = set()
 
-        # Count total merges
+        # Detect merges by comparing fragment graphs to ground truth graphs
         if self.fragment_graphs:
             pbar = tqdm(total=len(self.graphs), desc="Merge Detection")
             for key, graph in self.graphs.items():
@@ -433,7 +475,7 @@ class SkeletonMetric:
             for key in self.graphs:
                 self.adjust_metrics(key)
 
-        # Find graphs with common node labels
+        # Detect merges by finding ground truth graphs with common node labels
         for (key_1, key_2), label in self.find_label_intersections():
             self.process_merge(key_1, label, -1)
             self.process_merge(key_2, label, -1)
@@ -454,9 +496,9 @@ class SkeletonMetric:
         Parameters
         ----------
         key : str
-            ID of graph in "self.graphs".
+            Unique identifier of graph to detect merges.
         kdtree : scipy.spatial.KDTree
-            A KD-tree built from xyz coordinates in "self.graphs[key]".
+            A KD-tree built from voxels in graph corresponding to "key".
 
         Returns
         -------
@@ -480,11 +522,12 @@ class SkeletonMetric:
         Parameters
         ----------
         key : str
-            ID of graph in "self.graphs".
+            Unique identifier of graph to detect merges.
         label : int
-            ID of fragment.
+            Label contained in "labels" attribute in the graph corresponding
+            to "key".
         kdtree : scipy.spatial.KDTree
-            A KD-tree built from xyz coordinates in "self.graphs[key]".
+            A KD-tree built from voxels in graph corresponding to "key".
 
         Returns
         -------
@@ -516,7 +559,8 @@ class SkeletonMetric:
         Parameters
         ----------
         key : str
-            Identifier for the graph to adjust.
+            Unique identifier of the graph to adjust attributes that are are
+            used to compute various metrics.
 
         Returns
         -------
@@ -552,7 +596,7 @@ class SkeletonMetric:
 
         Returns
         -------
-        set[tuple]
+        Set[tuple]
             Set of tuples containing a tuple of graph ids and common label
             between the graphs.
 
