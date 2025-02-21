@@ -10,7 +10,7 @@ Python package that evaluates the topological accuracy of a predicted neuron seg
 The pipeline for computing skeleton metrics consists of three main steps:
 
 <blockquote>
-  <p>a. <strong>Label Graphs</strong>: To do...</p>
+  <p>a. <strong>Label Graphs</strong>: Nodes in ground truth graphs are labeled with segmentation IDs.</p>
   <p>b. <strong>Error Detection</strong>: To do...</p>
   <p>c. <strong>Compute Metrics</strong>: To do...</p>
 </blockquote>
