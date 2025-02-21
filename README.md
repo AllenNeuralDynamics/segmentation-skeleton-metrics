@@ -51,9 +51,9 @@ To do...
 
 To do...
 
-- Number of Splits: Number of segments that a ground truth skeleton is broken into.
+- \# Splits: Number of segments that a ground truth skeleton is broken into.
 - Number of Merges: Number of segments that are incorrectly merged into a single segment.
-- Percentage of Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
+- Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
 - Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
 - Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
 - Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
