@@ -20,14 +20,15 @@ from segmentation_skeleton_metrics.utils import util
 
 class SkeletonGraph(nx.Graph):
     """
-    A subclass of the NetworkX.Graph that represents a skeleton graph with
-    additional functionality for handling labels and voxel coordinates
-    corresponding to the nodes. Note that node IDs directly index into the
-    "labels" and "voxels" attributes.
+    A subclass of the NetworkX.Graph designed for graphs built from SWC files.
+    This class extends the functionality of the standard Graph by adding
+    support for handling node labels and voxel coordinates. In this subclass,
+    node IDs serve as direct indices for accessing the labels and voxels
+    attributes.
 
     Attributes
     ----------
-    anisotropy : ArrayLike
+    anisotropy : np.ndarray
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
     run_length : float
@@ -35,14 +36,14 @@ class SkeletonGraph(nx.Graph):
     labels : numpy.ndarray
         A 1D array that contains a label value associated with each node.
     voxels : numpy.ndarray
-        A 3D array that contains a voxel coordinate of each node.
+        A 3D array that contains a voxel coordinate for each node.
 
     """
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
         """
         Initializes a SkeletonGraph, including setting the anisotropy and
-        initializing the run length attribute.
+        initializing the run length attributes.
 
         Parameters
         ----------
@@ -78,6 +79,8 @@ class SkeletonGraph(nx.Graph):
         None
 
         """
+        error_msg = "Graph must have nodes to initialize labels!"
+        assert self.number_of_nodes() > 0, error_msg
         self.labels = np.zeros((self.number_of_nodes()), dtype=int)
 
     def init_voxels(self, voxels):
@@ -86,7 +89,8 @@ class SkeletonGraph(nx.Graph):
 
         Parameters
         ----------
-        None
+        voxels : ArrayLike
+            Voxel coordinates for each node in the graph.
 
         Returns
         -------
@@ -112,21 +116,20 @@ class SkeletonGraph(nx.Graph):
         """
         self.filename = filename
 
-    def set_nodes(self):
+    def set_nodes(self, num_nodes):
         """
-        Adds nodes to the graph. The nodes are assigned indices from 0 to the
-        total number of voxels in the image.
+        Adds nodes to the graph. The nodes are assigned indices from 0 to
+        "num_nodes".
 
         Parameters
         ----------
-        None
+        num_nodes
 
         Returns
         -------
         None
 
         """
-        num_nodes = len(self.voxels)
         self.add_nodes_from(np.arange(num_nodes))
 
     # --- Getters ---
@@ -140,9 +143,8 @@ class SkeletonGraph(nx.Graph):
 
         Returns
         -------
-        numpy.ndarray
-            A 1D array of unique non-zero labels assigned to nodes in the
-            graph.
+        Set[int]
+            Unique non-zero label values assigned to nodes in the graph.
 
         """
         labels = set(np.unique(self.labels))
@@ -202,7 +204,8 @@ class SkeletonGraph(nx.Graph):
         Returns
         -------
         float
-            Euclidea distance between physical coordinates of the given nodes.
+            Euclidean distance between physical coordinates of the given
+            nodes.
 
         """
         xyz_i = self.voxels[i] * self.anisotropy
@@ -211,13 +214,13 @@ class SkeletonGraph(nx.Graph):
 
     def get_bbox(self, nodes):
         """
-        Calculates the bounding box that contains the voxel coordinates for a
-        given collection of nodes.
+        Calculates the minimal bounding box containing the voxel coordinates
+        for a given collection of nodes.
 
         Parameters
         ----------
         nodes : Container
-            A collection of node indices for which to compute the bounding box.
+            Node indices for which to compute the bounding box.
 
         Returns
         -------
@@ -281,8 +284,8 @@ class SkeletonGraph(nx.Graph):
 
         Parameters
         ----------
-        graph : networkx.Graph
-            Graph to be parsed.
+        root : int
+            Node contained in connected component to compute run length of.
 
         Returns
         -------
@@ -297,14 +300,14 @@ class SkeletonGraph(nx.Graph):
 
     def upd_labels(self, nodes, label):
         """
-        Updates the label of each node in "nodes" with "label".
+        Updates the label of the given nodes with a specified label.
 
         Parameters
         ----------
         nodes : List[int]
             Nodes to be updated.
         label : int
-            Updated label.
+            New label of nodes.
 
         Returns
         -------
@@ -316,14 +319,16 @@ class SkeletonGraph(nx.Graph):
 
     def to_zipped_swc(self, zip_writer, color=None):
         """
-        Writes a graph to an SWC file that is to be stored in a zip.
+        Writes the graph to an SWC file format, which is then stored in a ZIP
+        archive.
 
         Parameters
         ----------
         zip_writer : zipfile.ZipFile
-            ...
+            A ZipFile object that will store the generated SWC file.
         color : str, optional
-            ...
+            A string representing the color (e.g., "[1.0 0.0 0.0]") of the SWC
+            file. The default is None.
 
         Returns
         -------
@@ -336,9 +341,8 @@ class SkeletonGraph(nx.Graph):
             text_buffer.write("# id, type, z, y, x, r, pid")
 
             # Write entries
-            n_entries = 0
             node_to_idx = dict()
-            r = 5 if color else 3
+            r = 6 if color else 3
             for i, j in nx.dfs_edges(self):
                 # Special Case: Root
                 x, y, z = tuple(self.voxels[i] * self.anisotropy)
@@ -346,14 +350,12 @@ class SkeletonGraph(nx.Graph):
                     parent = -1
                     node_to_idx[i] = 1
                     text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} {parent}")
-                    n_entries += 1
 
                 # General Case
-                node = n_entries + 1
+                node = len(node_to_idx) + 1
                 parent = node_to_idx[i]
-                node_to_idx[j] = n_entries + 1
+                node_to_idx[j] = node
                 text_buffer.write("\n" + f"{node} 2 {x} {y} {z} {r} {parent}")
-                n_entries += 1
 
             # Finish
             zip_writer.writestr(self.filename, text_buffer.getvalue())

@@ -89,7 +89,7 @@ class GraphBuilder:
         graph = SkeletonGraph(anisotropy=self.anisotropy)
         graph.init_voxels(swc_dict["voxel"])
         graph.set_filename(swc_dict["swc_id"] + ".swc")
-        graph.set_nodes()
+        graph.set_nodes(len(swc_dict["id"]))
 
         # Build graph
         id_lookup = dict()

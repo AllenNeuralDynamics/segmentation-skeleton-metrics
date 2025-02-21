@@ -537,7 +537,6 @@ class SkeletonMetric:
                     # Update graph
                     self.graphs[key].remove_nodes_from(nodes)
                     visited.add(label)
-                    print("# nodes deleted:", len(nodes))
 
     def find_label_intersections(self):
         """
