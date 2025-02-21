@@ -31,7 +31,7 @@ We start with a set of ground truth graphs stored as individual SWC files, where
 Note: Misalignments between the ground truth graphs and prediction segmentation are detected and corrected.
 
 <p>
-  <img src="imgs/misalignment-example" width="170" alt="misalignment-example">
+  <img src="imgs/misalignment-example.png" width="170" alt="misalignment-example">
   <br>
   <b> Figure: </b> Example of a misalignment between a ground truth graph and predicted segmentation.
 </p>
