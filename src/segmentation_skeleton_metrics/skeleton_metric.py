@@ -23,11 +23,8 @@ from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
     img_util,
-    swc_util,
     util
 )
-
-MIN_CNT = 40
 
 
 class SkeletonMetric:
@@ -155,10 +152,8 @@ class SkeletonMetric:
     def load_fragments(self, swc_pointer):
         print("\n(2) Load Fragments")
         if swc_pointer:
-            coords_only = False  #not self.save_projections
             graph_builder = gutil.GraphBuilder(
                 anisotropy=self.anisotropy,
-                coords_only=coords_only,
                 selected_ids=self.get_all_node_labels(),
                 use_anisotropy=True,
             )
@@ -172,7 +167,7 @@ class SkeletonMetric:
         for key in self.fragment_graphs:
             self.fragment_ids.add(util.get_segment_id(key))
 
-    def label_graphs(self, key, batch_size=64):
+    def label_graphs(self, key, batch_size=128):
         """
         Iterates over nodes in "graph" and stores the corresponding label from
         predicted segmentation mask (i.e. "self.label_mask") as a node-level
@@ -201,7 +196,7 @@ class SkeletonMetric:
                     visited.add(i)
 
                 # Check whether to submit batch
-                is_node_far = self.graphs[key].dist(root, j) > 128
+                is_node_far = self.graphs[key].dist(root, j) > batch_size
                 is_batch_full = len(batch) >= batch_size
                 if is_node_far or is_batch_full:
                     threads.append(
@@ -306,9 +301,7 @@ class SkeletonMetric:
         self.zip_writer = dict()
         for key in self.graphs.keys():
             self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
-            swc_util.to_zipped_swc(
-                self.zip_writer[key], self.graphs[key],
-            )
+            self.graphs[key].to_zipped_swc(self.zip_writer[key])
 
     # -- Main Routine --
     def run(self):
@@ -331,11 +324,6 @@ class SkeletonMetric:
         self.detect_splits()
         self.quantify_splits()
 
-        # Check for prexisting merges
-        if self.preexisting_merges:
-            for key in self.graphs:
-                self.adjust_metrics(key)
-
         # Merge evaluation
         self.detect_merges()
         self.quantify_merges()
@@ -343,39 +331,6 @@ class SkeletonMetric:
         # Compute metrics
         full_results, avg_results = self.compile_results()
         return full_results, avg_results
-
-    def adjust_metrics(self, key):
-        """
-        Adjusts the metrics of the graph associated with the given key by
-        removing nodes corresponding to known merges and their corresponding
-        subgraphs. Updates the total number of edges and run lengths in the
-        graph.
-
-        Parameters
-        ----------
-        key : str
-            Identifier for the graph to adjust.
-
-        Returns
-        -------
-        None
-
-        """
-        for label in self.preexisting_merges:
-            label = self.label_map[label] if self.label_map else label
-            if label in self.graphs[key].get_labels():
-                # Extract subgraph
-                nodes = self.graphs[key].nodes_with_label(label)
-                subgraph = self.graphs[key].subgraph(nodes)
-
-                # Adjust metrics
-                n_edges = subgraph.number_of_edges()
-                rls = gutil.compute_run_lengths(subgraph)
-                self.graphs[key].graph["run_length"] -= np.sum(rls)
-                self.graphs[key].graph["n_edges"] -= n_edges
-
-                # Update graph
-                self.graphs[key].remove_nodes_from(nodes)
 
     # -- Split Detection --
     def detect_splits(self):
@@ -393,7 +348,7 @@ class SkeletonMetric:
 
         """
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=8) as executor:
             # Assign processes
             processes = list()
             for key, graph in self.graphs.items():
@@ -470,7 +425,12 @@ class SkeletonMetric:
                     self.count_merges(key, kdtree)
                 pbar.update(1)
 
-        # Process merges
+        # Adjust metrics (if applicable)
+        if self.preexisting_merges:
+            for key in self.graphs:
+                self.adjust_metrics(key)
+
+        # Find graphs with common node labels
         for (key_1, key_2), label in self.find_label_intersections():
             self.process_merge(key_1, label, -1)
             self.process_merge(key_2, label, -1)
@@ -502,7 +462,7 @@ class SkeletonMetric:
         """
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > MIN_CNT:
+            if len(nodes) > 50:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
@@ -539,16 +499,45 @@ class SkeletonMetric:
                 self.merged_labels.add((key, equiv_label, tuple(xyz)))
 
                 # Save merged fragment (if applicable)
-                if self.save_projections and label in self.fragment_graphs:
-                    swc_util.to_zipped_swc(
-                        self.zip_writer[key], self.fragment_graphs[label]
-                    )
+                if self.save_projections:
+                    fragment_graph.to_zipped_swc(self.zip_writer[key])
                 break
 
-    def find_graph_from_label(self, label):
-        for key in self.fragment_graphs:
-            if label == util.get_segment_id(key):
-                return self.fragment_graphs[key]
+    def adjust_metrics(self, key):
+        """
+        Adjusts the metrics of the graph associated with the given key by
+        removing nodes corresponding to known merges and their corresponding
+        subgraphs. Updates the total number of edges and run lengths in the
+        graph.
+
+        Parameters
+        ----------
+        key : str
+            Identifier for the graph to adjust.
+
+        Returns
+        -------
+        None
+
+        """
+        visited = set()
+        for label in self.preexisting_merges:
+            label = self.label_handler.mapping[label]
+            if label in self.graphs[key].get_labels():
+                if label not in visited and label != 0:
+                    # Get component with label
+                    nodes = self.graphs[key].nodes_with_label(label)
+                    root = util.sample_once(list(nodes))
+
+                    # Adjust metrics
+                    rl = self.graphs[key].run_length_from(root)
+                    self.graphs[key].run_length -= np.sum(rl)
+                    self.graphs[key].graph["n_edges"] -= len(nodes) - 1
+
+                    # Update graph
+                    self.graphs[key].remove_nodes_from(nodes)
+                    visited.add(label)
+                    print("# nodes deleted:", len(nodes))
 
     def find_label_intersections(self):
         """
@@ -673,7 +662,7 @@ class SkeletonMetric:
         for l in self.label_handler.get_class(label):
             if l in self.fragment_graphs.keys():
                 return l
-        return self.inverse_label_map[label]
+        return self.label_handler.inverse_mapping[label]
 
     # -- Compute Metrics --
     def compile_results(self):
@@ -866,7 +855,13 @@ class SkeletonMetric:
         ]
         return metrics
 
-    # -- util --
+    # -- Helpers --
+    def find_graph_from_label(self, label):
+        for key in self.fragment_graphs:
+            if label == util.get_segment_id(key):
+                return self.fragment_graphs[key]
+        return None
+
     def physical_dist(self, voxel_1, voxel_2):
         xyz_1 = img_util.to_physical(voxel_1, self.anisotropy)
         xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
@@ -896,40 +891,6 @@ class SkeletonMetric:
 
 
 # -- util --
-def find_sites(graphs, get_labels):
-    """
-    Detects merges between ground truth graphs which are considered to be
-    potential merge sites.
-
-    Parameters
-    ----------
-    graphs : dict
-        Dictionary where the keys are graph ids and values are graphs.
-    get_labels : func
-        Gets the label of a node in "graphs".
-
-    Returns
-    -------
-    merge_ids : set[tuple]
-        Set of tuples containing a tuple of graph ids and common label between
-        the graphs.
-
-    """
-    merge_ids = set()
-    visited = set()
-    for key_1 in graphs:
-        for key_2 in graphs:
-            keys = frozenset((key_1, key_2))
-            if key_1 != key_2 and keys not in visited:
-                visited.add(keys)
-                intersection = get_labels(key_1).intersection(
-                    get_labels(key_2)
-                )
-                for label in intersection:
-                    merge_ids.add((keys, label))
-    return merge_ids
-
-
 def generate_result(keys, stats):
     """
     Reorders items in "stats" with respect to the order defined by "keys".

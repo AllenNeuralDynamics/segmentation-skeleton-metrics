@@ -9,6 +9,7 @@ Implementation of a custom subclass of NetworkX.Graph called SkeletonGraph.
 
 """
 
+from io import StringIO
 from scipy.spatial import distance
 
 import networkx as nx
@@ -59,7 +60,10 @@ class SkeletonGraph(nx.Graph):
 
         # Instance attributes
         self.anisotropy = np.array(anisotropy)
+        self.filename = None
+        self.labels = None
         self.run_length = 0
+        self.voxels = None
 
     def init_labels(self):
         """
@@ -91,6 +95,23 @@ class SkeletonGraph(nx.Graph):
         """
         self.voxels = np.array(voxels, dtype=np.int32)
 
+    def set_filename(self, filename):
+        """
+        Sets the filename attribute which corresponds to the SWC file that the
+        graph is built from.
+
+        Parameters
+        ----------
+        filename : str
+            Name of SWC file that graph is built from.
+
+        Returns
+        -------
+        None
+
+        """
+        self.filename = filename
+
     def set_nodes(self):
         """
         Adds nodes to the graph. The nodes are assigned indices from 0 to the
@@ -111,7 +132,7 @@ class SkeletonGraph(nx.Graph):
     # --- Getters ---
     def get_labels(self):
         """
-        Gets the unique label values in the "labels" attribute.
+        Gets the unique non-zero label values in the "labels" attribute.
 
         Parameters
         ----------
@@ -120,10 +141,13 @@ class SkeletonGraph(nx.Graph):
         Returns
         -------
         numpy.ndarray
-            A 1D array of unique labels assigned to nodes in the graph.
+            A 1D array of unique non-zero labels assigned to nodes in the
+            graph.
 
         """
-        return np.unique(self.labels)
+        labels = set(np.unique(self.labels))
+        labels.discard(0)
+        return labels
 
     def nodes_with_label(self, label):
         """
@@ -289,3 +313,47 @@ class SkeletonGraph(nx.Graph):
         """
         for i in nodes:
             self.labels[i] = label
+
+    def to_zipped_swc(self, zip_writer, color=None):
+        """
+        Writes a graph to an SWC file that is to be stored in a zip.
+
+        Parameters
+        ----------
+        zip_writer : zipfile.ZipFile
+            ...
+        color : str, optional
+            ...
+
+        Returns
+        -------
+        None
+
+        """
+        with StringIO() as text_buffer:
+            # Preamble
+            text_buffer.write("# COLOR " + color) if color else None
+            text_buffer.write("# id, type, z, y, x, r, pid")
+
+            # Write entries
+            n_entries = 0
+            node_to_idx = dict()
+            r = 5 if color else 3
+            for i, j in nx.dfs_edges(self):
+                # Special Case: Root
+                x, y, z = tuple(self.voxels[i] * self.anisotropy)
+                if len(node_to_idx) == 0:
+                    parent = -1
+                    node_to_idx[i] = 1
+                    text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} {parent}")
+                    n_entries += 1
+
+                # General Case
+                node = n_entries + 1
+                parent = node_to_idx[i]
+                node_to_idx[j] = n_entries + 1
+                text_buffer.write("\n" + f"{node} 2 {x} {y} {z} {r} {parent}")
+                n_entries += 1
+
+            # Finish
+            zip_writer.writestr(self.filename, text_buffer.getvalue())

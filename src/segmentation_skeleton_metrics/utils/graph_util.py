@@ -23,14 +23,12 @@ class GraphBuilder:
     def __init__(
         self,
         anisotropy=(1.0, 1.0, 1.0),
-        coords_only=False,
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
     ):
         # Instance attributes
         self.anisotropy = anisotropy
-        self.coords_only = coords_only
         self.label_mask = label_mask
 
         # Reader
@@ -90,20 +88,20 @@ class GraphBuilder:
         # Initialize graph
         graph = SkeletonGraph(anisotropy=self.anisotropy)
         graph.init_voxels(swc_dict["voxel"])
+        graph.set_filename(swc_dict["swc_id"] + ".swc")
+        graph.set_nodes()
 
         # Build graph
-        if not self.coords_only:
-            graph.set_nodes()
-            id_lookup = dict()
-            for i, id_i in enumerate(swc_dict["id"]):
-                id_lookup[id_i] = i
-                if swc_dict["pid"][i] != -1:
-                    parent = id_lookup[swc_dict["pid"][i]]
-                    graph.add_edge(i, parent)
-                    graph.run_length += graph.dist(i, parent)
+        id_lookup = dict()
+        for i, id_i in enumerate(swc_dict["id"]):
+            id_lookup[id_i] = i
+            if swc_dict["pid"][i] != -1:
+                parent = id_lookup[swc_dict["pid"][i]]
+                graph.add_edge(i, parent)
+                graph.run_length += graph.dist(i, parent)
 
-            # Set graph-level attributes
-            graph.graph["n_edges"] = graph.number_of_edges()
+        # Set graph-level attributes
+        graph.graph["n_edges"] = graph.number_of_edges()
         return {swc_dict["swc_id"]: graph}
 
     # --- Label Graphs ---
@@ -192,8 +190,8 @@ class LabelHandler:
         # Main
         for line in util.read_txt(connections_path):
             ids = line.split(",")
-            id_1 = int(ids[0])
-            id_2 = int(ids[1])
+            id_1 = get_segment_id(ids[0])
+            id_2 = get_segment_id(ids[1])
             labels_graph.add_edge(id_1, id_2)
         return labels_graph
 

@@ -29,11 +29,9 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
-from io import StringIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
-import networkx as nx
 import numpy as np
 import os
 
@@ -351,52 +349,3 @@ class Reader:
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
-
-
-# --- Helpers ---
-def to_zipped_swc(zip_writer, graph, color=None):
-    """
-    Writes a graph to an swc file that is to be stored in a zip.
-
-    Parameters
-    ----------
-    zip_writer : zipfile.ZipFile
-        ...
-    graph : networkx.Graph
-        Graph to be written to an swc file.
-    color : str, optional
-        ...
-
-    Returns
-    -------
-    None
-
-    """
-    with StringIO() as text_buffer:
-        # Preamble
-        n_entries = 0
-        node_to_idx = dict()
-        if color:
-            text_buffer.write("# COLOR " + color)
-        text_buffer.write("# id, type, z, y, x, r, pid")
-
-        # Write entries
-        r = 5 if color else 3
-        for i, j in nx.dfs_edges(graph):
-            # Special Case: Root
-            x, y, z = tuple(img_util.to_physical(graph.nodes[i]["voxel"]))
-            if n_entries == 0:
-                parent = -1
-                node_to_idx[i] = 1
-                text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} {parent}")
-                n_entries += 1
-
-            # General Case
-            node = n_entries + 1
-            parent = node_to_idx[i]
-            node_to_idx[j] = n_entries + 1
-            text_buffer.write("\n" + f"{node} 2 {x} {y} {z} {r} {parent}")
-            n_entries += 1
-
-        # Finish
-        zip_writer.writestr(graph.graph["filename"], text_buffer.getvalue())
