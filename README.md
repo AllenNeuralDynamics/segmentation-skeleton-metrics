@@ -51,12 +51,13 @@ To do...
 
 To do...
 
-- \# Splits: Number of segments that a ground truth skeleton is broken into.
-- Number of Merges: Number of segments that are incorrectly merged into a single segment.
-- Omit Edges: Proportion of edges in the ground truth that are omitted in the predicted segmentation.
-- Percentage of Merged Edges: Proportion of edges that are merged in the predicted segmentation.
-- Edge Accuracy: Proportion of edges that are correctly reconstructed in the predicted segmentation.
-- Expected Run Length (ERL): Expected length of segments or edges in the predicted segmentation.
+- \# Splits: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
+- \# Merges: Number of ground truth graphs that contain at least one merge.
+- Omit Edge Ratio: Proportion of omitted edges.
+- Split Edge Ratio: Proportion of split edges.
+- Merged Edge Ratio: Proportion of merged edges.
+- Edge Accuracy: Proportion of edges that are correct.
+- Expected Run Length (ERL): Expected run length of connected ground truth graph after removing omit nodes.
 
 
 ## Usage
