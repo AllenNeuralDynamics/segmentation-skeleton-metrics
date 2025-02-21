@@ -74,10 +74,10 @@ from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 def evaluate():
     # Initializations
-    pred_labels = TiffReader(pred_labels_path)
+    segmentation = TiffReader(segmentation_path)
     skeleton_metric = SkeletonMetric(
         groundtruth_pointer,
-        pred_labels,
+        segmentation,
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
@@ -100,7 +100,7 @@ def evaluate():
 if __name__ == "__main__":
     # Initializations
     output_dir = "./"
-    pred_labels_path = "./pred_labels.tif"
+    segmentation_path = "./pred_labels.tif"
     fragments_pointer = "./pred_swcs.zip"
     groundtruth_pointer = "./target_swcs.zip"
 
