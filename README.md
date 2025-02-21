@@ -28,7 +28,13 @@ The pipeline for computing skeleton metrics consists of three main steps:
 
 We start with a set of ground truth graphs stored as individual SWC files, where the "xyz" attribute represents voxel coordinates in an image. Each ground truth graph is loaded and represented as a NetworkX graph with the voxel coordinates as a node-level attribute. The first step is to label the nodes of each graph with the corresponding segment IDs from the predicted segmentation.
 
-Note: Misalignments between the ground truth graphs and prediction segmentation mask are detected and corrected.
+Note: Misalignments between the ground truth graphs and prediction segmentation are detected and corrected.
+
+<p>
+  <img src="imgs/misalignment-example" width="170" alt="misalignment-example">
+  <br>
+  <b> Figure: </b> Example of a misalignment between a ground truth graph and predicted segmentation.
+</p>
 
 ### Step 2: Error Detection
 
