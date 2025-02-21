@@ -51,7 +51,7 @@ To do...
 
 To do...
 
-- \# Splits: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
+- *\# Splits*: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
 - \# Merges: Number of ground truth graphs that contain at least one merge.
 - Omit Edge Ratio: Proportion of omitted edges.
 - Split Edge Ratio: Proportion of split edges.
