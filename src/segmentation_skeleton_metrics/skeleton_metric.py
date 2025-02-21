@@ -4,6 +4,10 @@ Created on Wed Dec 21 19:00:00 2022
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
+
+Implementation of class that computes skeleton-based metrics by comparing a
+predicted neuron segmentation to a set of ground truth graphs.
+
 """
 
 from concurrent.futures import (
@@ -33,12 +37,14 @@ class SkeletonMetric:
     the ground truth skeletons to the predicted segmentation mask. The
     accuracy is then quantified by detecting splits and merges, then computing
     the following metrics:
-        (1) Number of splits
-        (2) Number of merges
-        (3) Percentage of omit edges
-        (4) Percentage of merged edges
-        (5) Edge accuracy
-        (6) Expected Run Length (ERL)
+        (1) # Splits
+        (2) # Merges
+        (3) Omit Edge Ratio
+        (4) Split Edge Ratio
+        (5) Merged Edge Ratio
+        (6) Edge accuracy
+        (7) Expected Run Length (ERL)
+        (8) Normalized ERL
 
     """
 
@@ -51,51 +57,48 @@ class SkeletonMetric:
         fragments_pointer=None,
         output_dir=None,
         preexisting_merges=None,
-        save_projections=False,
+        save_merges=False,
         valid_labels=None,
     ):
         """
-        Constructs skeleton metric object that evaluates the quality of a
-        predicted segmentation.
+        Instantiates a SkeletonMetric object that evaluates the topological
+        accuracy of a predicted segmentation.
 
         Parameters
         ----------
         gt_pointer : Any
-            Pointer to ground truth swcs, see "swc_util.Reader" for further
-            documentation. Note these SWC files are assumed to be stored in
-            image coordinates.
+            Pointer to ground truth SWC files, see "swc_util.Reader" for
+            documentation. These SWC files are assumed to be stored in voxel
+            coordinates.
         pred_labels : ArrayLike
             Predicted segmentation mask.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
             stored at "fragments_pointer". The default is (1.0, 1.0, 1.0).
         connections_path : str, optional
-            Path to a txt file containing pairs of segment ids of segments
-            that were merged into a single segment. The default is None.
+            Path to a txt file containing pairs of segment IDs that represents
+            fragments that were merged. The default is None.
         fragments_pointer : Any, optional
             Pointer to SWC files corresponding to "pred_labels", see
-            "swc_util.Reader" for further documentation. Note that these SWC
-            file may be stored in physical coordiantes, but the anisotropy
-            scaling factors must be provided. The default is None.
+            "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
+            applied to these SWC files and (2) these SWC files are required
+            for counting merges. The default is None.
         output_dir : str, optional
-            Path to directory that mistake sites are written to. The default
-            is None.
-        preexisting_merges : list[int], optional
-            List of segment IDs that are known to be create a false merge. The
+            Path to directory wehere results are written. The default is None.
+        preexisting_merges : List[int], optional
+            List of segment IDs that are known to contain a merge mistake. The
             default is None.
-        save_projections: bool, optional
-            Indication of whether to save fragments that 'project' onto the
-            ground truth neurons (i.e. there exists a node in a graph from
-            "self.graphs" that is labeled with a given fragment id. The
+        save_merges: bool, optional
+            Indication of whether to save fragments with a merge mistake. The
             default is None.
         valid_labels : set[int], optional
-            Segment ids (i.e. labels) that are present in the segmentation.
-            The purpose of this argument is to account for segments that were
-            removed due to thresholding by path length. The default is None.
+            Segment IDs that can be assigned to nodes. This argument accounts
+            for segments that were removed during thresholding based on path
+            length. The default is None.
 
         Returns
         -------
-        None.
+        None
 
         """
         # Instance attributes
@@ -103,7 +106,7 @@ class SkeletonMetric:
         self.connections_path = connections_path
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
-        self.save_projections = save_projections
+        self.save_merges = save_merges
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -116,7 +119,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize writer
-        if self.save_projections:
+        if self.save_merges:
             self.init_zip_writer()
 
     # --- Load Data ---
@@ -499,7 +502,7 @@ class SkeletonMetric:
                 self.merged_labels.add((key, equiv_label, tuple(xyz)))
 
                 # Save merged fragment (if applicable)
-                if self.save_projections:
+                if self.save_merges:
                     fragment_graph.to_zipped_swc(self.zip_writer[key])
                 break
 
