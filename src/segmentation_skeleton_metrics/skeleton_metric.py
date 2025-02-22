@@ -77,7 +77,7 @@ class SkeletonMetric:
             Pointer to ground truth SWC files, see "swc_util.Reader" for
             documentation. These SWC files are assumed to be stored in voxel
             coordinates.
-        label_mask : ArrayLike
+        label_mask : ImageReader
             Predicted segmentation mask.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
@@ -100,8 +100,8 @@ class SkeletonMetric:
             default is None.
         valid_labels : set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
-            for segments that were removed during thresholding based on path
-            length. The default is None.
+            for segments that were been removed due to some type of filtering.
+            The default is None.
 
         Returns
         -------

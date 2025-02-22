@@ -51,11 +51,11 @@ class Reader:
         Parameters
         ----------
         anisotropy : Tuple[float], optional
-            Image to world scaling factors applied to xyz coordinates to
-            account for anisotropy of the microscope. The default is
-            (1.0, 1.0, 1.0).
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
         selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read.
+            Only SWC files with an swc_id contained in this set are read. The
+            default is None.
 
         Returns
         -------

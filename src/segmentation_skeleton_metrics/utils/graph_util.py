@@ -20,7 +20,7 @@ from segmentation_skeleton_metrics.utils import swc_util, util
 
 class GraphBuilder:
     """
-    A class that builds and processes graphs constructed from SWC files.
+    A class that builds graphs constructed from SWC files.
 
     """
 
@@ -31,6 +31,28 @@ class GraphBuilder:
         selected_ids=None,
         use_anisotropy=True,
     ):
+        """
+        Instantiates a GraphBuilder object.
+
+        Parameters
+        ----------
+        anisotropy : Tuple[int], optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+        label_mask : ImageReader, optional
+            Predicted segmentation mask.
+        selected_ids : Set[int], optional
+            Only SWC files with an swc_id contained in this set are read. The
+            default is None.
+        use_anisotropy : bool, optional
+            Indication of whether to apply anisotropy to coordinates in SWC
+            files. The default is True.
+
+        Returns
+        -------
+        None
+
+        """
         # Instance attributes
         self.anisotropy = anisotropy
         self.label_mask = label_mask
@@ -42,12 +64,45 @@ class GraphBuilder:
         )
 
     def run(self, swc_pointer):
+        """
+        Builds graphs by reading SWC files to extract content which is then
+        loaded into a custom SkeletonGraph object. Optionally, the nodes are
+        labeled if a "label_mask" is provided.
+
+        Parameters
+        ----------
+        swc_pointer : Any
+            Object that points to SWC files to be read.
+
+        Returns
+        -------
+        dict
+            A dictionary where the keys are unique identifiers (i.e. filenames
+            of SWC files) and values are the correspondign SkeletonGraph.
+
+        """
         graphs = self._build_graphs_from_swcs(swc_pointer)
         graphs = self._label_graphs_with_segmentation(graphs)
         return graphs
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
+        """
+        Builds graphs by reading SWC files to extract content which is then
+        loaded into a custom SkeletonGraph object.
+
+        Parameters
+        ----------
+        swc_pointer : Any
+            Object that points to SWC files to be read.
+
+        Returns
+        -------
+        dict
+            A dictionary where the keys are unique identifiers (i.e. filenames
+            of SWC files) and values are the correspondign SkeletonGraph.
+
+        """
         # Initializations
         swc_dicts = self.swc_reader.read(swc_pointer)
         pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
@@ -81,11 +136,12 @@ class GraphBuilder:
         Parameters
         ----------
         swc_dict : dict
-            ...
+            Dictionary whose keys and values are the attribute names and
+            values from an SWC file.
 
         Returns
         -------
-        networkx.Graph
+        SkeletonGraph
             Graph built from an SWC file.
 
         """
@@ -119,15 +175,18 @@ class GraphBuilder:
 class LabelHandler:
     def __init__(self, connections_path=None, valid_labels=None):
         """
-        Initializes the label handler and builds the label mappings
-        if a connections path is provided.
+        Initializes the label handler and builds the label mappings if a
+        connections path is provided.
 
         Parameters
         ----------
         connections_path : str, optional
             Path to a file containing pairs of segment ids that were merged.
+            The default is None.
         valid_labels : Set[int], optional
-            Set of valid segment ids to be considered during processing.
+            Segment IDs that can be assigned to nodes. This argument accounts
+            for segments that were been removed due to some type of filtering.
+            The default is None.
 
         Returns
         -------
@@ -194,8 +253,8 @@ class LabelHandler:
         # Main
         for line in util.read_txt(connections_path):
             ids = line.split(",")
-            id_1 = get_segment_id(ids[0])
-            id_2 = get_segment_id(ids[1])
+            id_1 = util.get_segment_id(ids[0])
+            id_2 = util.get_segment_id(ids[1])
             labels_graph.add_edge(id_1, id_2)
         return labels_graph
 
@@ -231,7 +290,3 @@ def count_splits(graph):
 
     """
     return max(nx.number_connected_components(graph) - 1, 0)
-
-
-def get_segment_id(swc_id):
-    return int(swc_id.split(".")[0])

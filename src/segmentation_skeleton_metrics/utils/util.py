@@ -18,10 +18,10 @@ import os
 import shutil
 
 
-# -- os utils ---
+# -- OS Utils ---
 def mkdir(path, delete=False):
     """
-    Creates a directory at "path".
+    Creates a directory at the given path.
 
     Parameters
     ----------
@@ -44,12 +44,12 @@ def mkdir(path, delete=False):
 
 def rmdir(path):
     """
-    Removes directory and all subdirectories at "path".
+    Removes the given directory and all of its subdirectories.
 
     Parameters
     ----------
     path : str
-        Path to directory and subdirectories to be deleted if they exist.
+        Path to directory to be removed if it exists.
 
     Returns
     -------
@@ -62,21 +62,20 @@ def rmdir(path):
 
 def list_dir(directory, extension=None):
     """
-    Lists all filenames in "directory". If "extension" is provided, then only
-    filenames ending with "extension" are returned.
+    Lists filenames in the given directory. If "extension" is provided,
+    filenames ending with the given extension are returned.
 
     Parameters
     ----------
     directory : str
         Path to directory to be searched.
-
     extension : str, optional
-       File type of interest. The default is None.
+       Extension of filenames to be returned. The default is None.
 
     Returns
     -------
-    list[str]
-        Filenames in the directory "directory".
+    List[str]
+        Filenames in the given directory.
 
     """
     if extension is None:
@@ -87,37 +86,37 @@ def list_dir(directory, extension=None):
 
 def list_paths(directory, extension=None):
     """
-    Lists all paths of files in the directory "directory". If "extension" is
-    provided, then only paths of files ending with "extension" are returned.
+    Lists paths of files in the given directory. If "extension" is provided,
+    filenames ending with the given extension are returned.
 
     Parameters
     ----------
     directory : str
-        Directory to be searched.
+        Path to directory to be searched.
     extension : str, optional
-        File type of interest. The default is None.
+        Extension of filenames to be returned. The default is None.
 
     Returns
     -------
     list[str]
-        Paths of files in the directory "directory".
+        Paths of files in the given directory.
 
     """
-    paths = []
+    paths = list()
     for f in list_dir(directory, extension=extension):
         paths.append(os.path.join(directory, f))
     return paths
 
 
-# --- io utils ---
+# --- IO Utils ---
 def read_zip(zip_file, path):
     """
-    Reads the content of an swc file from a zip file.
+    Reads a txt file contained in the given ZIP archive.
 
     Parameters
     ----------
     zip_file : ZipFile
-        Zip containing text file to be read.
+        ZIP archive containing text file.
 
     Returns
     -------
@@ -131,85 +130,57 @@ def read_zip(zip_file, path):
 
 def read_txt(path):
     """
-    Reads txt file stored at "path".
+    Reads txt file at the given path.
 
     Parameters
     ----------
     path : str
-        Path where txt file is stored.
+        Path to txt file.
 
     Returns
     -------
-    list[str]
-        List where each entry corresponds to a line from the txt file.
+    List[str]
+        Lines from the txt file.
 
     """
     with open(path, "r") as f:
         return f.read().splitlines()
 
 
-def list_gcs_filenames(bucket, cloud_path, extension):
-    """
-    Lists all files in a GCS bucket with the given extension.
-
-    Parameters
-    ----------
-    bucket : google.cloud.client
-        Client used to read from a GCS bucket.
-    cloud_path : str
-        ...
-    extension : str
-        File type of interest. The default is None.
-
-    Returns
-    -------
-    list[str]
-        Filenames in directory specified by "cloud_path" that end with
-        "extension".
-
-    """
-    blobs = bucket.list_blobs(prefix=cloud_path)
-    return [blob.name for blob in blobs if blob.name.endswith(extension)]
-
-
-def list_files_in_zip(zip_content):
-    """
-    Lists all filenames in a zip.
-
-    Parameters
-    ----------
-    zip_content : ...
-        ...
-
-    Returns
-    -------
-    list
-        Filenames in a zip.
-
-    """
-    with ZipFile(BytesIO(zip_content), "r") as zip_file:
-        return zip_file.namelist()
-
-
 # --- Miscellaneous ---
 def get_segment_id(filename):
+    """
+    Gets the segment ID correspionding to the given filename, assuming that
+    the format of filename is "{segment_id}.{*anything*}.swc".
+
+    Parameters
+    ----------
+    filename : str
+        Name of file to extract segmentation ID from.
+
+    Returns
+    -------
+    int
+        Segment ID.
+
+    """
     return int(filename.split(".")[0])
 
 
 def load_merged_labels(path):
     """
-    Loads a list of merged label IDs from a text file.
+    Loads segment IDs that are known to contain a merge mistake from the
+    given txt file.
 
     Parameters
     ----------
     path : str
-        Path to text file containing the label IDs corresponding to known
-        merge mistakes in a predicted segmentation.
+        Path to txt file containing segment IDs.
 
     Returns
     -------
-    list
-        Integer IDs read from the text file.
+    List[int]
+        Segment IDs that are known to contain a merge mistake.
 
     """
     merged_ids = list()
@@ -221,22 +192,19 @@ def load_merged_labels(path):
 
 def load_valid_labels(path):
     """
-    Loads the set of label IDs that are said to be 'valid', meaning that the
-    corresponding fragments were not filtered out during the neuron
-    reconstruction process. For example, this text file could contain the
-    label IDs of all fragments with path length greater than 20ums.
+    Loads segment IDs that can be assigned to nodes, accounts for segments
+    that may have been removed due to some type of filtering. The default is
+    None.
 
     Parameters
     ----------
     path : str
-        Path to txt file containing label IDs corresponding to fragments used
-        in the neuron reconstruction process.
+        Path to txt file containing segment IDs.
 
     Returns
     -------
-    set
-        Set of label IDs corresponding to fragments used in the neuron
-        reconstruction process.
+    Set[int]
+        Segment IDs that can be assigned to nodes.
 
     """
     valid_labels = set()
@@ -247,17 +215,17 @@ def load_valid_labels(path):
 
 def kdtree_query(kdtree, xyz):
     """
-    Gets the xyz coordinates of the nearest neighbor of "xyz" from "kdtree".
+    Gets the nearest neighbor of the given xyz coordinate from "kdtree".
 
     Parameters
     ----------
-    xyz : tuple
-        xyz coordinate to be queried.
+    xyz : ArrayLike
+        Coordinate to be queried.
 
     Returns
     -------
-    tuple
-        xyz coordinate of the nearest neighbor of "xyz".
+    Tuple[float]
+        Coordinate of the nearest neighbor in the given KD-Tree.
 
     """
     _, idx = kdtree.query(xyz)
@@ -270,42 +238,13 @@ def sample_once(my_container):
 
     Parameters
     ----------
-    my_container : container
+    my_container : Container
         Container to be sampled from.
 
     Returns
     -------
-    sample
+    Hashable
+        Random element from the given container.
 
     """
     return sample(my_container, 1)[0]
-
-
-def time_writer(t, unit="seconds"):
-    """
-    Converts runtime "t" to its proper unit.
-
-    Parameters
-    ----------
-    t : float
-        Runtime to be converted.
-    unit : str, optional
-        Unit of "t". The default is "seconds".
-
-    Returns
-    -------
-    float
-        Converted runtime.
-    str
-        Unit of "t"
-
-    """
-    assert unit in ["seconds", "minutes", "hours"]
-    upd_unit = {"seconds": "minutes", "minutes": "hours"}
-    if t < 60 or unit == "hours":
-        return t, unit
-    else:
-        t /= 60
-        unit = upd_unit[unit]
-        t, unit = time_writer(t, unit=unit)
-    return t, unit
