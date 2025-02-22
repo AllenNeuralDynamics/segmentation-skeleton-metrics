@@ -120,6 +120,8 @@ if __name__ == "__main__":
   <b>Figure:</b> Example of printouts generated after running evaluation.
 </p>
 
+<br>
+
 Note: this Python package can also be used to evaluate the accuracy of a segmentation in which split mistakes have been corrected.
 
 ## Installation
