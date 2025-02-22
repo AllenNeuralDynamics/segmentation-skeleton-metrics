@@ -49,7 +49,7 @@ class GraphBuilder:
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
         # Initializations
-        swc_dicts = self.swc_reader.load(swc_pointer)
+        swc_dicts = self.swc_reader.read(swc_pointer)
         pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
 
         # Main

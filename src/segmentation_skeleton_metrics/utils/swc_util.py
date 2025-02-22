@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Wed June 5 16:00:00 2023
 
@@ -41,14 +40,13 @@ from segmentation_skeleton_metrics.utils import img_util, util
 class Reader:
     """
     Class that reads SWC files stored in a (1) local directory, (2) local ZIP
-    archive, (3) local directory of ZIP archives or (4) GCS directory of ZIP
-    archives.
+    archive, and (3) local directory of ZIP archives.
 
     """
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None):
         """
-        Initializes a Reader object that loads swc files.
+        Initializes a Reader object that reads SWC files.
 
         Parameters
         ----------
@@ -56,6 +54,8 @@ class Reader:
             Image to world scaling factors applied to xyz coordinates to
             account for anisotropy of the microscope. The default is
             (1.0, 1.0, 1.0).
+        selected_ids : Set[int], optional
+            Only SWC files with an swc_id contained in this set are read.
 
         Returns
         -------
@@ -65,8 +65,8 @@ class Reader:
         self.anisotropy = anisotropy
         self.selected_ids = selected_ids or set()
 
-    # --- Load Data ---
-    def load(self, swc_pointer):
+    # --- Read Data ---
+    def read(self, swc_pointer):
         """
         Load SWCs files based on the type pointer provided.
 
@@ -82,26 +82,33 @@ class Reader:
 
         Returns
         -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
+        Deque[dict]
+            List of dictionaries whose keys and values are the attribute names
+            and values from the SWC files. Each dictionary contains the
+            following items:
+                - "id": unique identifier of each node in an SWC file.
+                - "pid": parent ID of each node.
+                - "radius": radius value corresponding to each node.
+                - "xyz": coordinate corresponding to each node.
+                - "filename": filename of SWC file
+                - "swc_id": name of SWC file, minus the ".swc".
 
         """
         # List of paths to SWC files
         if isinstance(swc_pointer, list):
-            return self.load_from_local_paths(swc_pointer)
+            return self.read_from_paths(swc_pointer)
 
         # Directory containing...
         if os.path.isdir(swc_pointer):
             # ZIP archives with SWC files
             paths = util.list_paths(swc_pointer, extension=".zip")
             if len(paths) > 0:
-                return self.load_from_local_zips(swc_pointer)
+                return self.read_from_zips(swc_pointer)
 
             # SWC files
-            paths = util.list_paths(swc_pointer, extension=".swc")
+            paths = util.read_paths(swc_pointer, extension=".swc")
             if len(paths) > 0:
-                return self.load_from_local_paths(paths)
+                return self.read_from_paths(paths)
 
             raise Exception("Directory is invalid!")
 
@@ -109,53 +116,53 @@ class Reader:
         if isinstance(swc_pointer, str):
             # ZIP archive with SWC files
             if ".zip" in swc_pointer:
-                return self.load_from_local_zip(swc_pointer)
+                return self.read_from_zip(swc_pointer)
 
             # Path to single SWC file
             if ".swc" in swc_pointer:
-                return self.load_from_local_path(swc_pointer)
+                return self.read_from_path(swc_pointer)
 
             raise Exception("Path is invalid!")
 
         raise Exception("SWC Pointer is inValid!")
 
-    def load_from_local_path(self, path):
+    def read_from_path(self, path):
         """
-        Reads a single SWC file from local machine.
+        Reads a single SWC file.
 
         Paramters
         ---------
         path : str
-            Path to SWC file stored on the local machine.
+            Path to SWC file.
 
         Returns
         -------
         dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
+            Dictionary whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         content = util.read_txt(path)
         filename = os.path.basename(path)
-        if self.confirm_load(filename):
+        if self.confirm_read(filename):
             return self.parse(content, filename)
         else:
             return None
 
-    def load_from_local_paths(self, paths):
+    def read_from_paths(self, paths):
         """
-        Reads list of SWC files stored on the local machine.
+        Reads SWC files given a list of paths.
 
         Paramters
         ---------
-        swc_paths : list
-            List of paths to SWC files stored on the local machine.
+        swc_paths : List[str]
+            Paths to SWC files.
 
         Returns
         -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         with ThreadPoolExecutor() as executor:
@@ -164,9 +171,9 @@ class Reader:
             pbar = tqdm(total=len(paths), desc="Read SWCs")
             for path in paths:
                 filename = os.path.basename(path)
-                if self.confirm_load(filename):
+                if self.confirm_read(filename):
                     threads.append(
-                        executor.submit(self.load_from_local_path, path)
+                        executor.submit(self.read_from_path, path)
                     )
 
             # Store results
@@ -176,7 +183,22 @@ class Reader:
                 pbar.update(1)
         return swc_dicts
 
-    def load_from_local_zips(self, zip_dir):
+    def read_from_zips(self, zip_dir):
+        """
+        Processes a directory containing ZIP archives with SWC files.
+
+        Parameters
+        ----------
+        zip_dir : str
+            Path to directory containing ZIP archives with SWC files.
+
+        Returns
+        -------
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+
+        """
         # Initializations
         zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
         pbar = tqdm(total=len(zip_names), desc="Read SWCs")
@@ -188,7 +210,7 @@ class Reader:
             for f in zip_names:
                 zip_path = os.path.join(zip_dir, f)
                 processes.append(
-                    executor.submit(self.load_from_local_zip, zip_path)
+                    executor.submit(self.read_from_zip, zip_path)
                 )
 
             # Store results
@@ -198,34 +220,32 @@ class Reader:
                 pbar.update(1)
         return swc_dicts
 
-    def load_from_local_zip(self, zip_path):
+    def read_from_zip(self, zip_path):
         """
-        Reads SWC files from zip on the local machine.
+        Reads SWC files from a ZIP archive.
 
         Paramters
         ---------
-        swc_paths : list or dict
-            If swc files are on local machine, list of paths to swc files where
-            each file corresponds to a neuron in the prediction. If swc files
-            are on cloud, then dict with keys "bucket_name" and "path".
+        zip_path : str
+            Path to ZIP archive.
 
         Returns
         -------
-        dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
             zipfile = ZipFile(zip_path, "r")
-            filesnames = [f for f in zipfile.namelist() if f.endswith(".swc")]
-            for filename in filesnames:
-                if self.confirm_load(filename):
+            filenames = [f for f in zipfile.namelist() if f.endswith(".swc")]
+            for filename in filenames:
+                if self.confirm_read(filename):
                     threads.append(
                         executor.submit(
-                            self.load_from_zipped_file, zipfile, filename
+                            self.read_from_zipped_file, zipfile, filename
                         )
                     )
 
@@ -235,29 +255,44 @@ class Reader:
                 swc_dicts.append(thread.result())
         return swc_dicts
 
-    def load_from_zipped_file(self, zipfile, path):
+    def read_from_zipped_file(self, zipfile, path):
         """
-        Reads swc file stored at "path" which points to a file in a zip.
+        Reads an SWC file stored in a ZIP archive.
 
         Parameters
         ----------
-        zipfile : ZipFile
-            Zip containing swc file to be read.
+        zip_file : ZipFile
+            ZIP archive containing SWC files.
         path : str
-            Path to swc file to be read.
+            Path to SWC file.
 
         Returns
         -------
         dict
-            Dictionary whose keys are filnames of SWC files and values are the
-            corresponding graphs.
+            Dictionary whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
         return self.parse(content, filename)
 
-    def confirm_load(self, filename):
+    def confirm_read(self, filename):
+        """
+        Checks whether the swc_id corresponding to the given filename is
+        contained in the attribute "selected_ids".
+
+        Parameters
+        ----------
+        filename : str
+            Name of SWC file to be checked.
+
+        Returns
+        -------
+        bool
+            Indication of whether to read SWC file.
+
+        """
         if len(self.selected_ids) > 0:
             segment_id = util.get_segment_id(filename)
             return True if segment_id in self.selected_ids else False
@@ -268,8 +303,6 @@ class Reader:
     def parse(self, content, filename):
         """
         Parses an SWC file to extract the content which is stored in a dict.
-        Note that node_ids from SWC are reindex from 0 to n-1 where n is the
-        number of nodes in the SWC file.
 
         Parameters
         ----------
@@ -279,8 +312,8 @@ class Reader:
         Returns
         -------
         dict
-            Dictionaries whose keys and values are the attribute names
-            and values from an SWC file.
+            Dictionary whose keys and values are the attribute names and
+            values from an SWC file.
 
         """
         # Initializations
@@ -314,11 +347,10 @@ class Reader:
 
         Returns
         -------
-        List[str]
-            A list of strings representing the lines of text starting from the
-            line immediately after the last commented line.
-        List[int]
-            Offset used to shift coordinates.
+        tuple
+            A tuple containing the following:
+            - "content" (List[str]): lines from an SWC file after comments.
+            - "offset" (Tuple[int]): offset used to shift coordinate.
 
         """
         offset = (0, 0, 0)
@@ -331,15 +363,14 @@ class Reader:
 
     def read_voxel(self, xyz_str, offset):
         """
-        Reads the coordinates from a string, then transforms them to image
-        coordinates (if applicable).
+        Reads a coordinate from a string and converts it to voxel coordinates.
 
         Parameters
         ----------
         xyz_str : str
-            Coordinate stored in a str.
+            Coordinate stored as a string.
         offset : list[int]
-            Offset of coordinates in swc file.
+            Offset of coordinates in SWC file.
 
         Returns
         -------
