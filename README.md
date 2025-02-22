@@ -115,7 +115,9 @@ if __name__ == "__main__":
 ```
 
 <p>
-  <img src="imgs/printouts.png" width=750">
+  <img src="imgs/printouts.png" width=900">
+  <br>
+  <b>Figure:</b> Example of printouts generated after running evaluation.
 </p>
 
 Note: this Python package can also be used to evaluate the accuracy of a segmentation in which split mistakes have been corrected.
