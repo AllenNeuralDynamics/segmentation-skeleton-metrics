@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
 <br>
 
-Note: this Python package can also be used to evaluate the accuracy of a segmentation in which split mistakes have been corrected.
+Note: this Python package can also be used to evaluate a segmentation in which split mistakes have been corrected.
 
 ## Installation
 To use the software, in the root directory, run
