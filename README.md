@@ -37,7 +37,7 @@ Note: Misalignments between the ground truth graphs and prediction segmentation 
 <p align="center">
   <img src="imgs/misalignment-example.png" width="400" alt="misalignment-example">
   <br>
-  <b>Figure:</b> Node 4 is an example of a misalignment between a ground truth graph and segmentation.
+  <b>Figure:</b> Misalignments between the ground truth graphs and segmentation, such as Node 4, are detected and corrected.
 </p>
 
 
