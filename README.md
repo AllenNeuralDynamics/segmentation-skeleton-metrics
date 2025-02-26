@@ -7,7 +7,10 @@
 
 Python package that evaluates the topological accuracy of a predicted neuron segmentation by comparing it to a set of ground truth skeletons. Topological errors (e.g. splits and merges) are detected by examining skeleton edges and checking if the corresponding nodes belong to the same object in the segmentation. Once the accuracy of each edge has been determined, several skeleton-based metrics are then computed to quantify the topological accuracy.
 
-Note: This repository is an implementation of the skeleton-based metrics described in "High-Precision Automated Reconstruction of Neurons with Flood-filling Networks"
+Note: This repository is an implementation of the skeleton-based metrics described in [High-Precision Automated Reconstruction of Neurons with Flood-filling Networks](https://www.biorxiv.org/content/10.1101/200675v1.full.pdf))
+""
+
+
 
 # Overview
 
