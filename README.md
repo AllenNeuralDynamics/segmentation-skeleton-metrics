@@ -10,7 +10,7 @@ Python package that evaluates the topological accuracy of a predicted neuron seg
 <b> Note: </b> This repository is an implementation of the skeleton-based metrics described in [High-Precision Automated Reconstruction of Neurons with Flood-filling Networks](https://www.biorxiv.org/content/10.1101/200675v1.full.pdf))
 
 
-# Overview
+## Overview
 
 The pipeline for computing skeleton metrics consists of three main steps:
 
