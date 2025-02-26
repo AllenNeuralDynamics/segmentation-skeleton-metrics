@@ -43,8 +43,6 @@ Note: Misalignments between the ground truth graphs and prediction segmentation 
 
 ### Step 2: Error Detection
 
-To do...
-
 <p>
   <img src="imgs/topological_mistakes.png" width="170" alt="Topological mistakes detected in skeleton">
   <br>
@@ -52,8 +50,6 @@ To do...
 </p>
 
 ### Step 3: Compute Metrics
-
-To do...
 
 - *\# Splits*: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
 - *\# Merges*: Number of ground truth graphs that contain at least one merge.
