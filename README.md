@@ -67,40 +67,47 @@ Here is a simple example of evaluating a predicted segmentation.
 
 ```python
     
-import torch.nn as nn
-import torch.optim as optim
+import numpy as np
+from xlwt import Workbook
 
-from supervoxel_loss.loss import SuperVoxelLoss2D
+from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
-    
-# Initialization
-model = UNet()
-optimizer = optim.AdamW(model.parameters(), lr=1e-4)
 
-loss_switch_epoch = 10
-voxel_loss = nn.BCEWithLogitsLoss()
-supervoxel_loss = SuperVoxelLoss2D(alpha=0.5, beta=0.5, threshold=0)
+def evaluate():
+    # Initializations
+    segmentation = TiffReader(segmentation_path)
+    skeleton_metric = SkeletonMetric(
+        groundtruth_pointer,
+        segmentation,
+        fragments_pointer=fragments_pointer,
+        output_dir=output_dir,
+    )
+    full_results, avg_results = skeleton_metric.run()
 
-# Main
-for epoch in range(n_epochs):
-    # Set loss function based on the current epoch
-    if epoch < loss_switch_epoch:
-        loss_function = voxel_loss
-   else:
-        loss_function = supervoxel_loss
+    # Report results
+    print(f"\nAveraged Results...")
+    for key in avg_results.keys():
+        print(f"   {key}: {round(avg_results[key], 4)}")
 
-    # Training loop
-    for inputs, targets in dataloader:
-        # Forward pass
-        preds = model(inputs)
+    print(f"\nTotal Results...")
+    print("# splits:", np.sum(list(skeleton_metric.split_cnt.values())))
+    print("# merges:", np.sum(list(skeleton_metric.merge_cnt.values())))
 
-        # Compute loss
-        loss = loss_function(preds, targets)
+    # Save results
+    path = f"{output_dir}/evaluation_results.xls"
+    save_results(path, full_results)
 
-        # Backward pass
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+
+if __name__ == "__main__":
+    # Initializations
+    output_dir = "./"
+    segmentation_path = "./pred_labels.tif"
+    fragments_pointer = "./pred_swcs.zip"
+    groundtruth_pointer = "./target_swcs.zip"
+
+    # Run
+    evaluate()
 
 ```
 
