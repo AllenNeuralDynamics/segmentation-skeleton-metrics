@@ -122,7 +122,7 @@ if __name__ == "__main__":
 Note: this Python package can also be used to evaluate a segmentation in which split mistakes have been corrected.
 
 ## Contant Information
-For any inquiries, feedback, or contributions, please do not hesitate to contact us. You can reach us via email at anna.grim@alleninstitute.org or connect on LinkedIn.
+For any inquiries, feedback, or contributions, please do not hesitate to contact us. You can reach us via email at anna.grim@alleninstitute.org or connect on [LinkedIn](https://www.linkedin.com/in/anna-m-grim/)..
 
 ## Installation
 To use the software, in the root directory, run
