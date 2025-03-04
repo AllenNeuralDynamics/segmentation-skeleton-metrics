@@ -175,14 +175,14 @@ class GraphBuilder:
 class LabelHandler:
     def __init__(self, connections_path=None, valid_labels=None):
         """
-        Initializes the label handler and builds the label mappings if a
+        Instantiates a LabelHandler object and builds the label mappings if a
         connections path is provided.
 
         Parameters
         ----------
         connections_path : str, optional
-            Path to a file containing pairs of segment ids that were merged.
-            The default is None.
+            Path to file containing pairs of segment IDs that were merged. The
+            default is None.
         valid_labels : Set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
@@ -198,18 +198,18 @@ class LabelHandler:
         self.processed_labels = set()
         self.valid_labels = valid_labels or set()
         if connections_path:
-            self.init_label_mappings(connections_path)
+            self.init_mappings(connections_path)
 
     # --- Constructor Helpers ---
-    def init_label_mappings(self, connections_path):
+    def init_mappings(self, connections_path):
         """
         Initializes dictionaries that map between segment IDs and equivalent
         class IDS.
 
         Parameters
         ----------
-        path : str
-            Path to a file containing pairs of segment ids that were merged.
+        connections_path : str
+            Path to file containing pairs of segment IDs that were merged.
 
         Returns
         -------

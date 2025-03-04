@@ -811,7 +811,7 @@ class SkeletonMetric:
         ----------
         stats : dict
             Values computed across all graphs from "self.graphs" for a given
-         metric stored in "stats".
+            metric stored in "stats".
 
         Returns
         -------
@@ -876,6 +876,38 @@ class SkeletonMetric:
         for key in self.graphs:
             self.wgts[key] = self.wgts[key] / total_run_length
 
+    def count_total_splits(self):
+        """
+        Counts the total number of splits across all ground truth graphs.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Total number of splits across all ground truth graphs.
+
+        """
+        return np.sum(list(self.split_cnt.values()))
+
+    def count_total_merges(self):
+        """
+        Counts the total number of merges across all ground truth graphs.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        int
+            Total number of merges across all ground truth graphs.
+
+        """
+        return np.sum(np.sum(list(self.merge_cnt.values())))
+
     def list_metrics(self):
         """
         Lists metrics that are computed by this module.
@@ -909,6 +941,22 @@ class SkeletonMetric:
         return None
 
     def physical_dist(self, voxel_1, voxel_2):
+        """
+        Computes the physical distance between the given voxel coordinates.
+
+        Parameters
+        ----------
+        voxel_1 : Tuple[int]
+            Voxel coordinate.
+        voxel_2 : Tuple[int]
+            Voxel coordinate.
+
+        Returns
+        -------
+        float
+            Physical distance between the given voxel coordinates.
+
+        """
         xyz_1 = img_util.to_physical(voxel_1, self.anisotropy)
         xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
         return distance.euclidean(xyz_1, xyz_2)

@@ -12,6 +12,7 @@ Code for helper routines.
 
 from io import BytesIO
 from random import sample
+from xlwt import Workbook
 from zipfile import ZipFile
 
 import os
@@ -248,3 +249,44 @@ def sample_once(my_container):
 
     """
     return sample(my_container, 1)[0]
+
+
+def save_results(path, stats):
+    """
+    Saves the evaluation results generated from skeleton-based metrics to an
+    Excel file.
+
+    Parameters
+    ----------
+    path : str
+        Path where the Excel file will be saved.
+    stats : dict
+        Dictionary where the keys are SWC IDs (as strings) and the values
+        are dictionaries containing metrics as keys and their respective
+        values.
+
+    Returns
+    -------
+    None
+
+    """
+    # Initialize
+    wb = Workbook()
+    sheet = wb.add_sheet("Results")
+    sheet.write(0, 0, "swc_id")
+
+    # Label rows and columns
+    swc_ids = list(stats.keys())
+    for i, swc_id in enumerate(swc_ids):
+        sheet.write(i + 1, 0, swc_id)
+
+    metrics = list(stats[swc_id].keys())
+    for i, metric in enumerate(metrics):
+        sheet.write(0, i + 1, metric)
+
+    # Write stats
+    for i, swc_id in enumerate(swc_ids):
+        for j, metric in enumerate(metrics):
+            sheet.write(i + 1, j + 1, round(stats[swc_id][metric], 4))
+
+    wb.save(path)
