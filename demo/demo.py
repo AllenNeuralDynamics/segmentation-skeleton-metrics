@@ -29,6 +29,7 @@ def evaluate():
 
     """
     # Initializations
+    path = f"{output_dir}/results.xls"
     pred_labels = TiffReader(pred_labels_path)
     skeleton_metric = SkeletonMetric(
         groundtruth_pointer,
@@ -36,20 +37,7 @@ def evaluate():
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
-    full_results, avg_results = skeleton_metric.run()
-
-    # Report results
-    print(f"\nAveraged Results...")
-    for key in avg_results.keys():
-        print(f"   {key}: {round(avg_results[key], 4)}")
-
-    print(f"\nTotal Results...")
-    print("# splits:", skeleton_metric.count_total_splits())
-    print("# merges:", skeleton_metric.count_total_merges())
-
-    # Save results
-    path = f"{output_dir}/evaluation_results.xls"
-    util.save_results(path, full_results)
+    full_results, avg_results = skeleton_metric.run(path)
 
 
 if __name__ == "__main__":

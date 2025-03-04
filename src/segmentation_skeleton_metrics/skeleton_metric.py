@@ -189,6 +189,10 @@ class SkeletonMetric:
         Sets the "fragment_ids" attribute by extracting unique segment IDs
         from the "fragment_graphs" keys.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         None
@@ -253,20 +257,21 @@ class SkeletonMetric:
 
     def get_patch_labels(self, key, nodes):
         """
-        Gets the labels for a given set of nodes within a specified patch of
-        the label mask.
+        Gets the segment labels for a given set of nodes within a specified
+        patch of the label mask.
 
         Parameters
         ----------
         key : str
             Unique identifier of graph to be labeled.
-        nodes : list
-            A list of node IDs for which the labels are to be retrieved.
+        nodes : List[int]
+            Node IDs for which the labels are to be retrieved.
 
         Returns
         -------
         dict
-            A dictionary mapping node IDs to their respective labels.
+            A dictionary that maps node IDs to their respective labels.
+
         """
         bbox = self.graphs[key].get_bbox(nodes)
         label_patch = self.label_mask.read_with_bbox(bbox)
@@ -277,10 +282,9 @@ class SkeletonMetric:
             node_to_label[i] = label
         return node_to_label
 
-    # --------- HERE
     def get_all_node_labels(self):
         """
-        Gets the a set of unique labels from all graphs in "self.graphs".
+        Gets the set of unique node labels from all graphs in "self.graphs".
 
         Parameters
         ----------
@@ -289,7 +293,7 @@ class SkeletonMetric:
         Returns
         -------
         Set[int]
-            Set containing unique labels from all graphs.
+            Set of unique node labels from all graphs.
 
         """
         all_labels = set()
@@ -301,7 +305,7 @@ class SkeletonMetric:
 
     def get_node_labels(self, key, inverse_bool=False):
         """
-        Gets the set of labels for nodes in the graph corresponding to the
+        Gets the set of unique node labels from the graph corresponding to the
         given key.
 
         Parameters
@@ -352,13 +356,14 @@ class SkeletonMetric:
             self.graphs[key].to_zipped_swc(self.zip_writer[key])
 
     # -- Main Routine --
-    def run(self):
+    def run(self, path=None):
         """
         Computes skeleton-based metrics.
 
         Parameters
         ----------
-        None
+        path : str, optional
+            Path where the results will be saved. The default is None.
 
         Returns
         -------
@@ -368,16 +373,29 @@ class SkeletonMetric:
         """
         print("\n(3) Evaluation")
 
-        # Split evaluation
+        # Split detection
         self.detect_splits()
         self.quantify_splits()
 
-        # Merge evaluation
+        # Merge detection
         self.detect_merges()
         self.quantify_merges()
 
-        # Compute metrics
-        return self.compile_results()
+        # Report results
+        full_results, avg_results = self.compile_results()
+        print(f"\nAverage Results...")
+        for key in avg_results.keys():
+            print(f"   {key}: {round(avg_results[key], 4)}")
+
+        print(f"\nTotal Results...")
+        print("# splits:", self.count_total_splits())
+        print("# merges:", self.count_total_merges())
+
+        # Save results (if applicable)
+        if path:
+            util.save_results(path, full_results)
+
+        return full_results, avg_results
 
     # -- Split Detection --
     def detect_splits(self):
