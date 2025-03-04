@@ -60,6 +60,11 @@ Note: Misalignments between the ground truth graphs and prediction segmentation 
 - *Edge Accuracy*: Proportion of edges that are correct.
 - *Expected Run Length (ERL)*: Expected run length of ground truth graph after removing omit nodes.
 
+## Installation
+To use the software, in the root directory, run
+```bash
+pip install -e .
+```
 
 ## Usage
 
@@ -102,12 +107,6 @@ if __name__ == "__main__":
 <br>
 
 Note: this Python package can also be used to evaluate a segmentation in which split mistakes have been corrected.
-
-## Installation
-To use the software, in the root directory, run
-```bash
-pip install -e .
-```
 
 ## Contant Information
 For any inquiries, feedback, or contributions, please do not hesitate to contact us. You can reach us via email at anna.grim@alleninstitute.org or connect on [LinkedIn](https://www.linkedin.com/in/anna-m-grim/).
