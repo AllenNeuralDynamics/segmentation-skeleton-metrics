@@ -87,7 +87,7 @@ if __name__ == "__main__":
     segmentation_path = "./pred_labels.tif"
     fragments_pointer = "./pred_swcs.zip"
     groundtruth_pointer = "./target_swcs.zip"
-    results_path = path = f"{output_dir}/results.xls"
+    results_path = f"{output_dir}/results.xls"
 
     # Run
     evaluate()
