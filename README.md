@@ -66,10 +66,7 @@ Note: Misalignments between the ground truth graphs and prediction segmentation 
 Here is a simple example of evaluating a predicted segmentation.
 
 ```python
-    
-import numpy as np
-from xlwt import Workbook
-
+from segmentation_skeleton_metrics.utils import util
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
@@ -91,12 +88,12 @@ def evaluate():
         print(f"   {key}: {round(avg_results[key], 4)}")
 
     print(f"\nTotal Results...")
-    print("# splits:", np.sum(list(skeleton_metric.split_cnt.values())))
-    print("# merges:", np.sum(list(skeleton_metric.merge_cnt.values())))
+    print("# splits:", skeleton_metric.count_total_splits())
+    print("# merges:", skeleton_metric.count_total_merges())
 
     # Save results
     path = f"{output_dir}/evaluation_results.xls"
-    save_results(path, full_results)
+    util.save_results(path, full_results)
 
 
 if __name__ == "__main__":
@@ -108,7 +105,6 @@ if __name__ == "__main__":
 
     # Run
     evaluate()
-
 ```
 
 <p>
