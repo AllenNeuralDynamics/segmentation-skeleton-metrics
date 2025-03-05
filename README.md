@@ -36,9 +36,9 @@ We start with a set of ground truth graphs stored as individual SWC files, where
 Note: Misalignments between the ground truth graphs and prediction segmentation are detected and corrected.
 
 <p align="center">
-  <img src="imgs/misalignment-example.png" width="400" alt="misalignment-example">
+  <img src="imgs/labeled_graph.png.png" width="400">
   <br>
-  <b>Figure:</b> Misalignments between the ground truth graphs and segmentation, such as Node 4, are detected and corrected.
+  <b>Figure:</b> 
 </p>
 
 
