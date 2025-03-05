@@ -49,6 +49,8 @@ The process starts with a collection of ground truth graphs, each stored as an i
 
 ### Step 3: Compute Metrics
 
+Lastly, we compute the following skeleton-based metrics:
+
 - *\# Splits*: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
 - *\# Merges*: Number of ground truth graphs that contain at least one merge.
 - *Omit Edge Ratio*: Proportion of omitted edges.
