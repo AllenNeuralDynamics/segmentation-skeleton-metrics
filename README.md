@@ -39,8 +39,6 @@ The process starts with a collection of ground truth graphs, each stored as an i
   <b>Figure:</b> 
 </p>
 
-Note: Misalignments between the ground truth graphs and prediction segmentation are detected and corrected.
-
 ### Step 2: Error Detection
 
 <p>
