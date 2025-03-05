@@ -98,7 +98,7 @@ if __name__ == "__main__":
 ```
 
 <p>
-  <img src="imgs/printouts.png" width=900">
+  <img src="imgs/printouts.png" width=800">
   <br>
   <b>Figure:</b> Example of printouts generated after running evaluation.
 </p>
