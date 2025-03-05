@@ -17,7 +17,7 @@ The pipeline for computing skeleton metrics consists of three main steps:
 <blockquote>
   <p>1. <strong>Label Graphs</strong>: Nodes in ground truth graphs are labeled with segmentation IDs.</p>
   <p>2. <strong>Error Detection</strong>: Compare labels of neighboring nodes to detect mistakes.</p>
-  <p>3. <strong>Compute Metrics</strong>: Update graph structure by removing omit nodes and compute graph-based metrics.</p>
+  <p>3. <strong>Compute Metrics</strong>: Update graph structure by removing omit nodes and compute skeleton-based metrics.</p>
 </blockquote>
 <br>
 
