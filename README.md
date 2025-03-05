@@ -36,7 +36,7 @@ The process starts with a collection of ground truth graphs, each stored as an i
 <p>
   <img src="imgs/labeled_graph.png" width="850">
   <br>
-  <b>Figure:</b> 
+  <b>Figure: On the left, we see ground truth graph superimposed on a segmentation where colors represent segment IDs. On the right, the nodes of the graphs have been labeled with the corresponding segment IDs.</b> 
 </p>
 
 ### Step 2: Error Detection
@@ -44,7 +44,7 @@ The process starts with a collection of ground truth graphs, each stored as an i
 <p>
   <img src="imgs/mistakes.png" width="650" alt="Topological mistakes detected in skeleton">
   <br>
-  <b> Figure: </b>Edges from graph superimposed on segmentation, where colors represent to segment IDs. From top to bottom: correct edge (nodes have same segment ID), split edge (nodes have different segment IDs), omit edge (one or two nodes do not have a segment ID), merged edge (segment intersects with multiple graphs).
+  <b> Figure: </b From top to bottom: correct edge (nodes have same segment ID), omit edge (one or two nodes do not have a segment ID), split edge (nodes have different segment IDs), merged edge (segment intersects with multiple graphs).
 </p>
 
 ### Step 3: Compute Metrics
