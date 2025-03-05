@@ -34,7 +34,7 @@ The pipeline for computing skeleton metrics consists of three main steps:
 The process starts with a collection of ground truth graphs, each stored as an individual SWC file, where the "xyz" attribute represents voxel coordinates in an image. Each ground truth graph is loaded and represented as a custom NetworkX graph with these coordinates as a node-level attribute. The nodes of each graph are then labeled with their corresponding segment IDs from the predicted segmentation.
 
 <p>
-  <img src="imgs/labeled_graph.png" width="850">
+  <img src="imgs/labeled_graph.png" width="800">
   <br>
   <b>Figure: On the left, we see ground truth graph superimposed on a segmentation where colors represent segment IDs. On the right, the nodes of the graphs have been labeled with the corresponding segment IDs.</b> 
 </p>
