@@ -44,7 +44,7 @@ The process starts with a collection of ground truth graphs, each stored as an i
 <p>
   <img src="imgs/mistakes.png" width="650" alt="Topological mistakes detected in skeleton">
   <br>
-  <b> Figure: </b From top to bottom: correct edge (nodes have same segment ID), omit edge (one or two nodes do not have a segment ID), split edge (nodes have different segment IDs), merged edge (segment intersects with multiple graphs).
+  <b> Figure: </b> From top to bottom: correct edge (nodes have same segment ID), omit edge (one or two nodes do not have a segment ID), split edge (nodes have different segment IDs), merged edge (segment intersects with multiple graphs).
 </p>
 
 ### Step 3: Compute Metrics
