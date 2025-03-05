@@ -22,7 +22,7 @@ The pipeline for computing skeleton metrics consists of three main steps:
 <br>
 
 <p>
-  <img src="imgs/pipeline.png" width="800" alt="pipeline">
+  <img src="imgs/pipeline.png" width="750" alt="pipeline">
   <br>
   <b> Figure: </b>Visualization of skeleton metric computation pipeline, see Method section for description of each step.
 </p>
