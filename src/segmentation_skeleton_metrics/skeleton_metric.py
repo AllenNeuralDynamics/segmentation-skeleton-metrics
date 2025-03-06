@@ -695,9 +695,9 @@ class SkeletonMetric:
         """
         # Save detected merges
         prefix = "corrected_" if self.connections_path else ""
-        filename = f"merged_ids-{prefix}segmentation.txt"
+        filename = f"merged_{prefix}_segment_ids.txt"
         with open(os.path.join(self.output_dir, filename), "w") as f:
-            f.write(f" Label   -   xyz\n")
+            f.write(f" Label   -   Physical Coordinate\n")
             for _, label, xyz in self.merged_labels:
                 if self.label_handler.use_mapping():
                     label = self.get_merged_label(label)
