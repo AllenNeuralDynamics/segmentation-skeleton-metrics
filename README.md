@@ -42,7 +42,7 @@ The process starts with a collection of ground truth graphs, each stored as an i
 ### Step 2: Error Detection
 
 <p>
-  <img src="imgs/mistakes.png" width="650" alt="Topological mistakes detected in skeleton">
+  <img src="imgs/mistakes.png" width="625" alt="Topological mistakes detected in skeleton">
   <br>
   <b> Figure: </b> From top to bottom: correct edge (nodes have same segment ID), omit edge (at least one node does not have a segment ID), split edge (nodes have different segment IDs), merged edge (segment intersects with multiple graphs).
 </p>
