@@ -59,10 +59,10 @@ class SkeletonMetric:
         self,
         gt_pointer,
         label_mask,
+        output_dir,
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
-        output_dir=None,
         preexisting_merges=None,
         save_merges=False,
         valid_labels=None,
@@ -79,6 +79,8 @@ class SkeletonMetric:
             coordinates.
         label_mask : ImageReader
             Predicted segmentation mask.
+         output_dir : str
+            Path to directory wehere results are written.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
             stored at "fragments_pointer". The default is (1.0, 1.0, 1.0).
@@ -90,8 +92,6 @@ class SkeletonMetric:
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
-        output_dir : str, optional
-            Path to directory wehere results are written. The default is None.
         preexisting_merges : List[int], optional
             List of segment IDs that are known to contain a merge mistake. The
             default is None.
@@ -346,29 +346,28 @@ class SkeletonMetric:
 
         """
         # Initialize output directory
-        output_dir = os.path.join(self.output_dir, "projections")
-        util.mkdir(output_dir)
+        projections_dir = os.path.join(self.output_dir, "projections")
+        util.mkdir(projections_dir)
 
         # Save intial graphs
         self.zip_writer = dict()
         for key in self.graphs.keys():
-            self.zip_writer[key] = ZipFile(f"{output_dir}/{key}.zip", "w")
+            zip_path = f"{projections_dir}/{key}.zip"
+            self.zip_writer[key] = ZipFile(zip_path, "w")
             self.graphs[key].to_zipped_swc(self.zip_writer[key])
 
     # -- Main Routine --
-    def run(self, path=None):
+    def run(self):
         """
         Computes skeleton-based metrics.
 
         Parameters
         ----------
-        path : str, optional
-            Path where the results will be saved. The default is None.
+        None
 
         Returns
         -------
-        tuple
-            ...
+        None
 
         """
         print("\n(3) Evaluation")
@@ -381,21 +380,23 @@ class SkeletonMetric:
         self.detect_merges()
         self.quantify_merges()
 
-        # Report results
+        # Compute metrics
         full_results, avg_results = self.compile_results()
-        print(f"\nAverage Results...")
+
+        # Report full results
+        prefix = "corrected-" if self.connections_path else ""
+        path = f"{self.output_dir}/{prefix}results.xls"
+        util.save_results(path, full_results)
+
+        # Report results overview
+        path = os.path.join(self.output_dir, f"{prefix}results-overview.txt")
+        util.update_txt(path, "Average Results...")
         for key in avg_results.keys():
-            print(f"   {key}: {round(avg_results[key], 4)}")
+            util.update_txt(path, f"   {key}: {round(avg_results[key], 4)}")
 
-        print(f"\nTotal Results...")
-        print("# splits:", self.count_total_splits())
-        print("# merges:", self.count_total_merges())
-
-        # Save results (if applicable)
-        if path:
-            util.save_results(path, full_results)
-
-        return full_results, avg_results
+        util.update_txt(path, "\nTotal Results...")
+        util.update_txt(path, f"   # splits: {self.count_total_splits()}")
+        util.update_txt(path, f"   # merges: {self.count_total_merges()}")
 
     # -- Split Detection --
     def detect_splits(self):
@@ -695,7 +696,7 @@ class SkeletonMetric:
         """
         # Save detected merges
         prefix = "corrected_" if self.connections_path else ""
-        filename = f"merged_{prefix}_segment_ids.txt"
+        filename = f"merged_{prefix}segment_ids.txt"
         with open(os.path.join(self.output_dir, filename), "w") as f:
             f.write(f" Label   -   Physical Coordinate\n")
             for _, label, xyz in self.merged_labels:

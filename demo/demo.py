@@ -29,7 +29,6 @@ def evaluate():
 
     """
     # Initializations
-    path = f"{output_dir}/results.xls"
     pred_labels = TiffReader(pred_labels_path)
     skeleton_metric = SkeletonMetric(
         groundtruth_pointer,
@@ -37,15 +36,15 @@ def evaluate():
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
-    full_results, avg_results = skeleton_metric.run(path)
+    skeleton_metric.run(output_dir)
 
 
 if __name__ == "__main__":
     # Initializations
     output_dir = "./"
-    pred_labels_path = "./pred_labels.tif"
-    fragments_pointer = "./pred_swcs.zip"
-    groundtruth_pointer = "./target_swcs.zip"
+    pred_labels_path = "./data/pred_labels.tif"
+    fragments_pointer = "./data/pred_swcs.zip"
+    groundtruth_pointer = "./data/target_swcs.zip"
 
     # Run
     evaluate()

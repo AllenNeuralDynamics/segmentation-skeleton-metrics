@@ -1,0 +1,13 @@
+Average Results...
+   # splits: 7.6878
+   # merges: 0.0
+   % omit: 0.0514
+   % split: 0.0158
+   % merged: 0.0
+   edge accuracy: 0.9486
+   erl: 173.2351
+   normalized erl: 0.3895
+
+Total Results...
+# splits: 36
+# merges: 0

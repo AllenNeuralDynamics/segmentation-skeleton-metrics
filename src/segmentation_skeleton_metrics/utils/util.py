@@ -148,6 +148,27 @@ def read_txt(path):
         return f.read().splitlines()
 
 
+def update_txt(path, text):
+    """
+    Appends the given text to a specified text file and prints the text.
+
+    Parameters
+    ----------
+    path : str
+        Path to txt file where the text will be appended.
+    text : str
+        Text to be written to the file.
+
+    Returns
+    -------
+    None
+
+    """
+    print(text)
+    with open(path, 'a') as file:
+        file.write(text + "\n")
+
+
 # --- Miscellaneous ---
 def get_segment_id(filename):
     """
