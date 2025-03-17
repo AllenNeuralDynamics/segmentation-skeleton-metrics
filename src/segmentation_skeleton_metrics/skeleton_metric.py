@@ -554,9 +554,21 @@ class SkeletonMetric:
 
         """
         fragment_graph = self.find_graph_from_label(label)
+        
+        max_dist = 0
+        min_dist = np.inf
+        
         for voxel in fragment_graph.voxels:
+            # Find closest point in ground truth
             gt_voxel = util.kdtree_query(kdtree, voxel)
-            if self.physical_dist(gt_voxel, voxel) > 150:
+
+            # Compute projection distance
+            dist = self.physical_dist(gt_voxel, voxel)
+            min_dist = min(dist, min_dist)
+            max_dist = max(dist, max_dist)
+
+            # Check if distances imply merge mistake
+            if max_dist > 150 and min_dist < 3.5:
                 # Log merge mistake
                 equiv_label = self.label_handler.get(label)
                 xyz = img_util.to_physical(voxel, self.anisotropy)
