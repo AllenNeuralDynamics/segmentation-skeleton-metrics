@@ -36,7 +36,7 @@ The process starts with a collection of ground truth graphs, each stored as an i
 <p>
   <img src="imgs/labeled_graph.png" width="800">
   <br>
-  <b>Figure:</b> On the left, we see ground truth graph superimposed on a segmentation where colors represent segment IDs. On the right, the nodes of the graphs have been labeled with the corresponding segment IDs.</b> 
+  <b>Figure:</b> On the left, ground truth graphs are superimposed on a segmentation where colors represent segment IDs. On the right, the nodes of the graphs have been labeled with the corresponding segment IDs.</b> 
 </p>
 
 ### Step 2: Error Detection
