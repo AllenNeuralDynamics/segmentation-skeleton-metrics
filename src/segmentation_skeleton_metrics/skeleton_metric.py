@@ -526,7 +526,7 @@ class SkeletonMetric:
         """
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 50:
+            if len(nodes) > 40:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
@@ -568,7 +568,7 @@ class SkeletonMetric:
             max_dist = max(dist, max_dist)
 
             # Check if distances imply merge mistake
-            if max_dist > 150 and min_dist < 3.5:
+            if max_dist > 100 and min_dist < 3:
                 # Log merge mistake
                 equiv_label = self.label_handler.get(label)
                 xyz = img_util.to_physical(voxel, self.anisotropy)
