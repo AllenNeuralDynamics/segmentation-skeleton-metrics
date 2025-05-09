@@ -66,7 +66,7 @@ class SkeletonMetric:
         localize_merge=False,
         preexisting_merges=None,
         save_merges=False,
-        save_projections=False,
+        save_fragments=False,
         valid_labels=None,
     ):
         """
@@ -103,7 +103,7 @@ class SkeletonMetric:
         save_merges: bool, optional
             Indication of whether to save fragments with a merge mistake. The
             default is None.
-        save_projections : bool, optional
+        save_fragments : bool, optional
             Indication of whether to save fragments that project onto each
             ground truth skeleton. The default is False.
         valid_labels : set[int], optional
@@ -123,7 +123,7 @@ class SkeletonMetric:
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
-        self.save_projections = save_projections
+        self.save_fragments = save_fragments
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -135,9 +135,8 @@ class SkeletonMetric:
         self.load_groundtruth(gt_pointer)
         self.load_fragments(fragments_pointer)
 
-        # Initialize writer
-        if self.save_merges:
-            self.init_zip_writer()
+        # Initialize writers
+        self.init_zip_writers()
 
         # Initialize fragment projections directory
         if self.save_projections:
@@ -346,9 +345,9 @@ class SkeletonMetric:
         else:
             return self.graphs[key].get_labels()
 
-    def init_zip_writer(self):
+    def init_zip_writers(self):
         """
-        Initializes "self.zip_writer" attribute by setting up a directory for
+        Initializes "self.merge_writer" attribute by setting up a directory for
         output files and creating ZIP files for each graph in "self.graphs".
 
         Parameters
@@ -360,16 +359,31 @@ class SkeletonMetric:
         None
 
         """
-        # Initialize output directory
-        merged_fragments_dir = os.path.join(self.output_dir, "merged_fragments")
-        util.mkdir(merged_fragments_dir)
+        # Merged fragments zip writer
+        if self.save_merges:
+            # Initialize directory
+            merges_dir = os.path.join(self.output_dir, "merged_fragments")
+            util.mkdir(merged_fragments_dir)
 
-        # Save intial graphs
-        self.zip_writer = dict()
-        for key in self.graphs.keys():
-            zip_path = f"{merged_fragments_dir}/{key}.zip"
-            self.zip_writer[key] = ZipFile(zip_path, "w")
-            self.graphs[key].to_zipped_swc(self.zip_writer[key])
+            # Initialize zip writer
+            self.merge_writer = dict()
+            for key in self.graphs.keys():
+                zip_path = f"{merged_fragments_dir}/{key}.zip"
+                self.merge_writer[key] = ZipFile(zip_path, "w")
+                self.graphs[key].to_zipped_swc(self.merge_writer[key])
+
+        # Fragments zip writer
+        if self.save_fragments:
+            # Initialize direction
+            fragments_dir = os.path.join(self.output_dir, "fragments")
+            util.mkdir(fragments_dir)
+
+            # Initialize zip writer
+            self.fragment_writer = dict()
+            for key in self.graphs.keys():
+                zip_path = f"{fragments_dir}/{key}.zip"
+                self.fragment_writer[key] = ZipFile(zip_path, "w")
+                self.graphs[key].to_zipped_swc(self.fragment_writer[key])
 
     # -- Main Routine --
     def run(self):
@@ -539,12 +553,6 @@ class SkeletonMetric:
         None
 
         """
-        # Initialize zip writer
-        if self.save_projections:
-            zip_path = os.path.join(self.projections_dir, key + ".zip")
-            zip_writer = ZipFile(zip_path, "w")
-            #self.graphs[key].to_zipped_swc(zip_writer)
-
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
@@ -580,6 +588,7 @@ class SkeletonMetric:
         """
         # Search graphs
         for fragment_graph in self.find_graph_from_label(label):
+            # Search for merge
             max_dist = 0
             min_dist = np.inf
             for voxel in fragment_graph.voxels:
@@ -601,10 +610,14 @@ class SkeletonMetric:
 
                     # Save merged fragment (if applicable)
                     if self.save_merges:
-                        fragment_graph.to_zipped_swc(self.zip_writer[key])
+                        fragment_graph.to_zipped_swc(self.merge_writer[key])
                     if self.localize_merge:
                         self.find_merge_site(key, fragment_graph, kdtree) 
                     break
+
+            # Save fragment (if applicable) 
+            if self.save_fragments and min_dist < 3: 
+                fragment_graph.to_zipped_swc(self.fragment_writer[key])
 
     def adjust_metrics(self, key):
         """
