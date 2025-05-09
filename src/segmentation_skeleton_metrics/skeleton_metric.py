@@ -63,8 +63,10 @@ class SkeletonMetric:
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
+        localize_merge=False,
         preexisting_merges=None,
         save_merges=False,
+        save_projections=False,
         valid_labels=None,
     ):
         """
@@ -92,12 +94,18 @@ class SkeletonMetric:
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
+        localize_merge : bool, optional
+            Indication of whether to search for the approximate location of a
+            merge. The default is False.
         preexisting_merges : List[int], optional
             List of segment IDs that are known to contain a merge mistake. The
             default is None.
         save_merges: bool, optional
             Indication of whether to save fragments with a merge mistake. The
             default is None.
+        save_projections : bool, optional
+            Indication of whether to save fragments that project onto each
+            ground truth skeleton. The default is False.
         valid_labels : set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
@@ -111,9 +119,11 @@ class SkeletonMetric:
         # Instance attributes
         self.anisotropy = anisotropy
         self.connections_path = connections_path
+        self.localize_merge = localize_merge
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
+        self.save_projections = save_projections
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -128,6 +138,11 @@ class SkeletonMetric:
         # Initialize writer
         if self.save_merges:
             self.init_zip_writer()
+
+        # Initialize fragment projections directory
+        if self.save_projections:
+            self.projections_dir = os.path.join(output_dir, "projections")
+            util.mkdir(self.projections_dir)
 
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer):
@@ -346,13 +361,13 @@ class SkeletonMetric:
 
         """
         # Initialize output directory
-        projections_dir = os.path.join(self.output_dir, "projections")
-        util.mkdir(projections_dir)
+        merged_fragments_dir = os.path.join(self.output_dir, "merged_fragments")
+        util.mkdir(merged_fragments_dir)
 
         # Save intial graphs
         self.zip_writer = dict()
         for key in self.graphs.keys():
-            zip_path = f"{projections_dir}/{key}.zip"
+            zip_path = f"{merged_fragments_dir}/{key}.zip"
             self.zip_writer[key] = ZipFile(zip_path, "w")
             self.graphs[key].to_zipped_swc(self.zip_writer[key])
 
@@ -524,12 +539,21 @@ class SkeletonMetric:
         None
 
         """
+        # Initialize zip writer
+        if self.save_projections:
+            zip_path = os.path.join(self.projections_dir, key + ".zip")
+            zip_writer = ZipFile(zip_path, "w")
+
+        # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
             if len(nodes) > 40:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
+                        if self.save_projections:
+                            fragment_graph = self.find_graph_from_label(label)[0]
+                            fragment_graph.to_zipped_swc(zip_writer)
 
     def is_fragment_merge(self, key, label, kdtree):
         """
@@ -553,32 +577,33 @@ class SkeletonMetric:
         None
 
         """
-        fragment_graph = self.find_graph_from_label(label)
-        
-        max_dist = 0
-        min_dist = np.inf
-        
-        for voxel in fragment_graph.voxels:
-            # Find closest point in ground truth
-            gt_voxel = util.kdtree_query(kdtree, voxel)
+        # Search graphs
+        for fragment_graph in self.find_graph_from_label(label):
+            max_dist = 0
+            min_dist = np.inf
+            for voxel in fragment_graph.voxels:
+                # Find closest point in ground truth
+                gt_voxel = util.kdtree_query(kdtree, voxel)
 
-            # Compute projection distance
-            dist = self.physical_dist(gt_voxel, voxel)
-            min_dist = min(dist, min_dist)
-            max_dist = max(dist, max_dist)
+                # Compute projection distance
+                dist = self.physical_dist(gt_voxel, voxel)
+                min_dist = min(dist, min_dist)
+                max_dist = max(dist, max_dist)
 
-            # Check if distances imply merge mistake
-            if max_dist > 100 and min_dist < 3:
-                # Log merge mistake
-                equiv_label = self.label_handler.get(label)
-                xyz = img_util.to_physical(voxel, self.anisotropy)
-                self.merge_cnt[key] += 1
-                self.merged_labels.add((key, equiv_label, tuple(xyz)))
+                # Check if distances imply merge mistake
+                if max_dist > 100 and min_dist < 3:
+                    # Log merge mistake
+                    equiv_label = self.label_handler.get(label)
+                    xyz = img_util.to_physical(voxel, self.anisotropy)
+                    self.merge_cnt[key] += 1
+                    self.merged_labels.add((key, equiv_label, tuple(xyz)))
 
-                # Save merged fragment (if applicable)
-                if self.save_merges:
-                    fragment_graph.to_zipped_swc(self.zip_writer[key])
-                break
+                    # Save merged fragment (if applicable)
+                    if self.save_merges:
+                        fragment_graph.to_zipped_swc(self.zip_writer[key])
+                    if self.localize_merge:
+                        self.find_merge_site(key, fragment_graph, kdtree) 
+                    break
 
     def adjust_metrics(self, key):
         """
@@ -673,6 +698,29 @@ class SkeletonMetric:
             self.graphs[key].remove_nodes_from(nodes)
             if update_merged_labels:
                 self.merged_labels.add((key, label, -1))
+
+    def find_merge_site(self, key, fragment_graph, kdtree):
+        visited = set()
+        hit = False
+        for i, voxel in enumerate(fragment_graph.voxels):
+            # Find closest point in ground truth
+            visited.add(i)
+            gt_voxel = util.kdtree_query(kdtree, voxel)
+
+            # Compute projection distance
+            if self.physical_dist(gt_voxel, voxel) > 100:
+                for _, j in nx.dfs_edges(fragment_graph, source=i):
+                    visited.add(j)
+                    voxel_j = fragment_graph.voxels[j]
+                    gt_voxel = util.kdtree_query(kdtree, voxel_j)
+                    if self.physical_dist(gt_voxel, voxel_j) < 2:
+                        hit = True
+                        print("Approximate Site:", img_util.to_physical(voxel_j, self.anisotropy))
+                        break
+
+            # Check whether to continue
+            if hit:
+                break
 
     def quantify_merges(self):
         """
@@ -966,10 +1014,11 @@ class SkeletonMetric:
 
     # -- Helpers --
     def find_graph_from_label(self, label):
+        graphs = list()
         for key in self.fragment_graphs:
             if label == util.get_segment_id(key):
-                return self.fragment_graphs[key]
-        return None
+                graphs.append(self.fragment_graphs[key])
+        return graphs
 
     def physical_dist(self, voxel_1, voxel_2):
         """
