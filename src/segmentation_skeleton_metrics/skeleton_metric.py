@@ -543,6 +543,7 @@ class SkeletonMetric:
         if self.save_projections:
             zip_path = os.path.join(self.projections_dir, key + ".zip")
             zip_writer = ZipFile(zip_path, "w")
+            #self.graphs[key].to_zipped_swc(zip_writer)
 
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):

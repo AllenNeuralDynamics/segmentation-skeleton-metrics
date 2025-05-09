@@ -46,7 +46,7 @@ def run(process_id, graph):
         label_i = int(graph.labels[i])
         label_j = int(graph.labels[j])
         if is_split(label_i, label_j):
-            graph.remove_edge(i, j)
+            graph.remove_edge(i, j) temp
             split_cnt += 1
         elif label_j == 0:
             check_misalignment(graph, visited_edges, i, j)
@@ -54,7 +54,7 @@ def run(process_id, graph):
 
     # Finish
     split_percent = split_cnt / graph.graph["n_edges"]
-    graph.remove_nodes_with_label(0)
+    graph.remove_nodes_with_label(0) temp
     return process_id, graph, split_percent
 
 
