@@ -138,6 +138,11 @@ class SkeletonMetric:
         # Initialize writers
         self.init_zip_writers()
 
+        # Initialize fragment projections directory
+        if self.save_projections:
+            self.projections_dir = os.path.join(output_dir, "projections")
+            util.mkdir(self.projections_dir)
+
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer):
         """
@@ -555,6 +560,9 @@ class SkeletonMetric:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
+                        if self.save_projections:
+                            fragment_graph = self.find_graph_from_label(label)[0]
+                            fragment_graph.to_zipped_swc(zip_writer)
 
     def is_fragment_merge(self, key, label, kdtree):
         """
