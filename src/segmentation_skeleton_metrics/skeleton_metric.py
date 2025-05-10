@@ -369,28 +369,20 @@ class SkeletonMetric:
                 self.graphs[key].to_zipped_swc(self.fragment_writer[key])
 
         # Merged fragments writer
-        if self.save_merges:
+        if self.save_merges or self.localize_merges:
             # Initialize directory
             merges_dir = os.path.join(self.output_dir, "merged_fragments")
-            util.mkdir(merged_fragments_dir, delete=True)
+            util.mkdir(merges_dir, delete=True)
 
             # ZIP writer
             self.merge_writer = dict()
             for key in self.graphs.keys():
-                zip_path = f"{merged_fragments_dir}/{key}.zip"
+                zip_path = f"{merges_dir}/{key}.zip"
                 self.merge_writer[key] = ZipFile(zip_path, "w")
                 self.graphs[key].to_zipped_swc(self.merge_writer[key])
 
         # Merge sites
         if self.localize_merges:
-            # Initialize directory
-            merges_dir = os.path.join(self.output_dir, "merge-sites")
-            util.mkdir(merges_dir, delete=True)
-
-            # ZIP writer
-            zip_path = f"{merges_dir}/estimated-merge-sites.zip"
-            self.site_zip_writer = ZipFile(zip_path, "w")
-
             # Txt writer
             sites_path = os.path.join(merges_dir, "estimated-merge-sites.txt")
             self.site_txt_writer = open(sites_path, "w", encoding="utf-8")
@@ -737,10 +729,10 @@ class SkeletonMetric:
                     if self.physical_dist(gt_voxel, voxel_j) < 2:
                         hit = True
                         merge_cnt = np.sum(list(self.merge_cnt.values()))
-                        filename = f"{merge_cnt}.swc"
+                        filename = f"merge-{merge_cnt}.swc"
                         xyz = img_util.to_physical(voxel_j, self.anisotropy)
                         swc_util.to_zipped_point(
-                            self.site_zip_writer, filename, xyz
+                            self.merge_writer[key], filename, xyz
                         )
                         self.site_txt_writer.write(f"{tuple(xyz)}\n")
                         break
