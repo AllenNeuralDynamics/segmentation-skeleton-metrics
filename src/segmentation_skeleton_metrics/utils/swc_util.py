@@ -28,6 +28,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
+from io import StringIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -380,3 +381,36 @@ class Reader:
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
+
+
+# --- Write ---
+def to_zipped_point(zip_writer, filename, xyz):
+    """
+    Writes a point to an SWC file format, which is then stored in a ZIP
+    archive.
+
+    Parameters
+    ----------
+    zip_writer : zipfile.ZipFile
+        A ZipFile object that will store the generated SWC file.
+    filename : str
+        Filename of SWC file.
+    xyz : ArrayLike
+        Point to be written to SWC file.
+
+    Returns
+    -------
+    None
+
+    """
+    with StringIO() as text_buffer:
+        # Preamble
+        text_buffer.write("# COLOR [1.0 0.0 0.0]")
+        text_buffer.write("# id, type, z, y, x, r, pid")
+
+        # Write entry
+        x, y, z = tuple(xyz)
+        text_buffer.write("\n" + f"1 2 {x} {y} {z} 15 -1")
+
+        # Finish
+        zip_writer.writestr(filename, text_buffer.getvalue())

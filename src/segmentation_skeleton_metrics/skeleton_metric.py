@@ -27,6 +27,7 @@ from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
     img_util,
+    swc_util,
     util,
 )
 
@@ -63,7 +64,7 @@ class SkeletonMetric:
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
-        localize_merge=False,
+        localize_merges=False,
         preexisting_merges=None,
         save_merges=False,
         save_fragments=False,
@@ -94,7 +95,7 @@ class SkeletonMetric:
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
-        localize_merge : bool, optional
+        localize_merges : bool, optional
             Indication of whether to search for the approximate location of a
             merge. The default is False.
         preexisting_merges : List[int], optional
@@ -119,7 +120,7 @@ class SkeletonMetric:
         # Instance attributes
         self.anisotropy = anisotropy
         self.connections_path = connections_path
-        self.localize_merge = localize_merge
+        self.localize_merges = localize_merges
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
@@ -136,12 +137,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize writers
-        self.init_zip_writers()
-
-        # Initialize fragment projections directory
-        if self.save_projections:
-            self.projections_dir = os.path.join(output_dir, "projections")
-            util.mkdir(self.projections_dir)
+        self.init_writers()
 
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer):
@@ -345,7 +341,7 @@ class SkeletonMetric:
         else:
             return self.graphs[key].get_labels()
 
-    def init_zip_writers(self):
+    def init_writers(self):
         """
         Initializes "self.merge_writer" attribute by setting up a directory for
         output files and creating ZIP files for each graph in "self.graphs".
@@ -359,31 +355,45 @@ class SkeletonMetric:
         None
 
         """
-        # Merged fragments zip writer
+        # Fragments writer
+        if self.save_fragments:
+            # Initialize direction
+            fragments_dir = os.path.join(self.output_dir, "fragments")
+            util.mkdir(fragments_dir, delete=True)
+
+            # ZIP writer
+            self.fragment_writer = dict()
+            for key in self.graphs.keys():
+                zip_path = f"{fragments_dir}/{key}.zip"
+                self.fragment_writer[key] = ZipFile(zip_path, "w")
+                self.graphs[key].to_zipped_swc(self.fragment_writer[key])
+
+        # Merged fragments writer
         if self.save_merges:
             # Initialize directory
             merges_dir = os.path.join(self.output_dir, "merged_fragments")
-            util.mkdir(merged_fragments_dir)
+            util.mkdir(merged_fragments_dir, delete=True)
 
-            # Initialize zip writer
+            # ZIP writer
             self.merge_writer = dict()
             for key in self.graphs.keys():
                 zip_path = f"{merged_fragments_dir}/{key}.zip"
                 self.merge_writer[key] = ZipFile(zip_path, "w")
                 self.graphs[key].to_zipped_swc(self.merge_writer[key])
 
-        # Fragments zip writer
-        if self.save_fragments:
-            # Initialize direction
-            fragments_dir = os.path.join(self.output_dir, "fragments")
-            util.mkdir(fragments_dir)
+        # Merge sites
+        if self.localize_merges:
+            # Initialize directory
+            merges_dir = os.path.join(self.output_dir, "merge-sites")
+            util.mkdir(merges_dir, delete=True)
 
-            # Initialize zip writer
-            self.fragment_writer = dict()
-            for key in self.graphs.keys():
-                zip_path = f"{fragments_dir}/{key}.zip"
-                self.fragment_writer[key] = ZipFile(zip_path, "w")
-                self.graphs[key].to_zipped_swc(self.fragment_writer[key])
+            # ZIP writer
+            zip_path = f"{merges_dir}/estimated-merge-sites.zip"
+            self.site_zip_writer = ZipFile(zip_path, "w")
+
+            # Txt writer
+            sites_path = os.path.join(merges_dir, "estimated-merge-sites.txt")
+            self.site_txt_writer = open(sites_path, "w", encoding="utf-8")
 
     # -- Main Routine --
     def run(self):
@@ -560,9 +570,6 @@ class SkeletonMetric:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
-                        if self.save_projections:
-                            fragment_graph = self.find_graph_from_label(label)[0]
-                            fragment_graph.to_zipped_swc(zip_writer)
 
     def is_fragment_merge(self, key, label, kdtree):
         """
@@ -611,12 +618,12 @@ class SkeletonMetric:
                     # Save merged fragment (if applicable)
                     if self.save_merges:
                         fragment_graph.to_zipped_swc(self.merge_writer[key])
-                    if self.localize_merge:
+                    if self.localize_merges:
                         self.find_merge_site(key, fragment_graph, kdtree) 
                     break
 
             # Save fragment (if applicable) 
-            if self.save_fragments and min_dist < 3: 
+            if self.save_fragments and min_dist < 3:
                 fragment_graph.to_zipped_swc(self.fragment_writer[key])
 
     def adjust_metrics(self, key):
@@ -729,7 +736,13 @@ class SkeletonMetric:
                     gt_voxel = util.kdtree_query(kdtree, voxel_j)
                     if self.physical_dist(gt_voxel, voxel_j) < 2:
                         hit = True
-                        print("Approximate Site:", img_util.to_physical(voxel_j, self.anisotropy))
+                        merge_cnt = np.sum(list(self.merge_cnt.values()))
+                        filename = f"{merge_cnt}.swc"
+                        xyz = img_util.to_physical(voxel_j, self.anisotropy)
+                        swc_util.to_zipped_point(
+                            self.site_zip_writer, filename, xyz
+                        )
+                        self.site_txt_writer.write(f"{tuple(xyz)}\n")
                         break
 
             # Check whether to continue
