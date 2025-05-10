@@ -357,7 +357,7 @@ class SkeletonMetric:
         """
         # Fragments writer
         if self.save_fragments:
-            # Initialize direction
+            # Initialize directory
             fragments_dir = os.path.join(self.output_dir, "fragments")
             util.mkdir(fragments_dir, delete=True)
 
@@ -383,7 +383,6 @@ class SkeletonMetric:
 
         # Merge sites
         if self.localize_merges:
-            # Txt writer
             sites_path = os.path.join(merges_dir, "estimated-merge-sites.txt")
             self.site_txt_writer = open(sites_path, "w", encoding="utf-8")
 
