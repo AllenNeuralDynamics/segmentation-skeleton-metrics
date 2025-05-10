@@ -405,12 +405,12 @@ def to_zipped_point(zip_writer, filename, xyz):
     """
     with StringIO() as text_buffer:
         # Preamble
-        text_buffer.write("# COLOR [1.0 0.0 0.0]")
+        text_buffer.write("# COLOR 1.0 0.0 0.0")
         text_buffer.write("# id, type, z, y, x, r, pid")
 
         # Write entry
         x, y, z = tuple(xyz)
-        text_buffer.write("\n" + f"1 2 {x} {y} {z} 15 -1")
+        text_buffer.write("\n" + f"1 2 {x} {y} {z} 10 -1")
 
         # Finish
         zip_writer.writestr(filename, text_buffer.getvalue())
