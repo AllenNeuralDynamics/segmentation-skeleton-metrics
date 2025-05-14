@@ -360,7 +360,7 @@ class SkeletonMetric:
         """
         # Fragments writer
         if self.save_fragments:
-            # Initialize direction
+            # Initialize directory
             fragments_dir = os.path.join(self.output_dir, "fragments")
             util.mkdir(fragments_dir, delete=True)
 
