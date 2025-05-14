@@ -139,6 +139,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize writers
+        util.mkdir(output_dir, delete=True)
         self.init_writers()
 
     # --- Load Data ---
