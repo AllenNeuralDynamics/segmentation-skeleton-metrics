@@ -10,10 +10,8 @@ Code for helper routines.
 
 """
 
-from io import BytesIO
 from random import sample
 from xlwt import Workbook
-from zipfile import ZipFile
 
 import os
 import shutil

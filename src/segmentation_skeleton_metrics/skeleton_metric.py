@@ -15,6 +15,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
+from copy import deepcopy
 from scipy.spatial import distance, KDTree
 from tqdm import tqdm
 from zipfile import ZipFile
@@ -22,6 +23,7 @@ from zipfile import ZipFile
 import networkx as nx
 import numpy as np
 import os
+import pandas as pd
 
 from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
@@ -162,6 +164,7 @@ class SkeletonMetric:
             use_anisotropy=False,
         )
         self.graphs = graph_builder.run(swc_pointer)
+        self.gt_graphs = deepcopy(self.graphs)
 
         # Label nodes
         for key in tqdm(self.graphs, desc="Labeling Graphs"):
@@ -370,21 +373,9 @@ class SkeletonMetric:
 
         # Merged fragments writer
         if self.save_merges or self.localize_merges:
-            # Initialize directory
-            merges_dir = os.path.join(self.output_dir, "merged_fragments")
-            util.mkdir(merges_dir, delete=True)
-
-            # ZIP writer
-            self.merge_writer = dict()
-            for key in self.graphs.keys():
-                zip_path = f"{merges_dir}/{key}.zip"
-                self.merge_writer[key] = ZipFile(zip_path, "w")
-                self.graphs[key].to_zipped_swc(self.merge_writer[key])
-
-        # Merge sites
-        if self.localize_merges:
-            sites_path = os.path.join(merges_dir, "estimated-merge-sites.txt")
-            self.site_txt_writer = open(sites_path, "w", encoding="utf-8")
+            zip_path = os.path.join(self.output_dir, "merged_fragments.zip")
+            self.merge_writer = ZipFile(zip_path, "a")
+            self.merge_sites = list()
 
     # -- Main Routine --
     def run(self):
@@ -417,6 +408,13 @@ class SkeletonMetric:
         prefix = "corrected-" if self.connections_path else ""
         path = f"{self.output_dir}/{prefix}results.xls"
         util.save_results(path, full_results)
+
+        # Save merge sites (if applicable)
+        if self.localize_merges:
+            df = pd.DataFrame(self.merge_sites)
+            df.to_csv(
+                os.path.join(self.output_dir, "merge_sites.csv"), index=False
+            )
 
         # Report results overview
         path = os.path.join(self.output_dir, f"{prefix}results-overview.txt")
@@ -608,12 +606,17 @@ class SkeletonMetric:
 
                     # Save merged fragment (if applicable)
                     if self.save_merges:
-                        fragment_graph.to_zipped_swc(self.merge_writer[key])
+                        fragment_graph.to_zipped_swc(self.merge_writer)
+                        if f"{key}.swc" not in self.merge_writer.namelist():
+                            self.gt_graphs[key].to_zipped_swc(self.merge_writer)
+
+                    # Find approximate merge site
                     if self.localize_merges:
-                        self.find_merge_site(key, fragment_graph, kdtree) 
+                        self.find_merge_site(key, fragment_graph, kdtree)
+
                     break
 
-            # Save fragment (if applicable) 
+            # Save fragment (if applicable)
             if self.save_fragments and min_dist < 3:
                 fragment_graph.to_zipped_swc(self.fragment_writer[key])
 
@@ -726,14 +729,24 @@ class SkeletonMetric:
                     voxel_j = fragment_graph.voxels[j]
                     gt_voxel = util.kdtree_query(kdtree, voxel_j)
                     if self.physical_dist(gt_voxel, voxel_j) < 2:
+                        # Save merge swc
                         hit = True
                         merge_cnt = np.sum(list(self.merge_cnt.values()))
                         filename = f"merge-{merge_cnt}.swc"
                         xyz = img_util.to_physical(voxel_j, self.anisotropy)
                         swc_util.to_zipped_point(
-                            self.merge_writer[key], filename, xyz
+                            self.merge_writer, filename, xyz
                         )
-                        self.site_txt_writer.write(f"{tuple(xyz)}\n")
+
+                        # Save merge in list
+                        segment_id = util.get_segment_id(fragment_graph.filename)
+                        self.merge_sites.append(
+                            {
+                                "Segment_ID": segment_id,
+                                "Voxel": voxel_j,
+                                "XYZ": xyz,
+                            }
+                        )
                         break
 
             # Check whether to continue
