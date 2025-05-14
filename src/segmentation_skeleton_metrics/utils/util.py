@@ -167,6 +167,84 @@ def update_txt(path, text):
         file.write(text + "\n")
 
 
+# -- GCS utils --
+def list_files_in_zip(zip_content):
+    """
+    Lists all files in a zip file stored in a GCS bucket.
+
+    Parameters
+    ----------
+    zip_content : str
+        Content stored in a zip file in the form of a string of bytes.
+
+    Returns
+    -------
+    list[str]
+        List of filenames in a zip file.
+
+    """
+    with ZipFile(BytesIO(zip_content), "r") as zip_file:
+        return zip_file.namelist()
+
+
+def list_gcs_filenames(bucket, prefix, extension):
+    """
+    Lists all files in a GCS bucket with the given extension.
+
+    Parameters
+    ----------
+    bucket : google.cloud.client
+        Name of bucket to be read from.
+    prefix : str
+        Path to directory in "bucket".
+    extension : str
+        File extension of filenames to be listed.
+
+    Returns
+    -------
+    list
+        Filenames stored at "cloud" path with the given extension.
+
+    """
+    blobs = bucket.list_blobs(prefix=prefix)
+    return [blob.name for blob in blobs if extension in blob.name]
+
+
+def list_gcs_subdirectories(bucket_name, prefix):
+    """
+    Lists all direct subdirectories of a given prefix in a GCS bucket.
+
+    Parameters
+    ----------
+    bucket : str
+        Name of bucket to be read from.
+    prefix : str
+        Path to directory in "bucket".
+
+    Returns
+    -------
+    list[str]
+         List of direct subdirectories.
+
+    """
+    # Load blobs
+    storage_client = storage.Client()
+    blobs = storage_client.list_blobs(
+        bucket_name, prefix=prefix, delimiter="/"
+    )
+    [blob.name for blob in blobs]
+
+    # Parse directory contents
+    prefix_depth = len(prefix.split("/"))
+    subdirs = list()
+    for prefix in blobs.prefixes:
+        is_dir = prefix.endswith("/")
+        is_direct_subdir = len(prefix.split("/")) - 1 == prefix_depth
+        if is_dir and is_direct_subdir:
+            subdirs.append(prefix)
+    return subdirs
+
+
 # --- Miscellaneous ---
 def get_segment_id(filename):
     """

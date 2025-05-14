@@ -28,6 +28,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
+from google.cloud import storage
 from io import StringIO
 from tqdm import tqdm
 from zipfile import ZipFile
@@ -95,6 +96,10 @@ class Reader:
                 - "swc_id": name of SWC file, minus the ".swc".
 
         """
+        # Dictionary with GCS specs
+        if isinstance(swc_pointer, dict):
+            return self.read_from_gcs(swc_pointer)
+
         # List of paths to SWC files
         if isinstance(swc_pointer, list):
             return self.read_from_paths(swc_pointer)
@@ -277,6 +282,97 @@ class Reader:
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
         return self.parse(content, filename)
+
+    def read_from_gcs(self, gcs_dict):
+        """
+        Reads SWC files from ZIP archives stored in a GCS bucket.
+
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary with the keys "bucket_name" and "path" that specify
+            where the ZIP archives are located in a GCS bucket.
+
+        Returns
+        -------
+        Dequeue[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+
+        """
+        # List filenames
+        bucket = storage.Client().bucket(gcs_dict["bucket_name"])
+        swc_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".swc")
+        zip_paths = util.list_gcs_filenames(bucket, gcs_dict["path"], ".zip")
+
+        # Call reader
+        if len(swc_paths) > 0:
+            return self.read_from_gcs_swcs(bucket, swc_paths)
+        if len(zip_paths) > 0:
+            return self.read_from_gcs_zips(bucket, zip_paths)
+
+        # Error
+        raise Exception(f"GCS Pointer is invalid -{gcs_dict}-")
+
+    def read_from_gcs_swcs(self, bucket, swc_paths):
+        pass
+
+    def read_from_gcs_zips(self, bucket, zip_paths):
+        # Main
+        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for path in zip_paths:
+                zip_content = bucket.blob(path).download_as_bytes()
+                processes.append(
+                    executor.submit(self.read_from_gcs_zip, zip_content)
+                )
+
+            # Store results
+            swc_dicts = deque()
+            for process in as_completed(processes):
+                swc_dicts.extend(process.result())
+                pbar.update(1)
+        return swc_dicts
+
+    def read_from_gcs_zip(self, zip_content):
+        """
+        Reads SWC files stored in a ZIP archive downloaded from a GCS
+        bucket.
+
+        Parameters
+        ----------
+        zip_content : bytes
+            Content of a ZIP archive.
+
+        Returns
+        -------
+        Dequeue[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+
+
+        """
+        with ZipFile(BytesIO(zip_content)) as zip_file:
+            with ThreadPoolExecutor() as executor:
+                # Assign threads
+                threads = list()
+                for filename in util.list_files_in_zip(zip_content):
+                    if self.confirm_read(filename):
+                        threads.append(
+                            executor.submit(
+                                self.read_from_zipped_file, zip_file, filename
+                            )
+                        )
+
+                # Process results
+                swc_dicts = deque()
+                for thread in as_completed(threads):
+                    result = thread.result()
+                    if result:
+                        swc_dicts.append(result)
+        return swc_dicts
 
     def confirm_read(self, filename):
         """
