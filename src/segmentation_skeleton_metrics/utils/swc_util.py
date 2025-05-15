@@ -29,7 +29,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
 )
 from google.cloud import storage
-from io import StringIO
+from io import BytesIO, StringIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -186,7 +186,7 @@ class Reader:
             swc_dicts = deque()
             for thread in as_completed(threads):
                 result = thread.result()
-                if result is not None:
+                if result:
                     swc_dicts.append(result)
                 pbar.update(1)
         return swc_dicts
@@ -261,7 +261,7 @@ class Reader:
             swc_dicts = deque()
             for thread in as_completed(threads):
                 result = thread.result()
-                if result is not None:
+                if result:
                     swc_dicts.append(result)
         return swc_dicts
 
@@ -333,7 +333,7 @@ class Reader:
             swc_dicts = deque()
             for thread in as_completed(threads):
                 result = thread.result()
-                if result is not None:
+                if result:
                     swc_dicts.append(result)
                 pbar.update(1)
         return swc_dicts
@@ -351,21 +351,22 @@ class Reader:
 
     def read_from_gcs_zips(self, bucket_name, zip_paths):
         pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
-        with ProcessPoolExecutor() as executor:
+        swc_dicts = deque()
+        with ThreadPoolExecutor() as executor:
             # Assign processes
-            processes = list()
-            for path in zip_paths:
-                processes.append(
+            threads = list()
+            for zip_path in zip_paths:
+                threads.append(
                     executor.submit(
-                        self.read_from_gcs_zip, bucket_name, path
+                        self.read_from_gcs_zip, bucket_name, zip_path
                     )
                 )
 
             # Store results
-            swc_dicts = deque()
-            for process in as_completed(processes):
-                swc_dicts.extend(process.result())
+            for thread in as_completed(threads):
+                swc_dicts.extend(thread.result())
                 pbar.update(1)
+        print("# swcs:", len(swc_dicts))
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
@@ -391,6 +392,7 @@ class Reader:
         bucket = client.bucket(bucket_name)
 
         # Parse Zip
+        swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
         with ZipFile(BytesIO(zip_content)) as zip_file:
             with ThreadPoolExecutor() as executor:
@@ -405,7 +407,6 @@ class Reader:
                         )
 
                 # Process results
-                swc_dicts = deque()
                 for thread in as_completed(threads):
                     result = thread.result()
                     if result:
