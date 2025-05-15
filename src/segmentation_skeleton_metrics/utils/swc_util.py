@@ -285,7 +285,7 @@ class Reader:
         """
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
-        return self.parse(content, filename)
+        return self.parse(content, filename) if len(content) > 40 else None
 
     def read_from_gcs(self, gcs_dict):
         """
@@ -332,6 +332,7 @@ class Reader:
             for thread in as_completed(threads):
                 swc_dicts.append(thread.result())
                 pbar.update(1)
+        print("# swcs:", len(swc_dicts))
         return swc_dicts
 
     def read_from_gcs_swc(self, bucket_name, path):
