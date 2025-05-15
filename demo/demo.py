@@ -8,7 +8,6 @@ Code that runs of demo of using this library to compute skeleton metrics.
 
 """
 
-from segmentation_skeleton_metrics.utils import util
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 

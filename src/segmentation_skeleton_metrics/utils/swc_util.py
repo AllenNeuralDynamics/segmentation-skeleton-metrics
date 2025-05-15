@@ -285,7 +285,7 @@ class Reader:
         """
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
-        return self.parse(content, filename) if len(content) > 40 else None
+        return self.parse(content, filename)
 
     def read_from_gcs(self, gcs_dict):
         """
@@ -305,7 +305,6 @@ class Reader:
 
         """
         # List filenames
-        
         swc_paths = util.list_gcs_filenames(gcs_dict, ".swc")
         zip_paths = util.list_gcs_filenames(gcs_dict, ".zip")
 
@@ -327,14 +326,11 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                break
 
             # Store results
             swc_dicts = deque()
             for thread in as_completed(threads):
-                result = thread.result()
-                if result:
-                    swc_dicts.append(result)
+                swc_dicts.append(thread.result())
                 pbar.update(1)
         return swc_dicts
 
@@ -346,33 +342,13 @@ class Reader:
 
         # Parse swc contents
         content = blob.download_as_text().splitlines()
-        filename = os.path.basename(path)        
+        filename = os.path.basename(path)
         return self.parse(content, filename)
 
     def read_from_gcs_zips(self, bucket_name, zip_paths):
-        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
         swc_dicts = deque()
-        
-        # test
-        for zip_path in zip_paths:
-            self.read_from_gcs_zip(bucket_name, zip_path)
-            pbar.update(1)
-        
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            threads = list()
-            for zip_path in zip_paths:
-                threads.append(
-                    executor.submit(
-                        self.read_from_gcs_zip, bucket_name, zip_path
-                    )
-                )
-
-            # Store results
-            for thread in as_completed(threads):
-                swc_dicts.extend(thread.result())
-                pbar.update(1)
-        print("# swcs:", len(swc_dicts))
+        for zip_path in tqdm(zip_paths, desc="Read SWCs"):
+            swc_dicts.extend(self.read_from_gcs_zip(bucket_name, zip_path))
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
@@ -414,9 +390,7 @@ class Reader:
 
                 # Process results
                 for thread in as_completed(threads):
-                    result = thread.result()
-                    if result:
-                        swc_dicts.append(result)
+                    swc_dicts.append(thread.result())
         return swc_dicts
 
     def confirm_read(self, filename):
@@ -435,7 +409,7 @@ class Reader:
             Indication of whether to read SWC file.
 
         """
-        if len(self.selected_ids) > 0:
+        if self.selected_ids:
             segment_id = util.get_segment_id(filename)
             return True if segment_id in self.selected_ids else False
         else:

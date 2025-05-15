@@ -609,7 +609,9 @@ class SkeletonMetric:
                     if self.save_merges:
                         fragment_graph.to_zipped_swc(self.merge_writer)
                         if f"{key}.swc" not in self.merge_writer.namelist():
-                            self.gt_graphs[key].to_zipped_swc(self.merge_writer)
+                            self.gt_graphs[key].to_zipped_swc(
+                                self.merge_writer
+                            )
 
                     # Find approximate merge site
                     if self.localize_merges:
