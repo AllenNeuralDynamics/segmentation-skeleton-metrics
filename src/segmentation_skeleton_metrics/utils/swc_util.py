@@ -352,7 +352,13 @@ class Reader:
     def read_from_gcs_zips(self, bucket_name, zip_paths):
         pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
         swc_dicts = deque()
-        with ThreadPoolExecutor() as executor:
+        
+        # test
+        for zip_path in zip_paths:
+            self.read_from_gcs_zip(bucket_name, zip_path)
+            pbar.update(1)
+        
+        with ProcessPoolExecutor() as executor:
             # Assign processes
             threads = list()
             for zip_path in zip_paths:
@@ -394,11 +400,11 @@ class Reader:
         # Parse Zip
         swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
-        with ZipFile(BytesIO(zip_content)) as zip_file:
+        with ZipFile(BytesIO(zip_content), "r") as zip_file:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
                 threads = list()
-                for filename in util.list_files_in_zip(zip_content):
+                for filename in zip_file.namelist():
                     if self.confirm_read(filename):
                         threads.append(
                             executor.submit(
