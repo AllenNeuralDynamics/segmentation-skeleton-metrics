@@ -354,17 +354,17 @@ class Reader:
         swc_dicts = deque()
         with ThreadPoolExecutor() as executor:
             # Assign processes
-            processes = list()
+            threads = list()
             for zip_path in zip_paths:
-                processes.append(
+                threads.append(
                     executor.submit(
                         self.read_from_gcs_zip, bucket_name, zip_path
                     )
                 )
 
             # Store results
-            for process in as_completed(processes):
-                swc_dicts.extend(process.result())
+            for thread in as_completed(threads):
+                swc_dicts.extend(thread.result())
                 pbar.update(1)
         print("# swcs:", len(swc_dicts))
         return swc_dicts
