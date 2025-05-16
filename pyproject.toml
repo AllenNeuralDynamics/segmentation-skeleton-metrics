@@ -15,6 +15,7 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    "google-cloud-storage",
     "networkx",
     "numpy",
     "pandas",
