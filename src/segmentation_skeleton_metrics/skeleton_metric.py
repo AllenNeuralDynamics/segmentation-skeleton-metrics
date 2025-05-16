@@ -443,7 +443,7 @@ class SkeletonMetric:
 
         """
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
-        with ProcessPoolExecutor(max_workers=8) as executor:
+        with ProcessPoolExecutor(max_workers=4) as executor:
             # Assign processes
             processes = list()
             for key, graph in self.graphs.items():
@@ -621,7 +621,9 @@ class SkeletonMetric:
 
             # Save fragment (if applicable)
             if self.save_fragments and min_dist < 3:
-                fragment_graph.to_zipped_swc(self.fragment_writer[key])
+                filename = fragment_graph.filename
+                if f"{filename}.swc" not in self.merge_writer.namelist(): 
+                    fragment_graph.to_zipped_swc(self.fragment_writer[key])
 
     def adjust_metrics(self, key):
         """
