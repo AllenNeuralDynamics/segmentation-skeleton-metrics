@@ -247,6 +247,22 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
+def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    for root, _, files in os.walk(source_dir):
+        for filename in files:
+            local_path = os.path.join(root, filename)
+
+            # Compute the relative path and GCS destination path
+            relative_path = os.path.relpath(local_path, start=source_dir)
+            blob_path = os.path.join(destination_dir, relative_path).replace("\\", "/")
+
+            # Upload the file
+            blob = bucket.blob(blob_path)
+            blob.upload_from_filename(local_path)
+
+
 # --- Miscellaneous ---
 def get_segment_id(filename):
     """
