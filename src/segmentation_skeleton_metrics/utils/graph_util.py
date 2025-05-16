@@ -146,10 +146,13 @@ class GraphBuilder:
 
         """
         # Initialize graph
-        graph = SkeletonGraph(anisotropy=self.anisotropy)
-        graph.init_voxels(swc_dict["voxel"])
-        graph.set_filename(swc_dict["swc_id"] + ".swc")
-        graph.set_nodes(len(swc_dict["id"]))
+        try:
+            graph = SkeletonGraph(anisotropy=self.anisotropy)
+            graph.init_voxels(swc_dict["voxel"])
+            graph.set_filename(swc_dict["swc_id"] + ".swc")
+            graph.set_nodes(len(swc_dict["id"]))
+        except:
+            print("Failed at Line 155 -", swc_dict["swc_id"] + ".swc")
 
         # Build graph
         id_lookup = dict()
