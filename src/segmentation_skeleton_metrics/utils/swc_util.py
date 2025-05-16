@@ -326,7 +326,6 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                break
 
             # Store results
             swc_dicts = deque()
@@ -350,7 +349,6 @@ class Reader:
         swc_dicts = deque()
         for zip_path in tqdm(zip_paths, desc="Read SWCs"):
             swc_dicts.extend(self.read_from_gcs_zip(bucket_name, zip_path))
-            break
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
