@@ -621,8 +621,7 @@ class SkeletonMetric:
 
             # Save fragment (if applicable)
             if self.save_fragments and min_dist < 3:
-                filename = fragment_graph.filename
-                if f"{filename}.swc" not in self.merge_writer.namelist(): 
+                if fragment_graph.filename not in self.merge_writer.namelist(): 
                     fragment_graph.to_zipped_swc(self.fragment_writer[key])
 
     def adjust_metrics(self, key):
