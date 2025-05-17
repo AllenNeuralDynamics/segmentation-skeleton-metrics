@@ -334,7 +334,6 @@ class Reader:
                 if result:
                     swc_dicts.append(result)
                 pbar.update(1)
-        print("# swcs:", len(swc_dicts))
         return swc_dicts
 
     def read_from_gcs_swc(self, bucket_name, path):
@@ -440,20 +439,23 @@ class Reader:
         # Initializations
         swc_id, _ = os.path.splitext(filename)
         content, offset = self.process_content(content)
-        swc_dict = {
-            "id": np.zeros((len(content)), dtype=int),
-            "pid": np.zeros((len(content)), dtype=int),
-            "voxel": np.zeros((len(content), 3), dtype=np.int32),
-            "swc_id": swc_id,
-        }
-
-        # Parse content
-        for i, line in enumerate(content):
-            parts = line.split()
-            swc_dict["id"][i] = parts[0]
-            swc_dict["pid"][i] = parts[-1]
-            swc_dict["voxel"][i] = self.read_voxel(parts[2:5], offset)
-        return swc_dict
+        if len(content) > 20:
+            swc_dict = {
+                "id": np.zeros((len(content)), dtype=int),
+                "pid": np.zeros((len(content)), dtype=int),
+                "voxel": np.zeros((len(content), 3), dtype=np.int32),
+                "swc_id": swc_id,
+            }
+    
+            # Parse content
+            for i, line in enumerate(content):
+                parts = line.split()
+                swc_dict["id"][i] = parts[0]
+                swc_dict["pid"][i] = parts[-1]
+                swc_dict["voxel"][i] = self.read_voxel(parts[2:5], offset)
+            return swc_dict
+        else:
+            return None
 
     def process_content(self, content):
         """
