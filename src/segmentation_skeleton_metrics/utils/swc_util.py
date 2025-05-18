@@ -439,7 +439,7 @@ class Reader:
         # Initializations
         swc_id, _ = os.path.splitext(filename)
         content, offset = self.process_content(content)
-        if len(content) > 20:
+        if len(content) > 30:
             swc_dict = {
                 "id": np.zeros((len(content)), dtype=int),
                 "pid": np.zeros((len(content)), dtype=int),
