@@ -933,13 +933,20 @@ class SkeletonMetric:
             Average value of metric computed across self.graphs".
 
         """
+        # Compute weights
         result = []
         wgts = []
         for key, wgt in self.wgts.items():
             if self.omit_percent[key] < 1:
                 result.append(stats[key])
                 wgts.append(wgt)
-        return np.average(result, weights=wgts)
+
+        # Average results
+        try:
+            return np.average(result, weights=wgts)
+        except:
+            print("Error - Line 948 -", wgts)
+            return result
 
     def compute_edge_accuracy(self):
         """
@@ -984,11 +991,11 @@ class SkeletonMetric:
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
             self.erl[key] = np.sum(wgt * run_lengths)
-            self.normalized_erl[key] = self.erl[key] / run_length
+            self.normalized_erl[key] = self.erl[key] / max(run_length, 1)
             self.wgts[key] = run_length
 
         for key in self.graphs:
-            self.wgts[key] = self.wgts[key] / total_run_length
+            self.wgts[key] = self.wgts[key] / max(total_run_length, 1)
 
     def count_total_splits(self):
         """
