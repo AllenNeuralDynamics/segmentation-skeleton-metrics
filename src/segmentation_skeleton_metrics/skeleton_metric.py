@@ -510,6 +510,7 @@ class SkeletonMetric:
                     kdtree = KDTree(graph.voxels)
                     self.count_merges(key, kdtree)
                 pbar.update(1)
+            self.merge_writer.close()
 
         # Adjust metrics (if applicable)
         if self.preexisting_merges:
