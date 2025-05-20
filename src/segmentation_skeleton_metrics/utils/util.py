@@ -17,6 +17,7 @@ from xlwt import Workbook
 from zipfile import ZipFile
 
 import os
+import pandas as pd
 import shutil
 
 
@@ -247,6 +248,13 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
+def read_txt_from_gcs(bucket_name, file_name):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(file_name)
+    return blob.download_as_text()
+
+
 def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -299,11 +307,8 @@ def load_merged_labels(path):
         Segment IDs that are known to contain a merge mistake.
 
     """
-    merged_ids = list()
-    for i, txt in enumerate(read_txt(path)):
-        if i > 0:
-            merged_ids.append(int(txt.split("-")[0]))
-    return merged_ids
+    df = pd.read_csv(path)
+    return list(df["Segment_ID"])
 
 
 def load_valid_labels(path):
