@@ -524,9 +524,6 @@ class SkeletonMetric:
         for key, label, xyz in self.merged_labels:
             self.process_merge(key, label, xyz, update_merged_labels=False)
 
-        # Write merges to local machine
-        self.save_merged_labels()
-
     def count_merges(self, key, kdtree):
         """
         Counts the number of label merges for a given graph key based on
