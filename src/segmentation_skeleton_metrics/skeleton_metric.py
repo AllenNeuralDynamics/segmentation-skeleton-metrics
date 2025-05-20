@@ -565,11 +565,9 @@ class SkeletonMetric:
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
                     if self.physical_dist(gt_voxel, voxel) > 50:
-                        has_merge, visited = self.find_merge_site(
+                        visited = self.find_merge_site(
                             key, kdtree, fragment_graph, leaf, visited
                         )
-                        if has_merge:
-                            break
 
                 # Save fragment (if applicable)
                 if self.save_fragments:
@@ -609,8 +607,8 @@ class SkeletonMetric:
                         gutil.write_graph(
                              self.gt_graphs[key], self.merge_writer
                          )
-                    return True, visited
-        return False, visited
+                    return visited
+        return visited
 
     def process_merge_sites(self):
         # Remove duplicates
