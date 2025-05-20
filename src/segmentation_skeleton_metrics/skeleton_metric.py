@@ -118,7 +118,6 @@ class SkeletonMetric:
         # Instance attributes
         self.anisotropy = anisotropy
         self.connections_path = connections_path
-        self.merge_sites = list()
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
@@ -134,9 +133,24 @@ class SkeletonMetric:
         self.load_groundtruth(gt_pointer)
         self.load_fragments(fragments_pointer)
 
-        # Initialize writers
+        # Initialize metrics
         util.mkdir(output_dir, delete=True)
         self.init_writers()
+        self.merge_sites = list()
+
+        row_names = list(self.graphs.keys())
+        col_names = [
+            "# Splits",
+            "# Merges",
+            "% Split",
+            "% Omit",
+            "% Merged",
+            "Edge Accuracy",
+            "ERL",
+            "Normalized ERL",
+            "GT Run Length"
+        ]
+        self.metrics = pd.DataFrame(index=row_names, columns=col_names)
 
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer):
@@ -389,36 +403,30 @@ class SkeletonMetric:
         """
         print("\n(3) Evaluation")
 
-        # Split detection
-        self.detect_splits()
-        self.quantify_splits()
-
-        # Merge detection
-        self.detect_merges()
-        self.quantify_merges()
-
         # Compute metrics
-        full_results, avg_results = self.compile_results()
+        self.detect_splits()
+        self.detect_merges()
+        self.compute_edge_accuracy()
+        self.compute_erl()
 
-        # Report full results
+        # Save results
         prefix = "corrected-" if self.connections_path else ""
-        path = f"{self.output_dir}/{prefix}results.xls"
-        util.save_results(path, full_results)
+        path = f"{self.output_dir}/{prefix}results.csv"
+        self.metrics.to_csv(path, index=False)
 
-        # Save merge sites
-        df = pd.DataFrame(self.merge_sites)
-        path = os.path.join(self.output_dir, "merge_sites.csv")
-        df.to_csv(path, index=False)
-
-        # Report results overview
+        # Report results
         path = os.path.join(self.output_dir, f"{prefix}results-overview.txt")
         util.update_txt(path, "Average Results...")
-        for key in avg_results.keys():
-            util.update_txt(path, f"   {key}: {round(avg_results[key], 4)}")
+        for column_name in self.metrics.columns:
+            if column_name != "GT Run Length":
+                avg = self.compute_weighted_avg(column_name)
+                util.update_txt(path, f"  {column_name}: {avg:.4f}")
 
+        n_splits = self.metrics["# Splits"].sum()
+        n_merges = self.metrics["# Merges"].sum()
         util.update_txt(path, "\nTotal Results...")
-        util.update_txt(path, f"   # splits: {self.count_total_splits()}")
-        util.update_txt(path, f"   # merges: {self.count_total_merges()}")
+        util.update_txt(path, "  # Splits: " + str(n_splits))
+        util.update_txt(path, "  # Merges: " + str(n_merges))
 
     # -- Split Detection --
     def detect_splits(self):
@@ -445,45 +453,21 @@ class SkeletonMetric:
                 )
 
             # Store results
-            self.split_percent = dict()
             for process in as_completed(processes):
                 key, graph, split_percent = process.result()
+                n_edges = graph.number_of_edges()
+                n_gt_edges = graph.graph["n_edges"]
+
                 self.graphs[key] = graph
-                self.split_percent[key] = split_percent
+                self.metrics.at[key, "% Omit"] = 1 - n_edges / n_gt_edges
+                self.metrics.at[key, "# Splits"] = gutil.count_splits(graph)
+                self.metrics.loc[key, "% Split"] = split_percent
+                self.metrics.loc[key, "GT Run Length"] = graph.run_length
                 pbar.update(1)
-
-    def quantify_splits(self):
-        """
-        Counts the number of splits, number of omit edges, and omit edge ratio
-        in the labeled ground truth graphs.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        self.split_cnt = dict()
-        self.omit_cnts = dict()
-        self.omit_percent = dict()
-        for key in self.graphs:
-            # Get counts
-            n_pred_edges = self.graphs[key].number_of_edges()
-            n_target_edges = self.graphs[key].graph["n_edges"]
-
-            # Compute stats
-            self.split_cnt[key] = gutil.count_splits(self.graphs[key])
-            self.omit_cnts[key] = n_target_edges - n_pred_edges
-            self.omit_percent[key] = 1 - n_pred_edges / n_target_edges
 
     # -- Merge Detection --
     def detect_merges(self):
         """
-        --> HERE
-
         Detects merges in the predicted segmentation, then deletes node and
         edges in "self.graphs" that correspond to a merge.
 
@@ -497,9 +481,7 @@ class SkeletonMetric:
 
         """
         # Initilizations
-        self.merge_cnt = self.init_counter()
-        self.merged_edges_cnt = self.init_counter()
-        self.merged_percent = self.init_counter()
+        self.n_merged_edges = {key: 0 for key in self.graphs}
         self.merged_labels = set()
 
         # Detect merges by comparing fragment graphs to ground truth graphs
@@ -507,10 +489,9 @@ class SkeletonMetric:
             pbar = tqdm(total=len(self.graphs), desc="Merge Detection")
             for key, graph in self.graphs.items():
                 if graph.number_of_nodes() > 0:
-                    kdtree = KDTree(graph.voxels)
-                    self.count_merges(key, kdtree)
+                    self.count_merges(key, KDTree(graph.voxels))
                 pbar.update(1)
-            self.merge_writer.close()
+            self.process_merge_sites()
 
         # Adjust metrics (if applicable)
         if self.preexisting_merges:
@@ -524,6 +505,8 @@ class SkeletonMetric:
 
         for key, label, xyz in self.merged_labels:
             self.process_merge(key, label, xyz, update_merged_labels=False)
+
+        self.quantify_merges()
 
     def count_merges(self, key, kdtree):
         """
@@ -576,10 +559,9 @@ class SkeletonMetric:
         """
         for fragment_graph in self.find_graph_from_label(label):
             if fragment_graph.run_length < 10**6:
-                # Search for merge
+                # Search for leaf far from ground truth
                 visited = set()
                 for leaf in gutil.get_leafs(fragment_graph):
-                    # Check if leaf is far from ground truth
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
                     if self.physical_dist(gt_voxel, voxel) > 50:
@@ -595,7 +577,9 @@ class SkeletonMetric:
                         voxel = fragment_graph.voxels[node]
                         gt_voxel = util.kdtree_query(kdtree, voxel)
                         if self.physical_dist(gt_voxel, voxel) < 3:
-                            write_graph(fragment_graph, self.fragment_writer[key])
+                            gutil.write_graph(
+                                fragment_graph, self.fragment_writer[key]
+                            )
                             break
 
     def find_merge_site(self, key, kdtree, fragment_graph, source, visited):
@@ -609,29 +593,48 @@ class SkeletonMetric:
                     # Log merge mistake
                     segment_id = util.get_segment_id(fragment_graph.filename)
                     xyz = img_util.to_physical(voxel, self.anisotropy)
-                    self.merge_cnt[key] += 1
                     self.merged_labels.add((key, segment_id, xyz))
                     self.merge_sites.append(
                         {
                             "Segment_ID": segment_id,
+                            "GroundTruth_ID": key,
                             "Voxel": voxel,
-                            "XYZ": xyz,
+                            "World": xyz,
                         }
                     )
 
                     # Save merged fragment (if applicable)
                     if self.save_merges:
-                        # Save graphs
-                        write_graph(self.gt_graphs[key], self.merge_writer)
-                        write_graph(fragment_graph, self.merge_writer)
-
-                        # Save merge site
-                        merge_cnt = np.sum(list(self.merge_cnt.values()))
-                        swc_util.to_zipped_point(
-                            self.merge_writer, f"merge-{merge_cnt}.swc", xyz
-                        )
+                        gutil.write_graph(fragment_graph, self.merge_writer)
+                        gutil.write_graph(
+                             self.gt_graphs[key], self.merge_writer
+                         )
                     return True, visited
         return False, visited
+
+    def process_merge_sites(self):
+        # Remove duplicates
+        idxs = set()
+        pts = [s["World"] for s in self.merge_sites]
+        for idx_1, idx_2 in KDTree(pts).query_pairs(30):
+            idxs.add(idx_1)
+        self.merge_sites = pd.DataFrame(self.merge_sites).drop(idxs)
+
+        # Save merge sites
+        for i in range(len(self.merge_sites)):
+            filename = f"merge-{i + 1}.swc"
+            xyz = self.merge_sites.iloc[i]["World"]
+            swc_util.to_zipped_point(self.merge_writer, filename, xyz)
+
+        # Update counter
+        for key in self.graphs.keys():
+            idx_mask = self.merge_sites["GroundTruth_ID"] == key
+            self.metrics.loc[key, "# Merges"] = int(idx_mask.sum())
+
+        # Save results
+        path = os.path.join(self.output_dir, "merge_sites.csv")
+        self.merge_sites.to_csv(path, index=False)
+        self.merge_writer.close()
 
     def adjust_metrics(self, key):
         """
@@ -720,7 +723,7 @@ class SkeletonMetric:
             # Compute metrics
             nodes = self.graphs[key].nodes_with_label(label)
             subgraph = self.graphs[key].subgraph(nodes)
-            self.merged_edges_cnt[key] += subgraph.number_of_edges()
+            self.n_merged_edges[key] += subgraph.number_of_edges()
 
             # Update self
             self.graphs[key].remove_nodes_from(nodes)
@@ -740,160 +743,11 @@ class SkeletonMetric:
         None
 
         """
-        self.merged_percent = dict()
         for key in self.graphs:
-            n_edges = self.graphs[key].graph["n_edges"]
-            self.merged_percent[key] = self.merged_edges_cnt[key] / n_edges
-
-    def get_merged_label(self, label):
-        """
-        Retrieves the label present in the corrected fragments that
-        corresponds to the given label. Note: the given and retrieved label
-        may differ in the case when two fragments are merged.
-
-        Parameters
-        ----------
-        label : str
-            The label for which to find the corresponding label present in the
-            corrected fragments.
-
-        Returns:
-        -------
-        str or list
-            The first matching label found in "self.fragment_graphs.keys()" or
-            the original associated labels from "inverse_label_map" if no
-            matches are found.
-
-        """
-        for l in self.label_handler.get_class(label):
-            if l in self.fragment_graphs.keys():
-                return l
-        return self.label_handler.inverse_mapping[label]
+            p = self.n_merged_edges[key] / self.graphs[key].graph["n_edges"]
+            self.metrics.loc[key, "% Merged"] = p
 
     # -- Compute Metrics --
-    def compile_results(self):
-        """
-        Compiles a dictionary containing the metrics computed by this module.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict
-            Dictionary where the keys are keys and the values are the
-            result of computing each metric for the corresponding graphs.
-        dict
-            Dictionary where the keys are names of metrics computed by this
-            module and values are the averaged result over all keys.
-
-        """
-        # Compute remaining metrics
-        self.compute_edge_accuracy()
-        self.compute_erl()
-
-        # Summarize results
-        keys, results = self.generate_full_results()
-        avg_results = self.generate_avg_results()
-
-        # Reformat full results
-        full_results = dict()
-        for i, key in enumerate(keys):
-            full_results[key] = {key: val[i] for key, val in results.items()}
-        return full_results, avg_results
-
-    def generate_full_results(self):
-        """
-        Generates a report by creating a list of the results for each metric.
-        Each item in this list corresponds to a graph in self.graphs and
-        this list is ordered with respect to "keys".
-
-        Parameters
-        ----------
-        None
-
-        Results
-        -------
-        list[str]
-            Specifies the ordering of results for each value in "stats".
-        dict
-            Dictionary where the keys are metrics and values are the result of
-            computing that metric for each graph in self.graphs.
-
-        """
-        keys = list(self.graphs.keys())
-        keys.sort()
-        stats = {
-            "# splits": generate_result(keys, self.split_cnt),
-            "# merges": generate_result(keys, self.merge_cnt),
-            "% omit": generate_result(keys, self.omit_percent),
-            "% split": generate_result(keys, self.split_percent),
-            "% merged": generate_result(keys, self.merged_percent),
-            "edge accuracy": generate_result(keys, self.edge_accuracy),
-            "erl": generate_result(keys, self.erl),
-            "normalized erl": generate_result(keys, self.normalized_erl),
-        }
-        return keys, stats
-
-    def generate_avg_results(self):
-        """
-        Averages value of each metric across all graphs from "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict
-            Average value of each metric across "self.graphs".
-
-        """
-        avg_stats = {
-            "# splits": self.avg_result(self.split_cnt),
-            "# merges": self.avg_result(self.merge_cnt),
-            "% omit": self.avg_result(self.omit_percent),
-            "% split": self.avg_result(self.split_percent),
-            "% merged": self.avg_result(self.merged_percent),
-            "edge accuracy": self.avg_result(self.edge_accuracy),
-            "erl": self.avg_result(self.erl),
-            "normalized erl": self.avg_result(self.normalized_erl),
-        }
-        return avg_stats
-
-    def avg_result(self, stats):
-        """
-        Averages the values computed across "self.graphs" for a given metric
-        stored in "stats".
-
-        Parameters
-        ----------
-        stats : dict
-            Values computed across all graphs from "self.graphs" for a given
-            metric stored in "stats".
-
-        Returns
-        -------
-        float
-            Average value of metric computed across self.graphs".
-
-        """
-        # Compute weights
-        result = []
-        wgts = []
-        for key, wgt in self.wgts.items():
-            if self.omit_percent[key] < 1:
-                result.append(stats[key])
-                wgts.append(wgt)
-
-        # Average results
-        try:
-            return np.average(result, weights=wgts)
-        except:
-            print("Error - Line 948 -", wgts)
-            return result
-
     def compute_edge_accuracy(self):
         """
         Computes the edge accuracy of each self.graph.
@@ -907,11 +761,10 @@ class SkeletonMetric:
         None
 
         """
-        self.edge_accuracy = dict()
         for key in self.graphs:
-            omit_percent = self.omit_percent[key]
-            merged_percent = self.merged_percent[key]
-            self.edge_accuracy[key] = 1 - omit_percent - merged_percent
+            p_omit = self.metrics.loc[key, "% Omit"]
+            p_merged = self.metrics.loc[key, "% Merged"]
+            self.metrics.loc[key, "Edge Accuracy"] = 1 - p_omit - p_merged
 
     def compute_erl(self):
         """
@@ -926,79 +779,20 @@ class SkeletonMetric:
         None
 
         """
-        self.erl = dict()
-        self.normalized_erl = dict()
-        self.wgts = dict()
         total_run_length = 0
         for key in self.graphs:
             run_length = self.graphs[key].run_length
-            total_run_length += run_length
             run_lengths = self.graphs[key].run_lengths()
+            total_run_length += run_length
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
-            self.erl[key] = np.sum(wgt * run_lengths)
-            self.normalized_erl[key] = self.erl[key] / max(run_length, 1)
-            self.wgts[key] = run_length
+            erl = np.sum(wgt * run_lengths)
+            self.metrics.loc[key, "ERL"] = erl
+            self.metrics.loc[key, "Normalized ERL"] = erl / max(run_length, 1)
 
-        for key in self.graphs:
-            self.wgts[key] = self.wgts[key] / max(total_run_length, 1)
-
-    def count_total_splits(self):
-        """
-        Counts the total number of splits across all ground truth graphs.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        int
-            Total number of splits across all ground truth graphs.
-
-        """
-        return np.sum(list(self.split_cnt.values()))
-
-    def count_total_merges(self):
-        """
-        Counts the total number of merges across all ground truth graphs.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        int
-            Total number of merges across all ground truth graphs.
-
-        """
-        return np.sum(np.sum(list(self.merge_cnt.values())))
-
-    def list_metrics(self):
-        """
-        Lists metrics that are computed by this module.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        list[str]
-            Metrics computed by this module.
-
-        """
-        metrics = [
-            "# splits",
-            "# merges",
-            "% omit",
-            "% merged",
-            "edge accuracy",
-            "erl",
-            "normalized erl",
-        ]
-        return metrics
+    def compute_weighted_avg(self, column_name):
+        wgt = self.metrics["GT Run Length"]
+        return (self.metrics[column_name] * wgt).sum() / wgt.sum()
 
     # -- Helpers --
     def find_graph_from_label(self, label):
@@ -1029,52 +823,7 @@ class SkeletonMetric:
         xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
         return distance.euclidean(xyz_1, xyz_2)
 
-    def init_counter(self):
-        """
-        Initializes a dictionary that is used to count some type of mistake
-        for each graph in "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        dict
-            Dictionary used to count some type of mistake for each graph.
-
-        """
-        return {key: 0 for key in self.graphs}
-
     def to_local_voxels(self, key, i, offset):
         voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
-
-
-# -- util --
-def generate_result(keys, stats):
-    """
-    Reorders items in "stats" with respect to the order defined by "keys".
-
-    Parameters
-    ----------
-    keys : list[str]
-        List of all "keys" of graphs in "self.graphs".
-    stats : dict
-        Dictionary where the keys are "keys" and values are the result
-        of computing some metrics.
-
-    Returns
-    -------
-    list
-        Reorded items in "stats" with respect to the order defined by
-        "keys".
-
-    """
-    return [stats[key] for key in keys]
-
-
-def write_graph(graph, writer):
-    if graph.filename not in writer.namelist():
-        graph.to_zipped_swc(writer)
