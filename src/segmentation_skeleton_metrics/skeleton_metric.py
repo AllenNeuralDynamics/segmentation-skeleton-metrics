@@ -66,7 +66,6 @@ class SkeletonMetric:
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
-        localize_merges=False,
         preexisting_merges=None,
         save_merges=False,
         save_fragments=False,
@@ -97,9 +96,6 @@ class SkeletonMetric:
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
-        localize_merges : bool, optional
-            Indication of whether to search for the approximate location of a
-            merge. The default is False.
         preexisting_merges : List[int], optional
             List of segment IDs that are known to contain a merge mistake. The
             default is None.
@@ -122,7 +118,7 @@ class SkeletonMetric:
         # Instance attributes
         self.anisotropy = anisotropy
         self.connections_path = connections_path
-        self.localize_merges = localize_merges
+        self.merge_sites = list()
         self.output_dir = output_dir
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
@@ -373,10 +369,9 @@ class SkeletonMetric:
                 self.graphs[key].to_zipped_swc(self.fragment_writer[key])
 
         # Merged fragments writer
-        if self.save_merges or self.localize_merges:
+        if self.save_merges:
             zip_path = os.path.join(self.output_dir, "merged_fragments.zip")
             self.merge_writer = ZipFile(zip_path, "a")
-            self.merge_sites = list()
 
     # -- Main Routine --
     def run(self):
@@ -410,12 +405,10 @@ class SkeletonMetric:
         path = f"{self.output_dir}/{prefix}results.xls"
         util.save_results(path, full_results)
 
-        # Save merge sites (if applicable)
-        if self.localize_merges:
-            df = pd.DataFrame(self.merge_sites)
-            df.to_csv(
-                os.path.join(self.output_dir, "merge_sites.csv"), index=False
-            )
+        # Save merge sites
+        df = pd.DataFrame(self.merge_sites)
+        path = os.path.join(self.output_dir, "merge_sites.csv")
+        df.to_csv(path, index=False)
 
         # Report results overview
         path = os.path.join(self.output_dir, f"{prefix}results-overview.txt")
@@ -554,7 +547,7 @@ class SkeletonMetric:
 
         """
         # Iterate over fragments that intersect with GT skeleton
-        for label in self.get_node_labels(key):
+        for label in tqdm(self.get_node_labels(key), desc="Merge Search"):
             nodes = self.graphs[key].nodes_with_label(label)
             if len(nodes) > 40:
                 for label in self.label_handler.get_class(label):
@@ -583,46 +576,64 @@ class SkeletonMetric:
         None
 
         """
-        # Search graphs
         for fragment_graph in self.find_graph_from_label(label):
-            # Search for merge
-            max_dist = 0
-            min_dist = np.inf
-            for voxel in fragment_graph.voxels:
+            if fragment_graph.run_length < 10**6:
+                # Search for merge
+                visited = set()
+                for leaf in gutil.get_leafs(fragment_graph):
+                    # Check if leaf is far from ground truth
+                    voxel = fragment_graph.voxels[leaf]
+                    gt_voxel = util.kdtree_query(kdtree, voxel)
+                    if self.physical_dist(gt_voxel, voxel) > 50:
+                        has_merge, visited = self.find_merge_site(
+                            key, kdtree, fragment_graph, leaf, visited
+                        )
+                        if has_merge:
+                            break
+
+                # Save fragment (if applicable)
+                if self.save_fragments:
+                    for node in fragment_graph.nodes:
+                        voxel = fragment_graph.voxels[node]
+                        gt_voxel = util.kdtree_query(kdtree, voxel)
+                        if self.physical_dist(gt_voxel, voxel) < 3:
+                            write_graph(fragment_graph, self.fragment_writer[key])
+                            break
+
+    def find_merge_site(self, key, kdtree, fragment_graph, source, visited):
+        for _, node in nx.dfs_edges(fragment_graph, source=source):
+            if node not in visited:
                 # Find closest point in ground truth
+                visited.add(node)
+                voxel = fragment_graph.voxels[node]
                 gt_voxel = util.kdtree_query(kdtree, voxel)
-
-                # Compute projection distance
-                dist = self.physical_dist(gt_voxel, voxel)
-                min_dist = min(dist, min_dist)
-                max_dist = max(dist, max_dist)
-
-                # Check if distances imply merge mistake
-                if max_dist > 100 and min_dist < 3:
+                if self.physical_dist(gt_voxel, voxel) < 2:
                     # Log merge mistake
-                    equiv_label = self.label_handler.get(label)
+                    segment_id = util.get_segment_id(fragment_graph.filename)
                     xyz = img_util.to_physical(voxel, self.anisotropy)
                     self.merge_cnt[key] += 1
-                    self.merged_labels.add((key, equiv_label, tuple(xyz)))
+                    self.merged_labels.add((key, segment_id, xyz))
+                    self.merge_sites.append(
+                        {
+                            "Segment_ID": segment_id,
+                            "Voxel": voxel,
+                            "XYZ": xyz,
+                        }
+                    )
 
                     # Save merged fragment (if applicable)
                     if self.save_merges:
-                        fragment_graph.to_zipped_swc(self.merge_writer)
-                        if f"{key}.swc" not in self.merge_writer.namelist():
-                            self.gt_graphs[key].to_zipped_swc(
-                                self.merge_writer
-                            )
+                        # Save graphs
+                        write_graph(self.gt_graphs[key], self.merge_writer)
+                        write_graph(fragment_graph, self.merge_writer)
 
-                    # Find approximate merge site
-                    if self.localize_merges:
-                        self.find_merge_site(key, fragment_graph, kdtree)
-
-                    break
-
-            # Save fragment (if applicable)
-            if self.save_fragments and min_dist < 3:
-                if fragment_graph.filename not in self.merge_writer.namelist(): 
-                    fragment_graph.to_zipped_swc(self.fragment_writer[key])
+                        # Save merge site
+                        merge_cnt = np.sum(list(self.merge_cnt.values()))
+                        swc_util.to_zipped_point(
+                            self.merge_writer, f"merge-{merge_cnt}.swc", xyz
+                        )
+                    return True, visited
+        return False, visited
 
     def adjust_metrics(self, key):
         """
@@ -718,45 +729,6 @@ class SkeletonMetric:
             if update_merged_labels:
                 self.merged_labels.add((key, label, -1))
 
-    def find_merge_site(self, key, fragment_graph, kdtree):
-        visited = set()
-        hit = False
-        for i, voxel in enumerate(fragment_graph.voxels):
-            # Find closest point in ground truth
-            visited.add(i)
-            gt_voxel = util.kdtree_query(kdtree, voxel)
-
-            # Compute projection distance
-            if self.physical_dist(gt_voxel, voxel) > 100:
-                for _, j in nx.dfs_edges(fragment_graph, source=i):
-                    visited.add(j)
-                    voxel_j = fragment_graph.voxels[j]
-                    gt_voxel = util.kdtree_query(kdtree, voxel_j)
-                    if self.physical_dist(gt_voxel, voxel_j) < 2:
-                        # Save merge swc
-                        hit = True
-                        merge_cnt = np.sum(list(self.merge_cnt.values()))
-                        filename = f"merge-{merge_cnt}.swc"
-                        xyz = img_util.to_physical(voxel_j, self.anisotropy)
-                        swc_util.to_zipped_point(
-                            self.merge_writer, filename, xyz
-                        )
-
-                        # Save merge in list
-                        segment_id = util.get_segment_id(fragment_graph.filename)
-                        self.merge_sites.append(
-                            {
-                                "Segment_ID": segment_id,
-                                "Voxel": voxel_j,
-                                "XYZ": xyz,
-                            }
-                        )
-                        break
-
-            # Check whether to continue
-            if hit:
-                break
-
     def quantify_merges(self):
         """
         Computes the percentage of merged edges for each graph.
@@ -774,30 +746,6 @@ class SkeletonMetric:
         for key in self.graphs:
             n_edges = self.graphs[key].graph["n_edges"]
             self.merged_percent[key] = self.merged_edges_cnt[key] / n_edges
-
-    def save_merged_labels(self):
-        """
-        Saves merged labels and their corresponding coordinates to a text
-        file.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-        # Save detected merges
-        prefix = "corrected_" if self.connections_path else ""
-        filename = f"merged_{prefix}segment_ids.txt"
-        with open(os.path.join(self.output_dir, filename), "w") as f:
-            f.write(f" Label   -   Physical Coordinate\n")
-            for _, label, xyz in self.merged_labels:
-                if self.label_handler.use_mapping():
-                    label = self.get_merged_label(label)
-                f.write(f" {label}   -   {xyz}\n")
 
     def get_merged_label(self, label):
         """
@@ -1127,3 +1075,8 @@ def generate_result(keys, stats):
 
     """
     return [stats[key] for key in keys]
+
+
+def write_graph(graph, writer):
+    if graph.filename not in writer.namelist():
+        graph.to_zipped_swc(writer)

@@ -290,3 +290,21 @@ def count_splits(graph):
 
     """
     return max(nx.number_connected_components(graph) - 1, 0)
+
+
+def get_leafs(graph):
+    """
+    Gets all leafs nodes in the given graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+
+    Returns
+    -------
+    List[int]
+        Leaf nodes in the given graph.
+
+    """
+    return [node for node in graph.nodes if graph.degree[node] == 1]
