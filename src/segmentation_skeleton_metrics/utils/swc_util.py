@@ -446,7 +446,7 @@ class Reader:
                 "voxel": np.zeros((len(content), 3), dtype=np.int32),
                 "swc_id": swc_id,
             }
-    
+
             # Parse content
             for i, line in enumerate(content):
                 parts = line.split()

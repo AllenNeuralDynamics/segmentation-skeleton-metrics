@@ -308,3 +308,8 @@ def get_leafs(graph):
 
     """
     return [node for node in graph.nodes if graph.degree[node] == 1]
+
+
+def write_graph(graph, writer):
+    if graph.filename not in writer.namelist():
+        graph.to_zipped_swc(writer)

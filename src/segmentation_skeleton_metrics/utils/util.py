@@ -263,8 +263,8 @@ def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
             local_path = os.path.join(root, filename)
 
             # Compute the relative path and GCS destination path
-            relative_path = os.path.relpath(local_path, start=source_dir)
-            blob_path = os.path.join(destination_dir, relative_path).replace("\\", "/")
+            path = os.path.relpath(local_path, start=source_dir)
+            blob_path = os.path.join(destination_dir, path).replace("\\", "/")
 
             # Upload the file
             blob = bucket.blob(blob_path)
