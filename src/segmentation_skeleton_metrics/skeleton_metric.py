@@ -532,7 +532,7 @@ class SkeletonMetric:
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 50:
+            if len(nodes) > 100:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
@@ -589,7 +589,7 @@ class SkeletonMetric:
                 visited.add(node)
                 voxel = fragment_graph.voxels[node]
                 gt_voxel = util.kdtree_query(kdtree, voxel)
-                if self.physical_dist(gt_voxel, voxel) < 2:
+                if self.physical_dist(gt_voxel, voxel) < 3:
                     # Log merge mistake
                     segment_id = util.get_segment_id(fragment_graph.filename)
                     xyz = img_util.to_physical(voxel, self.anisotropy)
@@ -598,8 +598,8 @@ class SkeletonMetric:
                         {
                             "Segment_ID": segment_id,
                             "GroundTruth_ID": key,
-                            "Voxel": voxel,
-                            "World": xyz,
+                            "Voxel": tuple(voxel),
+                            "World": tuple([float(t) for t in xyz]),
                         }
                     )
 
