@@ -611,28 +611,29 @@ class SkeletonMetric:
         return visited
 
     def process_merge_sites(self):
-        # Remove duplicates
-        idxs = set()
-        pts = [s["World"] for s in self.merge_sites]
-        for idx_1, idx_2 in KDTree(pts).query_pairs(30):
-            idxs.add(idx_1)
-        self.merge_sites = pd.DataFrame(self.merge_sites).drop(idxs)
+        if self.merge_sites:
+            # Remove duplicates
+            idxs = set()
+            pts = [s["World"] for s in self.merge_sites]
+            for idx_1, idx_2 in KDTree(pts).query_pairs(30):
+                idxs.add(idx_1)
+            self.merge_sites = pd.DataFrame(self.merge_sites).drop(idxs)
 
-        # Save merge sites
-        for i in range(len(self.merge_sites)):
-            filename = f"merge-{i + 1}.swc"
-            xyz = self.merge_sites.iloc[i]["World"]
-            swc_util.to_zipped_point(self.merge_writer, filename, xyz)
+            # Save merge sites
+            for i in range(len(self.merge_sites)):
+                filename = f"merge-{i + 1}.swc"
+                xyz = self.merge_sites.iloc[i]["World"]
+                swc_util.to_zipped_point(self.merge_writer, filename, xyz)
 
-        # Update counter
-        for key in self.graphs.keys():
-            idx_mask = self.merge_sites["GroundTruth_ID"] == key
-            self.metrics.loc[key, "# Merges"] = int(idx_mask.sum())
+            # Update counter
+            for key in self.graphs.keys():
+                idx_mask = self.merge_sites["GroundTruth_ID"] == key
+                self.metrics.loc[key, "# Merges"] = int(idx_mask.sum())
 
-        # Save results
-        path = os.path.join(self.output_dir, "merge_sites.csv")
-        self.merge_sites.to_csv(path, index=False)
-        self.merge_writer.close()
+            # Save results
+            path = os.path.join(self.output_dir, "merge_sites.csv")
+            self.merge_sites.to_csv(path, index=False)
+            self.merge_writer.close()
 
     def adjust_metrics(self, key):
         """
