@@ -69,6 +69,7 @@ class SkeletonMetric:
         preexisting_merges=None,
         save_merges=False,
         save_fragments=False,
+        use_anisotropy=True,
         valid_labels=None,
     ):
         """
@@ -122,6 +123,7 @@ class SkeletonMetric:
         self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
         self.save_fragments = save_fragments
+        self.use_anisotropy = use_anisotropy
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -201,7 +203,7 @@ class SkeletonMetric:
             graph_builder = gutil.GraphBuilder(
                 anisotropy=self.anisotropy,
                 selected_ids=self.get_all_node_labels(),
-                use_anisotropy=True,
+                use_anisotropy=self.use_anisotropy,
             )
             self.fragment_graphs = graph_builder.run(swc_pointer)
             self.set_fragment_ids()
