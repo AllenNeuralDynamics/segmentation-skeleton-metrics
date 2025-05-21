@@ -30,7 +30,7 @@ def run(process_id, graph):
 
     """
     # Initializations
-    split_cnt = 0
+    n_split_edges = 0
     source = get_leaf(graph)
     dfs_edges = deque(list(nx.dfs_edges(graph, source=source)))
     visited_edges = set()
@@ -47,15 +47,14 @@ def run(process_id, graph):
         label_j = int(graph.labels[j])
         if is_split(label_i, label_j):
             graph.remove_edge(i, j)
-            split_cnt += 1
+            n_split_edges += 1
         elif label_j == 0:
             check_misalignment(graph, visited_edges, i, j)
         visited_edges.add(frozenset({i, j}))
 
     # Finish
-    split_percent = split_cnt / graph.graph["n_edges"]
     graph.remove_nodes_with_label(0)
-    return process_id, graph, split_percent
+    return process_id, graph, n_split_edges
 
 
 def check_misalignment(graph, visited_edges, nb, root):

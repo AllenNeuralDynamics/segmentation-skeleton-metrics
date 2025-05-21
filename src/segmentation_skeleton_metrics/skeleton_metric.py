@@ -456,14 +456,18 @@ class SkeletonMetric:
 
             # Store results
             for process in as_completed(processes):
-                key, graph, split_percent = process.result()
-                n_edges = graph.number_of_edges()
-                n_gt_edges = graph.graph["n_edges"]
+                key, graph, n_split_edges = process.result()
+                n_before = graph.graph["n_edges"]
+                n_after = graph.number_of_edges()
+
+                n_missing = n_before - n_after
+                p_omit = 100 * (n_missing + n_split_edges) / n_before
+                p_split = 100 * n_split_edges / n_before
 
                 self.graphs[key] = graph
-                self.metrics.at[key, "% Omit"] = 1 - n_edges / n_gt_edges
+                self.metrics.at[key, "% Omit"] = p_omit
                 self.metrics.at[key, "# Splits"] = gutil.count_splits(graph)
-                self.metrics.loc[key, "% Split"] = split_percent
+                self.metrics.loc[key, "% Split"] = p_split
                 self.metrics.loc[key, "GT Run Length"] = graph.run_length
                 pbar.update(1)
 
@@ -765,7 +769,7 @@ class SkeletonMetric:
         for key in self.graphs:
             p_omit = self.metrics.loc[key, "% Omit"]
             p_merged = self.metrics.loc[key, "% Merged"]
-            self.metrics.loc[key, "Edge Accuracy"] = 1 - p_omit - p_merged
+            self.metrics.loc[key, "Edge Accuracy"] = 100 - p_omit - p_merged
 
     def compute_erl(self):
         """
