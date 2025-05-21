@@ -532,7 +532,7 @@ class SkeletonMetric:
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 40:
+            if len(nodes) > 50:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
