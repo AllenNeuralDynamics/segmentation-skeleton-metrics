@@ -602,7 +602,7 @@ class SkeletonMetric:
                         {
                             "Segment_ID": segment_id,
                             "GroundTruth_ID": key,
-                            "Voxel": tuple(voxel),
+                            "Voxel": tuple([int(t) for t in voxel]),
                             "World": tuple([float(t) for t in xyz]),
                         }
                     )
