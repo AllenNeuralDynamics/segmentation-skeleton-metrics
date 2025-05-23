@@ -141,6 +141,7 @@ class SkeletonMetric:
         self.merge_sites = list()
 
         row_names = list(self.graphs.keys())
+        row_names.sort()
         col_names = [
             "# Splits",
             "# Merges",
@@ -585,6 +586,10 @@ class SkeletonMetric:
                                 fragment_graph, self.fragment_writer[key]
                             )
                             break
+            else:
+                segment_id = util.get_segment_id(fragment_graph.filename)
+                self.merged_labels.add((key, segment_id, -1))
+                print(f"Skipping {segment_id} - run_length={fragment_graph.run_length}")
 
     def find_merge_site(self, key, kdtree, fragment_graph, source, visited):
         for _, node in nx.dfs_edges(fragment_graph, source=source):
@@ -626,10 +631,12 @@ class SkeletonMetric:
             self.merge_sites = pd.DataFrame(self.merge_sites).drop(idxs)
 
             # Save merge sites
-            for i in range(len(self.merge_sites)):
-                filename = f"merge-{i + 1}.swc"
-                xyz = self.merge_sites.iloc[i]["World"]
-                swc_util.to_zipped_point(self.merge_writer, filename, xyz)
+            if self.save_merges:
+                for i in range(len(self.merge_sites)):
+                    filename = f"merge-{i + 1}.swc"
+                    xyz = self.merge_sites.iloc[i]["World"]
+                    swc_util.to_zipped_point(self.merge_writer, filename, xyz)
+                self.merge_writer.close()
 
             # Update counter
             for key in self.graphs.keys():
@@ -639,7 +646,7 @@ class SkeletonMetric:
             # Save results
             path = os.path.join(self.output_dir, "merge_sites.csv")
             self.merge_sites.to_csv(path, index=False)
-            self.merge_writer.close()
+            
 
     def adjust_metrics(self, key):
         """
@@ -750,7 +757,7 @@ class SkeletonMetric:
         """
         for key in self.graphs:
             p = self.n_merged_edges[key] / self.graphs[key].graph["n_edges"]
-            self.metrics.loc[key, "% Merged"] = p
+            self.metrics.loc[key, "% Merged"] = 100 * p
 
     # -- Compute Metrics --
     def compute_edge_accuracy(self):
