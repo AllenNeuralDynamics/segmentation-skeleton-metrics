@@ -39,8 +39,18 @@ class SkeletonGraph(nx.Graph):
         A 3D array that contains a voxel coordinate for each node.
 
     """
+    colors = [
+        "# COLOR 1.0 0.0 1.0",  # pink
+        "# COLOR 0.0 1.0 1.0",  # cyan
+        "# COLOR 1.0 1.0 0.0",  # yellow
+        "# COLOR 0.0 0.5 1.0",  # blue
+        "# COLOR 1.0 0.5 0.0",  # orange
+        "# COLOR 0.5 0.0 1.0",  # purple
+        "# COLOR 0.0 0.8 0.8",  # teal
+        "# COLOR 0.6 0.0 0.6",  # plum
+    ]
 
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0)):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0), is_groundtruth=False):
         """
         Initializes a SkeletonGraph, including setting the anisotropy and
         initializing the run length attributes.
@@ -50,6 +60,9 @@ class SkeletonGraph(nx.Graph):
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
+        is_groundtruth : bool, optional
+            Indication of whether this graph corresponds to a ground truth
+            tracing. The default is False.
 
         Returns
         -------
@@ -62,6 +75,7 @@ class SkeletonGraph(nx.Graph):
         # Instance attributes
         self.anisotropy = np.array(anisotropy)
         self.filename = None
+        self.is_groundtruth = is_groundtruth
         self.labels = None
         self.run_length = 0
         self.voxels = None
@@ -317,7 +331,7 @@ class SkeletonGraph(nx.Graph):
         for i in nodes:
             self.labels[i] = label
 
-    def to_zipped_swc(self, zip_writer, color=None):
+    def to_zipped_swc(self, zip_writer):
         """
         Writes the graph to an SWC file format, which is then stored in a ZIP
         archive.
@@ -337,12 +351,12 @@ class SkeletonGraph(nx.Graph):
         """
         with StringIO() as text_buffer:
             # Preamble
-            text_buffer.write("# COLOR " + color) if color else None
-            text_buffer.write("# id, type, z, y, x, r, pid")
+            text_buffer.write(self.get_color())
+            text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
             # Write entries
             node_to_idx = dict()
-            r = 6 if color else 3
+            r = 2 if self.is_groundtruth else 3
             for i, j in nx.dfs_edges(self):
                 # Special Case: Root
                 x, y, z = tuple(self.voxels[i] * self.anisotropy)
@@ -359,3 +373,10 @@ class SkeletonGraph(nx.Graph):
 
             # Finish
             zip_writer.writestr(self.filename, text_buffer.getvalue())
+
+    def get_color(self):
+        if self.is_groundtruth:
+             return "# COLOR 1.0 1.0 1.0"
+        else:
+            return util.sample_once(SkeletonGraph.colors)
+            
