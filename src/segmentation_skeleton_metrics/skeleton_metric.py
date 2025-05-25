@@ -136,7 +136,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize metrics
-        util.mkdir(output_dir, delete=True)
+        util.mkdir(output_dir)
         self.init_writers()
         self.merge_sites = list()
 
@@ -602,6 +602,10 @@ class SkeletonMetric:
                 voxel = fragment_graph.voxels[node]
                 gt_voxel = util.kdtree_query(kdtree, voxel)
                 if self.physical_dist(gt_voxel, voxel) < 3:
+                    # Local search
+                    node = self.branch_search(fragment_graph, kdtree, node)
+                    voxel = fragment_graph.voxels[node]
+
                     # Log merge mistake
                     segment_id = util.get_segment_id(fragment_graph.filename)
                     xyz = img_util.to_physical(voxel, self.anisotropy)
@@ -815,6 +819,48 @@ class SkeletonMetric:
         return (self.metrics[column_name] * wgt).sum() / wgt.sum()
 
     # -- Helpers --
+    def branch_search(self, graph, kdtree, root, radius=70):
+        """
+        Searches for a branching node within distance "radius" from the given
+        root node.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+        kdtree : ...
+            KDTree containing voxel coordinates from a ground truth tracing.
+        root : int
+            Root of search.
+        radius : float, optional
+            Distance to search from root. The default is 70.
+
+        Returns
+        -------
+        int
+            Root node or closest branching node within distance "radius".
+
+        """
+        queue = list([(root, 0)])
+        visited = set({root})
+        while queue:
+            # Visit node
+            i, d_i = queue.pop()
+            voxel_i = graph.voxels[i]
+            if graph.degree[i] > 2:
+                gt_voxel = util.kdtree_query(kdtree, voxel_i)
+                if self.physical_dist(gt_voxel, voxel_i) < 16:
+                    return i
+
+            # Update queue
+            for j in graph.neighbors(i):
+                voxel_j = graph.voxels[j]
+                d_j = d_i + self.physical_dist(voxel_i, voxel_j)
+                if j not in visited and d_j < radius:
+                    queue.append((j, d_j))
+                    visited.add(j)
+        return root
+
     def find_graph_from_label(self, label):
         graphs = list()
         for key in self.fragment_graphs:
