@@ -27,6 +27,7 @@ class GraphBuilder:
     def __init__(
         self,
         anisotropy=(1.0, 1.0, 1.0),
+        is_groundtruth=False,
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
@@ -39,6 +40,9 @@ class GraphBuilder:
         anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+        is_groundtruth : bool, optional
+            Indication of whether this graph corresponds to a ground truth
+            tracing. The default is False.
         label_mask : ImageReader, optional
             Predicted segmentation mask.
         selected_ids : Set[int], optional
@@ -55,6 +59,7 @@ class GraphBuilder:
         """
         # Instance attributes
         self.anisotropy = anisotropy
+        self.is_groundtruth = is_groundtruth
         self.label_mask = label_mask
 
         # Reader
@@ -146,7 +151,9 @@ class GraphBuilder:
 
         """
         # Initialize graph
-        graph = SkeletonGraph(anisotropy=self.anisotropy)
+        graph = SkeletonGraph(
+            anisotropy=self.anisotropy, is_groundtruth=self.is_groundtruth
+        )
         graph.init_voxels(swc_dict["voxel"])
         graph.set_filename(swc_dict["swc_id"] + ".swc")
         graph.set_nodes(len(swc_dict["id"]))
