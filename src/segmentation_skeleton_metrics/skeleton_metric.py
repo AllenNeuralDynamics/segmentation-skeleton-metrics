@@ -419,6 +419,7 @@ class SkeletonMetric:
         # Save results
         prefix = "corrected-" if self.connections_path else ""
         path = f"{self.output_dir}/{prefix}results.csv"
+        self.metrics.fillna(0)
         self.metrics.to_csv(path, index=True)
 
         # Report results
