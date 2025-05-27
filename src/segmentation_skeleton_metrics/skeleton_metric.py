@@ -136,7 +136,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize metrics
-        util.mkdir(output_dir, delete=True)
+        util.mkdir(output_dir)
         self.init_writers()
         self.merge_sites = list()
 
@@ -589,7 +589,7 @@ class SkeletonMetric:
             else:
                 segment_id = util.get_segment_id(fragment_graph.filename)
                 self.merged_labels.add((key, segment_id, -1))
-                print(f"Skipping {segment_id} - run_length={fragment_graph.run_length}")
+                print(f"Skipping {fragment_graph.filename} - run_length={fragment_graph.run_length}")
 
     def find_merge_site(self, key, kdtree, fragment_graph, source, visited):
         for _, node in nx.dfs_edges(fragment_graph, source=source):
@@ -668,21 +668,24 @@ class SkeletonMetric:
         """
         visited = set()
         for label in self.preexisting_merges:
-            label = self.label_handler.mapping[label]
-            if label in self.graphs[key].get_labels():
-                if label not in visited and label != 0:
-                    # Get component with label
-                    nodes = self.graphs[key].nodes_with_label(label)
-                    root = util.sample_once(list(nodes))
+            try:
+                label = self.label_handler.mapping[label]
+                if label in self.graphs[key].get_labels():
+                    if label not in visited and label != 0:
+                        # Get component with label
+                        nodes = self.graphs[key].nodes_with_label(label)
+                        root = util.sample_once(list(nodes))
 
-                    # Adjust metrics
-                    rl = self.graphs[key].run_length_from(root)
-                    self.graphs[key].run_length -= np.sum(rl)
-                    self.graphs[key].graph["n_edges"] -= len(nodes) - 1
+                        # Adjust metrics
+                        rl = self.graphs[key].run_length_from(root)
+                        self.graphs[key].run_length -= np.sum(rl)
+                        self.graphs[key].graph["n_edges"] -= len(nodes) - 1
 
-                    # Update graph
-                    self.graphs[key].remove_nodes_from(nodes)
-                    visited.add(label)
+                        # Update graph
+                        self.graphs[key].remove_nodes_from(nodes)
+                        visited.add(label)
+            except:
+                pass
 
     def find_label_intersections(self):
         """
@@ -756,7 +759,8 @@ class SkeletonMetric:
 
         """
         for key in self.graphs:
-            p = self.n_merged_edges[key] / self.graphs[key].graph["n_edges"]
+            n_edges = max(self.graphs[key].graph["n_edges"], 1)
+            p = self.n_merged_edges[key] / n_edges
             self.metrics.loc[key, "% Merged"] = 100 * p
 
     # -- Compute Metrics --

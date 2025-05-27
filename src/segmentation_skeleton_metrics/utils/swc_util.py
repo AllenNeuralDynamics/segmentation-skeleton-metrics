@@ -527,7 +527,7 @@ def to_zipped_point(zip_writer, filename, xyz):
     """
     with StringIO() as text_buffer:
         # Preamble
-        text_buffer.write("# COLOR 1.0 0.0 0.0")
+        text_buffer.write("# COLOR 1.0 0.0 1.0")
         text_buffer.write("# id, type, z, y, x, r, pid")
 
         # Write entry
