@@ -322,7 +322,7 @@ class Reader:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for path in swc_paths[0:16]:  # temp
+            for path in swc_paths[0:5]:  # temp
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )

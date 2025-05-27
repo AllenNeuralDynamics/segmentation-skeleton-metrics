@@ -575,7 +575,7 @@ class SkeletonMetric:
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
                     if self.physical_dist(gt_voxel, voxel) > 60:
-                        visited = self.find_merge_site(
+                        self.find_merge_site(
                             key, kdtree, fragment_graph, leaf, visited
                         )
 
@@ -607,27 +607,55 @@ class SkeletonMetric:
                     voxel = fragment_graph.voxels[node]
 
                     # Log merge mistake
-                    segment_id = util.get_segment_id(fragment_graph.filename)
-                    xyz = img_util.to_physical(voxel, self.anisotropy)
-                    self.merged_labels.add((key, segment_id, xyz))
-                    self.merge_sites.append(
-                        {
-                            "Segment_ID": segment_id,
-                            "GroundTruth_ID": key,
-                            "Voxel": tuple([int(t) for t in voxel]),
-                            "World": tuple([float(t) for t in xyz]),
-                        }
-                    )
+                    if self.is_valid_merge(fragment_graph, kdtree, node):
+                        filename = fragment_graph.filename
+                        segment_id = util.get_segment_id(filename)
+                        xyz = img_util.to_physical(voxel, self.anisotropy)
+                        self.merged_labels.add((key, segment_id, xyz))
+                        self.merge_sites.append(
+                            {
+                                "Segment_ID": segment_id,
+                                "GroundTruth_ID": key,
+                                "Voxel": tuple([int(t) for t in voxel]),
+                                "World": tuple([float(t) for t in xyz]),
+                            }
+                        )
 
-                    # Save merged fragment (if applicable)
-                    if self.save_merges:
-                        gutil.write_graph(fragment_graph, self.merge_writer)
-                        gutil.write_graph(
-                             self.gt_graphs[key], self.merge_writer
-                         )
-                    return visited
-        return visited
+                        # Save merged fragment (if applicable)
+                        if self.save_merges:
+                            gutil.write_graph(
+                                fragment_graph, self.merge_writer
+                            )
+                            gutil.write_graph(
+                                 self.gt_graphs[key], self.merge_writer
+                             )
+                        return
 
+    def is_valid_merge(self, graph, kdtree, root):
+        n_hits = 0
+        queue = list([(root, 0)])
+        visited = set({root})
+        while queue:
+            # Visit node
+            i, d_i = queue.pop()
+            voxel_i = graph.voxels[i]
+            gt_voxel = util.kdtree_query(kdtree, voxel_i)
+            if self.physical_dist(gt_voxel, voxel_i) < 5:
+                n_hits += 1
+
+            # Check whether to break
+            if n_hits > 16:
+                break
+
+            # Update queue
+            for j in graph.neighbors(i):
+                voxel_j = graph.voxels[j]
+                d_j = d_i + self.physical_dist(voxel_i, voxel_j)
+                if j not in visited and d_j < 30:
+                    queue.append((j, d_j))
+                    visited.add(j)
+        return True #True if n_hits > 16 else False
+    
     def process_merge_sites(self):
         if self.merge_sites:
             # Remove duplicates
