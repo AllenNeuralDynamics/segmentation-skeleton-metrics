@@ -390,6 +390,8 @@ class SkeletonMetric:
         # Merged fragments writer
         if self.save_merges:
             zip_path = os.path.join(self.output_dir, "merged_fragments.zip")
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
             self.merge_writer = ZipFile(zip_path, "a")
 
     # -- Main Routine --
@@ -601,7 +603,7 @@ class SkeletonMetric:
                 visited.add(node)
                 voxel = fragment_graph.voxels[node]
                 gt_voxel = util.kdtree_query(kdtree, voxel)
-                if self.physical_dist(gt_voxel, voxel) < 3:
+                if self.physical_dist(gt_voxel, voxel) < 3.5:
                     # Local search
                     node = self.branch_search(fragment_graph, kdtree, node)
                     voxel = fragment_graph.voxels[node]
@@ -617,7 +619,7 @@ class SkeletonMetric:
                                 "Segment_ID": segment_id,
                                 "GroundTruth_ID": key,
                                 "Voxel": tuple([int(t) for t in voxel]),
-                                "World": tuple([float(t) for t in xyz]),
+                                "World": tuple([float(round(t, 2)) for t in xyz]),
                             }
                         )
 
@@ -661,7 +663,7 @@ class SkeletonMetric:
             # Remove duplicates
             idxs = set()
             pts = [s["World"] for s in self.merge_sites]
-            for idx_1, idx_2 in KDTree(pts).query_pairs(30):
+            for idx_1, idx_2 in KDTree(pts).query_pairs(40):
                 idxs.add(idx_1)
             self.merge_sites = pd.DataFrame(self.merge_sites).drop(idxs)
 
@@ -850,7 +852,7 @@ class SkeletonMetric:
         return (self.metrics[column_name] * wgt).sum() / wgt.sum()
 
     # -- Helpers --
-    def branch_search(self, graph, kdtree, root, radius=70):
+    def branch_search(self, graph, kdtree, root, radius=100):
         """
         Searches for a branching node within distance "radius" from the given
         root node.
@@ -864,7 +866,7 @@ class SkeletonMetric:
         root : int
             Root of search.
         radius : float, optional
-            Distance to search from root. The default is 70.
+            Distance to search from root. The default is 100.
 
         Returns
         -------
