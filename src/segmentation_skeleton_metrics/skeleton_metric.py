@@ -654,7 +654,7 @@ class SkeletonMetric:
                 if j not in visited and d_j < 30:
                     queue.append((j, d_j))
                     visited.add(j)
-        return True #True if n_hits > 16 else False
+        return True if n_hits > 16 else False
     
     def process_merge_sites(self):
         if self.merge_sites:

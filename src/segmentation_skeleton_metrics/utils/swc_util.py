@@ -322,7 +322,7 @@ class Reader:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            for path in swc_paths[0:5]:  # temp
+            for path in swc_paths:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
@@ -527,7 +527,7 @@ def to_zipped_point(zip_writer, filename, xyz):
     """
     with StringIO() as text_buffer:
         # Preamble
-        text_buffer.write("# COLOR 1.0 0.0 1.0")
+        text_buffer.write("# COLOR 1.0 0.0 0.0")
         text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
         # Write entry
