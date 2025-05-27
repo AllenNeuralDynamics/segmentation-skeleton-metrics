@@ -136,7 +136,7 @@ class SkeletonMetric:
         self.load_fragments(fragments_pointer)
 
         # Initialize metrics
-        util.mkdir(output_dir, delete=True)
+        util.mkdir(output_dir)
         self.init_writers()
         self.merge_sites = list()
 
@@ -174,6 +174,7 @@ class SkeletonMetric:
         print("\n(1) Load Ground Truth")
         graph_builder = gutil.GraphBuilder(
             anisotropy=self.anisotropy,
+            is_groundtruth=True,
             label_mask=self.label_mask,
             use_anisotropy=False,
         )
@@ -203,6 +204,7 @@ class SkeletonMetric:
         if swc_pointer:
             graph_builder = gutil.GraphBuilder(
                 anisotropy=self.anisotropy,
+                is_groundtruth=False,
                 selected_ids=self.get_all_node_labels(),
                 use_anisotropy=self.use_anisotropy,
             )
@@ -464,12 +466,13 @@ class SkeletonMetric:
                 n_missing = n_before - n_after
                 p_omit = 100 * (n_missing + n_split_edges) / n_before
                 p_split = 100 * n_split_edges / n_before
+                gt_rl = graph.run_length
 
                 self.graphs[key] = graph
-                self.metrics.at[key, "% Omit"] = p_omit
+                self.metrics.at[key, "% Omit"] = round(p_omit, 2)
                 self.metrics.at[key, "# Splits"] = gutil.count_splits(graph)
-                self.metrics.loc[key, "% Split"] = p_split
-                self.metrics.loc[key, "GT Run Length"] = graph.run_length
+                self.metrics.loc[key, "% Split"] = round(p_split, 2)
+                self.metrics.loc[key, "GT Run Length"] = round(gt_rl, 2)
                 pbar.update(1)
 
     # -- Merge Detection --
@@ -571,8 +574,8 @@ class SkeletonMetric:
                 for leaf in gutil.get_leafs(fragment_graph):
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
-                    if self.physical_dist(gt_voxel, voxel) > 50:
-                        visited = self.find_merge_site(
+                    if self.physical_dist(gt_voxel, voxel) > 60:
+                        self.find_merge_site(
                             key, kdtree, fragment_graph, leaf, visited
                         )
 
@@ -599,28 +602,60 @@ class SkeletonMetric:
                 voxel = fragment_graph.voxels[node]
                 gt_voxel = util.kdtree_query(kdtree, voxel)
                 if self.physical_dist(gt_voxel, voxel) < 3:
+                    # Local search
+                    node = self.branch_search(fragment_graph, kdtree, node)
+                    voxel = fragment_graph.voxels[node]
+
                     # Log merge mistake
-                    segment_id = util.get_segment_id(fragment_graph.filename)
-                    xyz = img_util.to_physical(voxel, self.anisotropy)
-                    self.merged_labels.add((key, segment_id, xyz))
-                    self.merge_sites.append(
-                        {
-                            "Segment_ID": segment_id,
-                            "GroundTruth_ID": key,
-                            "Voxel": tuple([int(t) for t in voxel]),
-                            "World": tuple([float(t) for t in xyz]),
-                        }
-                    )
+                    if self.is_valid_merge(fragment_graph, kdtree, node):
+                        filename = fragment_graph.filename
+                        segment_id = util.get_segment_id(filename)
+                        xyz = img_util.to_physical(voxel, self.anisotropy)
+                        self.merged_labels.add((key, segment_id, xyz))
+                        self.merge_sites.append(
+                            {
+                                "Segment_ID": segment_id,
+                                "GroundTruth_ID": key,
+                                "Voxel": tuple([int(t) for t in voxel]),
+                                "World": tuple([float(t) for t in xyz]),
+                            }
+                        )
 
-                    # Save merged fragment (if applicable)
-                    if self.save_merges:
-                        gutil.write_graph(fragment_graph, self.merge_writer)
-                        gutil.write_graph(
-                             self.gt_graphs[key], self.merge_writer
-                         )
-                    return visited
-        return visited
+                        # Save merged fragment (if applicable)
+                        if self.save_merges:
+                            gutil.write_graph(
+                                fragment_graph, self.merge_writer
+                            )
+                            gutil.write_graph(
+                                 self.gt_graphs[key], self.merge_writer
+                             )
+                        return
 
+    def is_valid_merge(self, graph, kdtree, root):
+        n_hits = 0
+        queue = list([(root, 0)])
+        visited = set({root})
+        while queue:
+            # Visit node
+            i, d_i = queue.pop()
+            voxel_i = graph.voxels[i]
+            gt_voxel = util.kdtree_query(kdtree, voxel_i)
+            if self.physical_dist(gt_voxel, voxel_i) < 5:
+                n_hits += 1
+
+            # Check whether to break
+            if n_hits > 16:
+                break
+
+            # Update queue
+            for j in graph.neighbors(i):
+                voxel_j = graph.voxels[j]
+                d_j = d_i + self.physical_dist(voxel_i, voxel_j)
+                if j not in visited and d_j < 30:
+                    queue.append((j, d_j))
+                    visited.add(j)
+        return True if n_hits > 16 else False
+    
     def process_merge_sites(self):
         if self.merge_sites:
             # Remove duplicates
@@ -632,10 +667,13 @@ class SkeletonMetric:
 
             # Save merge sites
             if self.save_merges:
+                row_names = list()
                 for i in range(len(self.merge_sites)):
                     filename = f"merge-{i + 1}.swc"
                     xyz = self.merge_sites.iloc[i]["World"]
                     swc_util.to_zipped_point(self.merge_writer, filename, xyz)
+                    row_names.append(filename)
+                self.merge_sites.index = row_names
                 self.merge_writer.close()
 
             # Update counter
@@ -645,7 +683,7 @@ class SkeletonMetric:
 
             # Save results
             path = os.path.join(self.output_dir, "merge_sites.csv")
-            self.merge_sites.to_csv(path, index=False)
+            self.merge_sites.to_csv(path, index=True)
             
 
     def adjust_metrics(self, key):
@@ -757,7 +795,7 @@ class SkeletonMetric:
         """
         for key in self.graphs:
             p = self.n_merged_edges[key] / self.graphs[key].graph["n_edges"]
-            self.metrics.loc[key, "% Merged"] = 100 * p
+            self.metrics.loc[key, "% Merged"] = round(100 * p, 2)
 
     # -- Compute Metrics --
     def compute_edge_accuracy(self):
@@ -776,7 +814,8 @@ class SkeletonMetric:
         for key in self.graphs:
             p_omit = self.metrics.loc[key, "% Omit"]
             p_merged = self.metrics.loc[key, "% Merged"]
-            self.metrics.loc[key, "Edge Accuracy"] = 100 - p_omit - p_merged
+            edge_accuracy = round(100 - p_omit - p_merged, 2)
+            self.metrics.loc[key, "Edge Accuracy"] = edge_accuracy
 
     def compute_erl(self):
         """
@@ -799,14 +838,57 @@ class SkeletonMetric:
             wgt = run_lengths / max(np.sum(run_lengths), 1)
 
             erl = np.sum(wgt * run_lengths)
-            self.metrics.loc[key, "ERL"] = erl
-            self.metrics.loc[key, "Normalized ERL"] = erl / max(run_length, 1)
+            n_erl = round(erl / max(run_length, 1), 4)
+            self.metrics.loc[key, "ERL"] = round(erl, 2)
+            self.metrics.loc[key, "Normalized ERL"] = n_erl
 
     def compute_weighted_avg(self, column_name):
         wgt = self.metrics["GT Run Length"]
         return (self.metrics[column_name] * wgt).sum() / wgt.sum()
 
     # -- Helpers --
+    def branch_search(self, graph, kdtree, root, radius=70):
+        """
+        Searches for a branching node within distance "radius" from the given
+        root node.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph to be searched.
+        kdtree : ...
+            KDTree containing voxel coordinates from a ground truth tracing.
+        root : int
+            Root of search.
+        radius : float, optional
+            Distance to search from root. The default is 70.
+
+        Returns
+        -------
+        int
+            Root node or closest branching node within distance "radius".
+
+        """
+        queue = list([(root, 0)])
+        visited = set({root})
+        while queue:
+            # Visit node
+            i, d_i = queue.pop()
+            voxel_i = graph.voxels[i]
+            if graph.degree[i] > 2:
+                gt_voxel = util.kdtree_query(kdtree, voxel_i)
+                if self.physical_dist(gt_voxel, voxel_i) < 16:
+                    return i
+
+            # Update queue
+            for j in graph.neighbors(i):
+                voxel_j = graph.voxels[j]
+                d_j = d_i + self.physical_dist(voxel_i, voxel_j)
+                if j not in visited and d_j < radius:
+                    queue.append((j, d_j))
+                    visited.add(j)
+        return root
+
     def find_graph_from_label(self, label):
         graphs = list()
         for key in self.fragment_graphs:
