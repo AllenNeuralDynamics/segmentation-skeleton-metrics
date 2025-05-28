@@ -66,7 +66,6 @@ class SkeletonMetric:
         anisotropy=(1.0, 1.0, 1.0),
         connections_path=None,
         fragments_pointer=None,
-        preexisting_merges=None,
         save_merges=False,
         save_fragments=False,
         use_anisotropy=True,
@@ -97,9 +96,6 @@ class SkeletonMetric:
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
             for counting merges. The default is None.
-        preexisting_merges : List[int], optional
-            List of segment IDs that are known to contain a merge mistake. The
-            default is None.
         save_merges: bool, optional
             Indication of whether to save fragments with a merge mistake. The
             default is None.
@@ -120,7 +116,6 @@ class SkeletonMetric:
         self.anisotropy = anisotropy
         self.connections_path = connections_path
         self.output_dir = output_dir
-        self.preexisting_merges = preexisting_merges
         self.save_merges = save_merges
         self.save_fragments = save_fragments
         self.use_anisotropy = use_anisotropy
@@ -506,11 +501,6 @@ class SkeletonMetric:
                 pbar.update(1)
             self.process_merge_sites()
 
-        # Adjust metrics (if applicable)
-        if self.preexisting_merges:
-            for key in self.graphs:
-                self.adjust_metrics(key)
-
         # Detect merges by finding ground truth graphs with common node labels
         for (key_1, key_2), label in self.find_label_intersections():
             self.process_merge(key_1, label, -1)
@@ -686,46 +676,7 @@ class SkeletonMetric:
 
             # Save results
             path = os.path.join(self.output_dir, "merge_sites.csv")
-            self.merge_sites.to_csv(path, index=True)            
-
-    def adjust_metrics(self, key):
-        """
-        Adjusts the metrics of the graph associated with the given key by
-        removing nodes corresponding to known merges and their corresponding
-        subgraphs. Updates the total number of edges and run lengths in the
-        graph.
-
-        Parameters
-        ----------
-        key : str
-            Unique identifier of the graph to adjust attributes that are are
-            used to compute various metrics.
-
-        Returns
-        -------
-        None
-
-        """
-        visited = set()
-        for label in self.preexisting_merges:
-            try:
-                label = self.label_handler.mapping[label]
-                if label in self.graphs[key].get_labels():
-                    if label not in visited and label != 0:
-                        # Get component with label
-                        nodes = self.graphs[key].nodes_with_label(label)
-                        root = util.sample_once(list(nodes))
-
-                        # Adjust metrics
-                        rl = self.graphs[key].run_length_from(root)
-                        self.graphs[key].run_length -= np.sum(rl)
-                        self.graphs[key].graph["n_edges"] -= len(nodes) - 1
-
-                        # Update graph
-                        self.graphs[key].remove_nodes_from(nodes)
-                        visited.add(label)
-            except:
-                pass
+            self.merge_sites.to_csv(path, index=True)
 
     def find_label_intersections(self):
         """
