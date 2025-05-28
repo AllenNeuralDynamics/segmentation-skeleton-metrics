@@ -507,9 +507,9 @@ class SkeletonMetric:
             self.process_merge_sites()
 
         # Adjust metrics (if applicable)
-        if self.preexisting_merges:
-            for key in self.graphs:
-                self.adjust_metrics(key)
+        #if self.preexisting_merges:
+        #    for key in self.graphs:
+        #        self.adjust_metrics(key)
 
         # Detect merges by finding ground truth graphs with common node labels
         for (key_1, key_2), label in self.find_label_intersections():
