@@ -574,14 +574,9 @@ class SkeletonMetric:
 
                 # Save fragment (if applicable)
                 if self.save_fragments:
-                    for node in fragment_graph.nodes:
-                        voxel = fragment_graph.voxels[node]
-                        gt_voxel = util.kdtree_query(kdtree, voxel)
-                        if self.physical_dist(gt_voxel, voxel) < 3:
-                            gutil.write_graph(
-                                fragment_graph, self.fragment_writer[key]
-                            )
-                            break
+                    gutil.write_graph(
+                        fragment_graph, self.fragment_writer[key]
+                    )
             else:
                 segment_id = util.get_segment_id(fragment_graph.filename)
                 self.merged_labels.add((key, segment_id, -1))
