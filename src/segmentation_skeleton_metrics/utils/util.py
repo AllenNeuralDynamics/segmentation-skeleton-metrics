@@ -167,7 +167,7 @@ def update_txt(path, text):
 
     """
     print(text)
-    with open(path, 'a') as file:
+    with open(path, "a") as file:
         file.write(text + "\n")
 
 
@@ -248,14 +248,47 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-def read_txt_from_gcs(bucket_name, file_name):
+def read_txt_from_gcs(bucket_name, filename):
+    """
+    Reads a txt file stored in a GCS bucket.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of bucket to be read from.
+    filename : str
+        Name of txt file to be read.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+
+    """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
+    blob = bucket.blob(filename)
     return blob.download_as_text()
 
 
 def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
+    """
+    Uploads the contents of a local directory to a GCS bucket.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of bucket to be read from.
+    source_dir : str
+        Path to the local directory whose contents should be uploaded.
+    destination_dir : str
+        Prefix path in the GCS bucket under which the files will be stored.
+
+    Returns
+    -------
+    None
+
+    """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     for root, _, files in os.walk(source_dir):

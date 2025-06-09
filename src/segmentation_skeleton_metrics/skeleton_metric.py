@@ -49,13 +49,6 @@ class SkeletonMetric:
         (7) Expected Run Length (ERL)
         (8) Normalized ERL
 
-    Class attributes
-    ----------------
-    merge_dist : float
-        ...
-    min_label_cnt : int
-        ...
-
     """
 
     def __init__(
@@ -146,7 +139,7 @@ class SkeletonMetric:
             "Edge Accuracy",
             "ERL",
             "Normalized ERL",
-            "GT Run Length"
+            "GT Run Length",
         ]
         self.metrics = pd.DataFrame(index=row_names, columns=col_names)
 
@@ -561,7 +554,7 @@ class SkeletonMetric:
 
         """
         for fragment_graph in self.find_graph_from_label(label):
-            if fragment_graph.run_length < 10**6:
+            if fragment_graph.run_length < 10 ** 6:
                 # Search for leaf far from ground truth
                 visited = set()
                 for leaf in gutil.get_leafs(fragment_graph):
@@ -579,8 +572,11 @@ class SkeletonMetric:
                     )
             else:
                 segment_id = util.get_segment_id(fragment_graph.filename)
+                run_length = fragment_graph.run_length
                 self.merged_labels.add((key, segment_id, -1))
-                print(f"Skipping {segment_id} - run_length={fragment_graph.run_length}")
+                print(
+                    f"Skipping {segment_id} - run_length={run_length}"
+                )
 
     def find_merge_site(self, key, kdtree, fragment_graph, source, visited):
         for _, node in nx.dfs_edges(fragment_graph, source=source):
@@ -605,7 +601,9 @@ class SkeletonMetric:
                                 "Segment_ID": segment_id,
                                 "GroundTruth_ID": key,
                                 "Voxel": tuple([int(t) for t in voxel]),
-                                "World": tuple([float(round(t, 2)) for t in xyz]),
+                                "World": tuple(
+                                    [float(round(t, 2)) for t in xyz]
+                                ),
                             }
                         )
 
@@ -615,8 +613,8 @@ class SkeletonMetric:
                                 fragment_graph, self.merge_writer
                             )
                             gutil.write_graph(
-                                 self.gt_graphs[key], self.merge_writer
-                             )
+                                self.gt_graphs[key], self.merge_writer
+                            )
                         return
 
     def is_valid_merge(self, graph, kdtree, root):
@@ -643,7 +641,7 @@ class SkeletonMetric:
                     queue.append((j, d_j))
                     visited.add(j)
         return True if n_hits > 16 else False
-    
+
     def process_merge_sites(self):
         if self.merge_sites:
             # Remove duplicates

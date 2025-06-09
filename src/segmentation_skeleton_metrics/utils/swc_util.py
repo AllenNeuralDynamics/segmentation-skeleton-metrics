@@ -178,9 +178,7 @@ class Reader:
             for path in paths:
                 filename = os.path.basename(path)
                 if self.confirm_read(filename):
-                    threads.append(
-                        executor.submit(self.read_from_path, path)
-                    )
+                    threads.append(executor.submit(self.read_from_path, path))
 
             # Store results
             swc_dicts = deque()
@@ -217,9 +215,7 @@ class Reader:
             processes = list()
             for f in zip_names:
                 zip_path = os.path.join(zip_dir, f)
-                processes.append(
-                    executor.submit(self.read_from_zip, zip_path)
-                )
+                processes.append(executor.submit(self.read_from_zip, zip_path))
 
             # Store results
             swc_dicts = deque()
@@ -318,6 +314,22 @@ class Reader:
         raise Exception(f"GCS Pointer is invalid -{gcs_dict}-")
 
     def read_from_gcs_swcs(self, bucket_name, swc_paths):
+        """
+        Reads SWC files stored in a GCS bucket.
+
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary with the keys "bucket_name" and "path" that specify
+            where the SWC files are located in a GCS bucket.
+
+        Returns
+        -------
+        Dequeue[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+
+        """
         pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -337,6 +349,22 @@ class Reader:
         return swc_dicts
 
     def read_from_gcs_swc(self, bucket_name, path):
+        """
+        Reads a single SWC file stored in a GCS bucket.
+
+        Parameters
+        ----------
+        gcs_dict : dict
+            Dictionary with the keys "bucket_name" and "path" that specify
+            where a single SWC file is located in a GCS bucket.
+
+        Returns
+        -------
+        dict
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+
+        """
         # Initialize cloud reader
         client = storage.Client()
         bucket = client.bucket(bucket_name)
@@ -348,6 +376,22 @@ class Reader:
         return self.parse(content, filename)
 
     def read_from_gcs_zips(self, bucket_name, zip_paths):
+        """
+        Reads SWC files stored in a ZIP archives stored in a GCS bucket.
+
+        Parameters
+        ----------
+        zip_content : bytes
+            Content of a ZIP archive.
+
+        Returns
+        -------
+        Dequeue[dict]
+            List of dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+
+
+        """
         swc_dicts = deque()
         for zip_path in tqdm(zip_paths, desc="Read SWCs"):
             swc_dicts.extend(self.read_from_gcs_zip(bucket_name, zip_path))

@@ -39,6 +39,7 @@ class SkeletonGraph(nx.Graph):
         A 3D array that contains a voxel coordinate for each node.
 
     """
+
     colors = [
         "# COLOR 1.0 0.0 1.0",  # pink
         "# COLOR 0.0 1.0 1.0",  # cyan
@@ -375,8 +376,20 @@ class SkeletonGraph(nx.Graph):
             zip_writer.writestr(self.filename, text_buffer.getvalue())
 
     def get_color(self):
+        """
+        Gets the display color of the skeleton to be written to an SWC file.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        str
+            String representing the color in the format "# COLOR R G B".
+
+        """
         if self.is_groundtruth:
-             return "# COLOR 1.0 1.0 1.0"
+            return "# COLOR 1.0 1.0 1.0"
         else:
             return util.sample_once(SkeletonGraph.colors)
-            
