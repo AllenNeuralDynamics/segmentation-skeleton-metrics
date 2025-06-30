@@ -82,7 +82,7 @@ def evaluate():
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
-    full_results, avg_results = skeleton_metric.run(results_path)
+    full_results, avg_results = skeleton_metric.run()
 
 
 if __name__ == "__main__":
@@ -91,7 +91,6 @@ if __name__ == "__main__":
     segmentation_path = "./pred_labels.tif"
     fragments_pointer = "./pred_swcs.zip"
     groundtruth_pointer = "./target_swcs.zip"
-    results_path = f"{output_dir}/results.xls"
 
     # Run
     evaluate()
