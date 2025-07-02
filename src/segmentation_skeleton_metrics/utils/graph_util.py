@@ -9,16 +9,19 @@ Code for building a custom graph object called a SkeletonGraph and helper
 routines for working with graph.
 
 """
-from concurrent.futures import as_completed, ProcessPoolExecutor
+from concurrent.futures import (
+    as_completed, ProcessPoolExecutor, ThreadPoolExecutor
+)
 from tqdm import tqdm
 
 import networkx as nx
+import numpy as np
 
 from segmentation_skeleton_metrics.skeleton_graph import SkeletonGraph
 from segmentation_skeleton_metrics.utils import swc_util, util
 
 
-class GraphBuilder:
+class GraphLoader:
     """
     A class that builds graphs constructed from SWC files.
 
@@ -28,12 +31,13 @@ class GraphBuilder:
         self,
         anisotropy=(1.0, 1.0, 1.0),
         is_groundtruth=False,
+        label_handler=None,
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
     ):
         """
-        Instantiates a GraphBuilder object.
+        Instantiates a GraphLoader object.
 
         Parameters
         ----------
@@ -60,6 +64,7 @@ class GraphBuilder:
         # Instance attributes
         self.anisotropy = anisotropy
         self.is_groundtruth = is_groundtruth
+        self.label_handler = label_handler
         self.label_mask = label_mask
 
         # Reader
@@ -86,9 +91,11 @@ class GraphBuilder:
             of SWC files) and values are the correspondign SkeletonGraph.
 
         """
-        graphs = self._build_graphs_from_swcs(swc_pointer)
-        graphs = self._label_graphs_with_segmentation(graphs)
-        return graphs
+        graph_dict = self._build_graphs_from_swcs(swc_pointer)
+        if self.label_mask:
+            for key in graph_dict:
+                self._label_graph(graph_dict[key])
+        return graph_dict
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
@@ -113,11 +120,11 @@ class GraphBuilder:
         pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
 
         # Main
-        graphs = dict()
+        graph_dict = dict()
         if len(swc_dicts) > 10 ** 4:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
-                graphs.update(self.to_graph(swc_dict))
+                graph_dict.update(self.to_graph(swc_dict))
                 pbar.update(1)
         else:
             with ProcessPoolExecutor() as executor:
@@ -129,9 +136,9 @@ class GraphBuilder:
 
                 # Store results
                 for process in as_completed(processes):
-                    graphs.update(process.result())
+                    graph_dict.update(process.result())
                     pbar.update(1)
-        return graphs
+        return graph_dict
 
     def to_graph(self, swc_dict):
         """
@@ -172,11 +179,78 @@ class GraphBuilder:
         return {swc_dict["swc_id"]: graph}
 
     # --- Label Graphs ---
-    def _label_graphs_with_segmentation(self, graphs):
-        return graphs
+    def _label_graph(self, graph):
+        with ThreadPoolExecutor() as executor:
+            # Assign threads
+            batch = set()
+            threads = list()
+            visited = set()
+            for i, j in nx.dfs_edges(graph):
+                # Check if starting new batch
+                if len(batch) == 0:
+                    root = i
+                    batch.add(i)
+                    visited.add(i)
 
-    def _label_graph(self, key):
-        pass
+                # Check whether to submit batch
+                is_node_far = graph.dist(root, j) > 128
+                is_batch_full = len(batch) >= 128
+                if is_node_far or is_batch_full:
+                    threads.append(
+                        executor.submit(self.get_patch_labels, graph, batch)
+                    )
+                    batch = set()
+
+                # Visit j
+                if j not in visited:
+                    batch.add(j)
+                    visited.add(j)
+                    if len(batch) == 1:
+                        root = j
+
+            # Submit last batch
+            threads.append(
+                executor.submit(self.get_patch_labels, graph, batch)
+            )
+
+            # Store results
+            graph.init_labels()
+            for thread in as_completed(threads):
+                node_to_label = thread.result()
+                for i, label in node_to_label.items():
+                    graph.labels[i] = label
+
+    def get_patch_labels(self, graph, nodes):
+        """
+        Gets the segment labels for a given set of nodes within a specified
+        patch of the label mask.
+
+        Parameters
+        ----------
+        graph : str
+            Unique identifier of graph to be labeled.
+        nodes : List[int]
+            Node IDs for which the labels are to be retrieved.
+
+        Returns
+        -------
+        dict
+            A dictionary that maps node IDs to their respective labels.
+
+        """
+        bbox = graph.get_bbox(nodes)
+        label_patch = self.label_mask.read_with_bbox(bbox)
+        node_to_label = dict()
+        for i in nodes:
+            voxel = self.to_local_voxels(graph, i, bbox["min"])
+            label = self.label_handler.get(label_patch[voxel])
+            node_to_label[i] = label
+        return node_to_label
+
+    def to_local_voxels(self, graph, i, offset):
+        voxel = np.array(graph.voxels[i])
+        offset = np.array(offset)
+        return tuple(voxel - offset)
 
 
 class LabelHandler:

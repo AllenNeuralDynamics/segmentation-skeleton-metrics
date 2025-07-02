@@ -11,3 +11,152 @@ Average Results...
 Total Results...
 # splits: 36
 # merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+Average Results...
+  # Splits: 7.9680
+  # Merges: 0.0000
+  % Split: 1.1996
+  % Omit: 4.5086
+  % Merged: 0.0000
+  Edge Accuracy: 95.4914
+  ERL: 180.8849
+  Normalized ERL: 0.3949
+
+Total Results...
+  # Splits: 31
+  # Merges: 0
