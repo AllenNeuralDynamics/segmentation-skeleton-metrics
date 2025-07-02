@@ -35,7 +35,7 @@ def evaluate():
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
-    skeleton_metric.run(output_dir)
+    skeleton_metric.run()
 
 
 if __name__ == "__main__":

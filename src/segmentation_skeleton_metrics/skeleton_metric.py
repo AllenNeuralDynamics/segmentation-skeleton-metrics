@@ -13,7 +13,6 @@ predicted neuron segmentation to a set of ground truth graphs.
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
-    ThreadPoolExecutor,
 )
 from copy import deepcopy
 from scipy.spatial import distance, KDTree
@@ -119,8 +118,7 @@ class SkeletonMetric:
         )
 
         # Load data
-        self.label_mask = label_mask
-        self.load_groundtruth(gt_pointer)
+        self.load_groundtruth(gt_pointer, label_mask)
         self.load_fragments(fragments_pointer)
 
         # Initialize metrics
@@ -144,7 +142,7 @@ class SkeletonMetric:
         self.metrics = pd.DataFrame(index=row_names, columns=col_names)
 
     # --- Load Data ---
-    def load_groundtruth(self, swc_pointer):
+    def load_groundtruth(self, swc_pointer, label_mask):
         """
         Loads ground truth graphs and initializes the "graphs" attribute.
 
@@ -152,6 +150,8 @@ class SkeletonMetric:
         ----------
         swc_pointer : Any
             Pointer to ground truth SWC files.
+        label_mask : ImageReader
+            Predicted segmentation mask.
 
         Returns
         -------
@@ -160,18 +160,15 @@ class SkeletonMetric:
         """
         # Build graphs
         print("\n(1) Load Ground Truth")
-        graph_builder = gutil.GraphBuilder(
+        graph_loader = gutil.GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=True,
-            label_mask=self.label_mask,
+            label_handler=self.label_handler,
+            label_mask=label_mask,
             use_anisotropy=False,
         )
-        self.graphs = graph_builder.run(swc_pointer)
+        self.graphs = graph_loader.run(swc_pointer)
         self.gt_graphs = deepcopy(self.graphs)
-
-        # Label nodes
-        for key in tqdm(self.graphs, desc="Labeling Graphs"):
-            self.label_graphs(key)
 
     def load_fragments(self, swc_pointer):
         """
@@ -190,13 +187,13 @@ class SkeletonMetric:
         """
         print("\n(2) Load Fragments")
         if swc_pointer:
-            graph_builder = gutil.GraphBuilder(
+            graph_loader = gutil.GraphLoader(
                 anisotropy=self.anisotropy,
                 is_groundtruth=False,
                 selected_ids=self.get_all_node_labels(),
                 use_anisotropy=self.use_anisotropy,
             )
-            self.fragment_graphs = graph_builder.run(swc_pointer)
+            self.fragment_graphs = graph_loader.run(swc_pointer)
             self.set_fragment_ids()
         else:
             self.fragment_graphs = None
@@ -218,86 +215,6 @@ class SkeletonMetric:
         self.fragment_ids = set()
         for key in self.fragment_graphs:
             self.fragment_ids.add(util.get_segment_id(key))
-
-    def label_graphs(self, key):
-        """
-        Iterates over nodes in "graph" and stores the corresponding label from
-        "self.label_mask") as a node-level attribute called "labels".
-
-        Parameters
-        ----------
-        key : str
-            Unique identifier of graph to be labeled.
-
-        Returns
-        -------
-        None
-
-        """
-        with ThreadPoolExecutor() as executor:
-            # Assign threads
-            batch = set()
-            threads = list()
-            visited = set()
-            for i, j in nx.dfs_edges(self.graphs[key]):
-                # Check if starting new batch
-                if len(batch) == 0:
-                    root = i
-                    batch.add(i)
-                    visited.add(i)
-
-                # Check whether to submit batch
-                is_node_far = self.graphs[key].dist(root, j) > 128
-                is_batch_full = len(batch) >= 128
-                if is_node_far or is_batch_full:
-                    threads.append(
-                        executor.submit(self.get_patch_labels, key, batch)
-                    )
-                    batch = set()
-
-                # Visit j
-                if j not in visited:
-                    batch.add(j)
-                    visited.add(j)
-                    if len(batch) == 1:
-                        root = j
-
-            # Submit last batch
-            threads.append(executor.submit(self.get_patch_labels, key, batch))
-
-            # Store results
-            self.graphs[key].init_labels()
-            for thread in as_completed(threads):
-                node_to_label = thread.result()
-                for i, label in node_to_label.items():
-                    self.graphs[key].labels[i] = label
-
-    def get_patch_labels(self, key, nodes):
-        """
-        Gets the segment labels for a given set of nodes within a specified
-        patch of the label mask.
-
-        Parameters
-        ----------
-        key : str
-            Unique identifier of graph to be labeled.
-        nodes : List[int]
-            Node IDs for which the labels are to be retrieved.
-
-        Returns
-        -------
-        dict
-            A dictionary that maps node IDs to their respective labels.
-
-        """
-        bbox = self.graphs[key].get_bbox(nodes)
-        label_patch = self.label_mask.read_with_bbox(bbox)
-        node_to_label = dict()
-        for i in nodes:
-            voxel = self.to_local_voxels(key, i, bbox["min"])
-            label = self.label_handler.get(label_patch[voxel])
-            node_to_label[i] = label
-        return node_to_label
 
     def get_all_node_labels(self):
         """
@@ -407,7 +324,8 @@ class SkeletonMetric:
         # Save results
         prefix = "corrected-" if self.connections_path else ""
         path = f"{self.output_dir}/{prefix}results.csv"
-        self.metrics.fillna(0)
+        if self.fragment_graphs is None:
+            self.metrics = self.metrics.drop("# Merges", axis=1)
         self.metrics.to_csv(path, index=True)
 
         # Report results
@@ -419,10 +337,12 @@ class SkeletonMetric:
                 util.update_txt(path, f"  {column_name}: {avg:.4f}")
 
         n_splits = self.metrics["# Splits"].sum()
-        n_merges = self.metrics["# Merges"].sum()
         util.update_txt(path, "\nTotal Results...")
         util.update_txt(path, "  # Splits: " + str(n_splits))
-        util.update_txt(path, "  # Merges: " + str(n_merges))
+
+        if self.fragment_graphs is not None:
+            n_merges = self.metrics["# Merges"].sum()
+            util.update_txt(path, "  # Merges: " + str(n_merges))
 
     # -- Split Detection --
     def detect_splits(self):

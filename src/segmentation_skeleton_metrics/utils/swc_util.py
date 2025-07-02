@@ -121,11 +121,11 @@ class Reader:
         # Path to...
         if isinstance(swc_pointer, str):
             # ZIP archive with SWC files
-            if ".zip" in swc_pointer:
+            if swc_pointer.endswith(".zip"):
                 return self.read_from_zip(swc_pointer)
 
             # Path to single SWC file
-            if ".swc" in swc_pointer:
+            if swc_pointer.endswith(".swc"):
                 return self.read_from_path(swc_pointer)
 
             raise Exception("Path is invalid!")
