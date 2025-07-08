@@ -291,7 +291,7 @@ class Reader:
         ----------
         gcs_dict : dict
             Dictionary with the keys "bucket_name" and "path" that specify
-            where the ZIP archives are located in a GCS bucket.
+            where the SWC files are located in a GCS bucket.
 
         Returns
         -------
