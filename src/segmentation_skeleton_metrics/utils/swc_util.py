@@ -285,7 +285,7 @@ class Reader:
 
     def read_from_gcs(self, gcs_dict):
         """
-        Reads SWC files from ZIP archives stored in a GCS bucket.
+        Reads SWC files stored in a GCS bucket.
 
         Parameters
         ----------
