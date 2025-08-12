@@ -341,9 +341,6 @@ class SkeletonGraph(nx.Graph):
         ----------
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
-        color : str, optional
-            A string representing the color (e.g., "[1.0 0.0 0.0]") of the SWC
-            file. The default is None.
 
         Returns
         -------
