@@ -5,11 +5,9 @@ Created on Wed June 5 16:00:00 2023
 @email: anna.grim@alleninstitute.org
 
 
-Routines for working with SWC files.
-
-An SWC file is a text-based file format used to represent the directed
-graphical structure of a neuron. It contains a series of nodes such that each
-has the following attributes:
+Routines for working with SWC files. An SWC file is a text-based file format
+used to represent the directed graphical structure of a neuron. It contains a
+series of nodes such that each has the following attributes:
     "id" (int): node ID
     "type" (int): node type (e.g. soma, axon, dendrite)
     "x" (float): x coordinate
@@ -19,7 +17,6 @@ has the following attributes:
 
 Note: Each uncommented line in an SWC file corresponds to a node and contains
       these attributes in the same order.
-
 """
 
 from collections import deque
@@ -43,7 +40,6 @@ class Reader:
     """
     Class that reads SWC files stored in a (1) local directory, (2) local ZIP
     archive, and (3) local directory of ZIP archives.
-
     """
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None):
@@ -54,15 +50,10 @@ class Reader:
         ----------
         anisotropy : Tuple[float], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read. The
-            default is None.
-
-        Returns
-        -------
-        None
-
+            Only SWC files with an swc_id contained in this set are read.
+            Default is None.
         """
         self.anisotropy = anisotropy
         self.selected_ids = selected_ids or set()
@@ -94,7 +85,6 @@ class Reader:
                 - "xyz": coordinate corresponding to each node.
                 - "filename": filename of SWC file
                 - "swc_id": name of SWC file, minus the ".swc".
-
         """
         # Dictionary with GCS specs
         if isinstance(swc_pointer, dict):
@@ -146,7 +136,6 @@ class Reader:
         dict
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         content = util.read_txt(path)
         filename = os.path.basename(path)
@@ -169,7 +158,6 @@ class Reader:
         Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -203,7 +191,6 @@ class Reader:
         Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         # Initializations
         zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
@@ -238,7 +225,6 @@ class Reader:
         Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
@@ -277,7 +263,6 @@ class Reader:
         dict
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         content = util.read_zip(zipfile, path).splitlines()
         filename = os.path.basename(path)
@@ -298,7 +283,6 @@ class Reader:
         Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
         """
         # List filenames
         swc_paths = util.list_gcs_filenames(gcs_dict, ".swc")
@@ -328,7 +312,6 @@ class Reader:
         Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
         """
         pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
         with ThreadPoolExecutor() as executor:
@@ -363,7 +346,6 @@ class Reader:
         dict
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         # Initialize cloud reader
         client = storage.Client()
@@ -389,8 +371,6 @@ class Reader:
         Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
-
         """
         swc_dicts = deque()
         for zip_path in tqdm(zip_paths, desc="Read SWCs"):
@@ -412,8 +392,6 @@ class Reader:
         Dequeue[dict]
             List of dictionaries whose keys and values are the attribute
             names and values from an SWC file.
-
-
         """
         # Initialize cloud reader
         client = storage.Client()
@@ -455,7 +433,6 @@ class Reader:
         -------
         bool
             Indication of whether to read SWC file.
-
         """
         if self.selected_ids:
             segment_id = util.get_segment_id(filename)
@@ -478,7 +455,6 @@ class Reader:
         dict
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
-
         """
         # Initializations
         swc_id, _ = os.path.splitext(filename)
@@ -518,7 +494,6 @@ class Reader:
             A tuple containing the following:
             - "content" (List[str]): lines from an SWC file after comments.
             - "offset" (Tuple[int]): offset used to shift coordinate.
-
         """
         offset = (0, 0, 0)
         for i, line in enumerate(content):
@@ -543,7 +518,6 @@ class Reader:
         -------
         Tuple[int]
             xyz coordinates of an entry from an SWC file.
-
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
@@ -563,11 +537,6 @@ def to_zipped_point(zip_writer, filename, xyz):
         Filename of SWC file.
     xyz : ArrayLike
         Point to be written to SWC file.
-
-    Returns
-    -------
-    None
-
     """
     with StringIO() as text_buffer:
         # Preamble

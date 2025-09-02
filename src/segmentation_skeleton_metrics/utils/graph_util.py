@@ -23,8 +23,7 @@ from segmentation_skeleton_metrics.utils import swc_util, util
 
 class GraphLoader:
     """
-    A class that builds graphs constructed from SWC files.
-
+    A class that builds a graph from SWC files.
     """
 
     def __init__(
@@ -43,23 +42,18 @@ class GraphLoader:
         ----------
         anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is [1.0, 1.0, 1.0].
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
-            tracing. The default is False.
+            tracing. Default is False.
         label_mask : ImageReader, optional
             Predicted segmentation mask.
         selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read. The
-            default is None.
+            Only SWC files with an swc_id contained in this set are read.
+            Default is None.
         use_anisotropy : bool, optional
             Indication of whether to apply anisotropy to coordinates in SWC
-            files. The default is True.
-
-        Returns
-        -------
-        None
-
+            files. Default is True.
         """
         # Instance attributes
         self.anisotropy = anisotropy
@@ -88,8 +82,7 @@ class GraphLoader:
         -------
         dict
             A dictionary where the keys are unique identifiers (i.e. filenames
-            of SWC files) and values are the correspondign SkeletonGraph.
-
+            of SWC files) and values are the corresponding SkeletonGraph.
         """
         graph_dict = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
@@ -112,8 +105,7 @@ class GraphLoader:
         -------
         dict
             A dictionary where the keys are unique identifiers (i.e. filenames
-            of SWC files) and values are the correspondign SkeletonGraph.
-
+            of SWC files) and values are the corresponding SkeletonGraph.
         """
         # Initializations
         swc_dicts = self.swc_reader.read(swc_pointer)
@@ -155,7 +147,6 @@ class GraphLoader:
         -------
         SkeletonGraph
             Graph built from an SWC file.
-
         """
         # Initialize graph
         graph = SkeletonGraph(
@@ -175,11 +166,20 @@ class GraphLoader:
                 graph.run_length += graph.dist(i, parent)
 
         # Set graph-level attributes
-        graph.graph["n_edges"] = graph.number_of_edges()
+        graph.graph["n_initial_edges"] = graph.number_of_edges()
         return {swc_dict["swc_id"]: graph}
 
     # --- Label Graphs ---
     def _label_graph(self, graph):
+        """
+        Assigns labels to graph nodes by indexing a segmentation mask using
+        each node’s voxel coordinates.
+
+        Parameters
+        ----------
+        graph : SkeletonGraph
+            Graph to be labeled.
+        """
         with ThreadPoolExecutor() as executor:
             # Assign threads
             batch = set()
@@ -236,7 +236,6 @@ class GraphLoader:
         -------
         dict
             A dictionary that maps node IDs to their respective labels.
-
         """
         bbox = graph.get_bbox(nodes)
         label_patch = self.label_mask.read_with_bbox(bbox)
@@ -248,12 +247,31 @@ class GraphLoader:
         return node_to_label
 
     def to_local_voxels(self, graph, i, offset):
+        """
+        Convert a global voxel coordinate to a local voxel coordinate.
+
+        Parameters
+        ----------
+        graph : SkeletonGraph
+            Graph object containing node voxel coordinates.
+        i : int
+            Node ID of voxel coordinate to be converted.
+        offset : ArrayLike
+            Offset to subtract from the global voxel coordinate to get the
+            local coordinate.
+
+        Returns
+        -------
+        Tuple[int]
+            Local voxel coordinate after subtracting the offset.
+        """
         voxel = np.array(graph.voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
 
 
 class LabelHandler:
+
     def __init__(self, connections_path=None, valid_labels=None):
         """
         Instantiates a LabelHandler object and builds the label mappings if a
@@ -262,17 +280,12 @@ class LabelHandler:
         Parameters
         ----------
         connections_path : str, optional
-            Path to file containing pairs of segment IDs that were merged. The
-            default is None.
+            Path to file containing pairs of segment IDs that were merged.
+            Default is None.
         valid_labels : Set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
-            The default is None.
-
-        Returns
-        -------
-        None
-
+            Default is None.
         """
         self.mapping = dict()  # Maps label to equivalent class id
         self.inverse_mapping = dict()  # Maps class id to list of labels
@@ -291,11 +304,6 @@ class LabelHandler:
         ----------
         connections_path : str
             Path to file containing pairs of segment IDs that were merged.
-
-        Returns
-        -------
-        None
-
         """
         self.mapping = {0: 0}
         self.inverse_mapping = {0: [0]}
@@ -324,7 +332,6 @@ class LabelHandler:
         networkx.Graph
             Graph with nodes that represent labels and edges are based on the
             connections read from the "connections_path".
-
         """
         # Initializations
         assert self.valid_labels is not None, "Must provide valid labels!"
@@ -354,10 +361,10 @@ class LabelHandler:
         return True if len(self.mapping) > 0 else False
 
 
-# -- Miscellaneous --
+# --- Helpers ---
 def count_splits(graph):
     """
-    Counts the number of splits in "graph".
+    Counts the number of splits in the given graph.
 
     Parameters
     ----------
@@ -367,8 +374,7 @@ def count_splits(graph):
     Returns
     -------
     int
-        Number of splits in "graph".
-
+        Number of splits in the given graph.
     """
     return max(nx.number_connected_components(graph) - 1, 0)
 
@@ -386,11 +392,10 @@ def get_leafs(graph):
     -------
     List[int]
         Leaf nodes in the given graph.
-
     """
     return [node for node in graph.nodes if graph.degree[node] == 1]
 
 
-def write_graph(graph, writer):
+def write_graph(graph, zip_writer):
     if graph.filename not in writer.namelist():
-        graph.to_zipped_swc(writer)
+        graph.to_zipped_swc(zip_writer)

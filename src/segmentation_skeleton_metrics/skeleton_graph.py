@@ -28,7 +28,7 @@ class SkeletonGraph(nx.Graph):
 
     Attributes
     ----------
-    anisotropy : np.ndarray
+    anisotropy : numpy.ndarray
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
     run_length : float
@@ -37,7 +37,6 @@ class SkeletonGraph(nx.Graph):
         A 1D array that contains a label value associated with each node.
     voxels : numpy.ndarray
         A 3D array that contains a voxel coordinate for each node.
-
     """
 
     colors = [
@@ -60,15 +59,11 @@ class SkeletonGraph(nx.Graph):
         ----------
         anisotropy : ArrayLike, optional
             Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. The default is (1.0, 1.0, 1.0).
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
-            tracing. The default is False.
-
-        Returns
-        -------
+            tracing. Default is False.
         None
-
         """
         # Call parent class
         super(SkeletonGraph, self).__init__()
@@ -84,15 +79,6 @@ class SkeletonGraph(nx.Graph):
     def init_labels(self):
         """
         Initializes the "labels" attribute for the graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         error_msg = "Graph must have nodes to initialize labels!"
         assert self.number_of_nodes() > 0, error_msg
@@ -106,11 +92,6 @@ class SkeletonGraph(nx.Graph):
         ----------
         voxels : ArrayLike
             Voxel coordinates for each node in the graph.
-
-        Returns
-        -------
-        None
-
         """
         self.voxels = np.array(voxels, dtype=np.int32)
 
@@ -122,12 +103,7 @@ class SkeletonGraph(nx.Graph):
         Parameters
         ----------
         filename : str
-            Name of SWC file that graph is built from.
-
-        Returns
-        -------
-        None
-
+            Name of the SWC file that the graph is built from.
         """
         self.filename = filename
 
@@ -138,12 +114,8 @@ class SkeletonGraph(nx.Graph):
 
         Parameters
         ----------
-        num_nodes
-
-        Returns
-        -------
-        None
-
+        num_nodes : int
+            Number of nodes to be added to the graph.
         """
         self.add_nodes_from(np.arange(num_nodes))
 
@@ -152,15 +124,10 @@ class SkeletonGraph(nx.Graph):
         """
         Gets the unique non-zero label values in the "labels" attribute.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         Set[int]
             Unique non-zero label values assigned to nodes in the graph.
-
         """
         labels = set(np.unique(self.labels))
         labels.discard(0)
@@ -179,7 +146,6 @@ class SkeletonGraph(nx.Graph):
         -------
         numpy.ndarray
             A 1D array of node IDs that have the specified label.
-
         """
         return np.where(self.labels == label)[0]
 
@@ -200,7 +166,6 @@ class SkeletonGraph(nx.Graph):
         -------
         float
             Distance between voxel coordinates of the given nodes.
-
         """
         return distance.euclidean(self.voxels[i], self.voxels[j])
 
@@ -221,7 +186,6 @@ class SkeletonGraph(nx.Graph):
         float
             Euclidean distance between physical coordinates of the given
             nodes.
-
         """
         xyz_i = self.voxels[i] * self.anisotropy
         xyz_j = self.voxels[j] * self.anisotropy
@@ -243,7 +207,6 @@ class SkeletonGraph(nx.Graph):
             Dictionary containing the bounding box coordinates:
             - "min": minimum voxel coordinates along each axis.
             - "max": maximum voxel coordinates along each axis.
-
         """
         bbox_min = np.inf * np.ones(3)
         bbox_max = np.zeros(3)
@@ -260,11 +223,6 @@ class SkeletonGraph(nx.Graph):
         ----------
         label : int
             Label to be deleted from graph.
-
-        Returns
-        -------
-        None
-
         """
         nodes = self.nodes_with_label(label)
         self.remove_nodes_from(nodes)
@@ -273,15 +231,10 @@ class SkeletonGraph(nx.Graph):
         """
         Computes the path length of each connected component.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         numpy.ndarray
             Array containing run lengths of each connected component.
-
         """
         run_lengths = []
         if self.number_of_nodes() > 0:
@@ -306,7 +259,6 @@ class SkeletonGraph(nx.Graph):
         -------
         float
             Path length.
-
         """
         run_length = 0
         for i, j in nx.dfs_edges(self, source=root):
@@ -323,11 +275,6 @@ class SkeletonGraph(nx.Graph):
             Nodes to be updated.
         label : int
             New label of nodes.
-
-        Returns
-        -------
-        None
-
         """
         for i in nodes:
             self.labels[i] = label
@@ -341,11 +288,6 @@ class SkeletonGraph(nx.Graph):
         ----------
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
-
-        Returns
-        -------
-        None
-
         """
         with StringIO() as text_buffer:
             # Preamble
@@ -376,15 +318,10 @@ class SkeletonGraph(nx.Graph):
         """
         Gets the display color of the skeleton to be written to an SWC file.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         str
             String representing the color in the format "# COLOR R G B".
-
         """
         if self.is_groundtruth:
             return "# COLOR 1.0 1.0 1.0"

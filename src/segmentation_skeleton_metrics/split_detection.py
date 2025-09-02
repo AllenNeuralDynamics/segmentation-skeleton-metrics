@@ -14,7 +14,7 @@ from collections import deque
 import networkx as nx
 
 
-def run(process_id, graph):
+def run(graph):
     """
     Adjusts misalignments between ground truth graph and segmentation mask.
 
@@ -27,18 +27,13 @@ def run(process_id, graph):
     -------
     graph : networkx.Graph
         Labeled graph with omit and split edges removed.
-
+    n_split_edges : int
+        Number of split edges in the given graph.
     """
-    # Initializations
     n_split_edges = 0
-    source = get_leaf(graph)
-    dfs_edges = deque(list(nx.dfs_edges(graph, source=source)))
     visited_edges = set()
-
-    # Main
-    while len(dfs_edges) > 0:
+    for i, j in deque(nx.dfs_edges(graph, source=get_leaf(graph))):
         # Check whether to visit edge
-        i, j = dfs_edges.popleft()
         if frozenset({i, j}) in visited_edges:
             continue
 
@@ -54,7 +49,7 @@ def run(process_id, graph):
 
     # Finish
     graph.remove_nodes_with_label(0)
-    return process_id, graph, n_split_edges
+    return graph, n_split_edges
 
 
 def check_misalignment(graph, visited_edges, nb, root):
@@ -66,21 +61,12 @@ def check_misalignment(graph, visited_edges, nb, root):
     ----------
     graph : networkx.Graph
         Graph that represents a ground truth neuron.
-    visited_edges : list[tuple]
+    visited_edges : List[tuple]
         List of edges in "graph" that have been visited.
     nb : int
         Neighbor of "root".
     root : int
         Node where possible split starts (i.e. zero-valued label).
-
-    Returns
-    -------
-    dfs_edges : list[tuple].
-        Updated "dfs_edges" with visited edges removed.
-    graph : networkx.Graph
-        Ground truth graph with nodes labeled with respect to corresponding
-        voxel in predicted segmentation.
-
     """
     # Search
     label_collisions = set()
@@ -116,22 +102,21 @@ def is_split(a, b):
     Parameters
     ----------
     a : int
-        label at node i.
+        Label of node i.
     b : int
-        label at node j.
+        Label of node j.
 
     Returns
     -------
     bool
-        Indication of whether there is a split.
-
+        Indication of whether there is a split mistake.
     """
     return (a > 0 and b > 0) and (a != b)
 
 
 def get_leaf(graph):
     """
-    Gets a leaf node from "graph".
+    Gets a random leaf node from "graph".
 
     Parameters
     ----------
@@ -142,7 +127,6 @@ def get_leaf(graph):
     -------
     int
         Leaf node of "graph"
-
     """
     for i in graph.nodes:
         if graph.degree[i] == 1:

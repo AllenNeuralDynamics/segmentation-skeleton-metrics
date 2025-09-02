@@ -125,9 +125,11 @@ class SkeletonMetric:
         col_names = [
             "# Splits",
             "# Merges",
-            "% Split",
-            "% Omit",
-            "% Merged",
+            "Split Rate",
+            "Merge Rate",
+            "% Split Edges",
+            "% Omit Edges",
+            "% Merged Edges",
             "Edge Accuracy",
             "ERL",
             "Normalized ERL",
@@ -193,19 +195,19 @@ class SkeletonMetric:
 
     def get_all_node_labels(self):
         """
-        Gets the set of unique node labels from all graphs in "self.graphs".
+        Gets the set of unique node labels across all graphs in "self.graphs".
 
         Returns
         -------
         Set[int]
-            Set of unique node labels from all graphs.
+            Unique node labels across all graphs.
         """
-        all_labels = set()
+        all_node_labels = set()
         inverse_bool = self.label_handler.use_mapping()
         for key in self.graphs:
-            labels = self.get_node_labels(key, inverse_bool=inverse_bool)
-            all_labels = all_labels.union(labels)
-        return all_labels
+            node_labels = self.get_node_labels(key, inverse_bool=inverse_bool)
+            all_node_labels = all_node_labels.union(node_labels)
+        return all_node_labels
 
     def get_node_labels(self, key, inverse_bool=False):
         """
@@ -304,30 +306,32 @@ class SkeletonMetric:
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
         with ProcessPoolExecutor(max_workers=4) as executor:
             # Assign processes
-            processes = list()
+            pending = dict()
             for key, graph in self.graphs.items():
-                processes.append(
-                    executor.submit(split_detection.run, key, graph)
-                )
+                process = executor.submit(split_detection.run, graph)
+                pending[process] = key
 
             # Store results
-            for process in as_completed(processes):
-                key, graph, n_split_edges = process.result()
-                n_before = graph.graph["n_edges"]
-                n_after = graph.number_of_edges()
+            for process in as_completed(pending.keys()):
+                key = pending.pop(process)
+                self.graphs[key], n_split_edges = process.result()
+                n_before = self.graphs[key].graph["n_initial_edges"]
+                n_after = self.graphs[key].number_of_edges()
 
                 n_missing = n_before - n_after
+                n_splits = gutil.count_splits(self.graphs[key])
                 p_omit = 100 * (n_missing + n_split_edges) / n_before
                 p_split = 100 * n_split_edges / n_before
-                gt_rl = graph.run_length
+                rl = np.sum(self.graphs[key].run_lengths())
+                gt_rl = self.graphs[key].run_length
 
-                self.graphs[key] = graph
-                self.metrics.at[key, "% Omit"] = round(p_omit, 2)
-                self.metrics.at[key, "# Splits"] = gutil.count_splits(graph)
-                self.metrics.loc[key, "% Split"] = round(p_split, 2)
+                self.metrics.at[key, "# Splits"] = n_splits
+                self.metrics.at[key, "Split Rate"] = rl / max(n_splits, 1)
+                self.metrics.loc[key, "% Split Edges"] = round(p_split, 2)
+                self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
                 self.metrics.loc[key, "GT Run Length"] = round(gt_rl, 2)
                 pbar.update(1)
-
+                    
     # -- Merge Detection --
     def detect_merges(self):
         """
@@ -567,9 +571,9 @@ class SkeletonMetric:
         Computes the percentage of merged edges for each graph.
         """
         for key in self.graphs:
-            n_edges = max(self.graphs[key].graph["n_edges"], 1)
-            p = self.n_merged_edges[key] / n_edges
-            self.metrics.loc[key, "% Merged"] = round(100 * p, 2)
+            n_initial_edges = self.graphs[key].graph["n_initial_edges"]
+            p = self.n_merged_edges[key] / max(n_initial_edges, 1)
+            self.metrics.loc[key, "% Merged Edges"] = round(100 * p, 2)
 
     # -- Compute Metrics --
     def compute_edge_accuracy(self):
@@ -577,8 +581,8 @@ class SkeletonMetric:
         Computes the edge accuracy of each self.graph.
         """
         for key in self.graphs:
-            p_omit = self.metrics.loc[key, "% Omit"]
-            p_merged = self.metrics.loc[key, "% Merged"]
+            p_omit = self.metrics.loc[key, "% Omit Edges"]
+            p_merged = self.metrics.loc[key, "% Merged Edges"]
             edge_accuracy = round(100 - p_omit - p_merged, 2)
             self.metrics.loc[key, "Edge Accuracy"] = edge_accuracy
 

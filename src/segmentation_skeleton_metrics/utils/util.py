@@ -33,11 +33,6 @@ def mkdir(path, delete=False):
     delete : bool, optional
         Indication of whether to delete directory at path if it already
         exists. The default is False.
-
-    Returns
-    -------
-    None
-
     """
     if delete:
         rmdir(path)
@@ -53,11 +48,6 @@ def rmdir(path):
     ----------
     path : str
         Path to directory to be removed if it exists.
-
-    Returns
-    -------
-    None
-
     """
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -79,7 +69,6 @@ def list_dir(directory, extension=None):
     -------
     List[str]
         Filenames in the given directory.
-
     """
     if extension is None:
         return [f for f in os.listdir(directory)]
@@ -97,13 +86,12 @@ def list_paths(directory, extension=None):
     directory : str
         Path to directory to be searched.
     extension : str, optional
-        Extension of filenames to be returned. The default is None.
+        Extension of filenames to be returned. Default is None.
 
     Returns
     -------
-    list[str]
+    List[str]
         Paths of files in the given directory.
-
     """
     paths = list()
     for f in list_dir(directory, extension=extension):
@@ -119,12 +107,12 @@ def read_zip(zip_file, path):
     Parameters
     ----------
     zip_file : ZipFile
-        ZIP archive containing text file.
+        ZIP archive containing TXT file.
 
     Returns
     -------
     str
-        Contents of a txt file.
+        Contents of a TXT file.
 
     """
     with zip_file.open(path) as f:
@@ -144,7 +132,6 @@ def read_txt(path):
     -------
     List[str]
         Lines from the txt file.
-
     """
     with open(path, "r") as f:
         return f.read().splitlines()
@@ -160,11 +147,6 @@ def update_txt(path, text):
         Path to txt file where the text will be appended.
     text : str
         Text to be written to the file.
-
-    Returns
-    -------
-    None
-
     """
     print(text)
     with open(path, "a") as file:
@@ -179,13 +161,12 @@ def list_files_in_zip(zip_content):
     Parameters
     ----------
     zip_content : str
-        Content stored in a zip file in the form of a string of bytes.
+        Content stored in a ZIP archive in the form of a string of bytes.
 
     Returns
     -------
-    list[str]
-        List of filenames in a zip file.
-
+    List[str]
+        Filenames in a ZIP archive file.
     """
     with ZipFile(BytesIO(zip_content), "r") as zip_file:
         return zip_file.namelist()
@@ -204,9 +185,8 @@ def list_gcs_filenames(gcs_dict, extension):
 
     Returns
     -------
-    list
+    List[str]
         Filenames stored at "cloud" path with the given extension.
-
     """
     bucket = storage.Client().bucket(gcs_dict["bucket_name"])
     blobs = bucket.list_blobs(prefix=gcs_dict["path"])
@@ -226,9 +206,8 @@ def list_gcs_subdirectories(bucket_name, prefix):
 
     Returns
     -------
-    list[str]
+    List[str]
          List of direct subdirectories.
-
     """
     # Load blobs
     storage_client = storage.Client()
@@ -263,7 +242,6 @@ def read_txt_from_gcs(bucket_name, filename):
     -------
     str
         Contents of txt file.
-
     """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -283,11 +261,6 @@ def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
         Path to the local directory whose contents should be uploaded.
     destination_dir : str
         Prefix path in the GCS bucket under which the files will be stored.
-
-    Returns
-    -------
-    None
-
     """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -319,7 +292,6 @@ def get_segment_id(filename):
     -------
     int
         Segment ID.
-
     """
     return int(filename.split(".")[0])
 
@@ -338,7 +310,6 @@ def load_merged_labels(path):
     -------
     List[int]
         Segment IDs that are known to contain a merge mistake.
-
     """
     df = pd.read_csv(path)
     return list(df["Segment_ID"])
@@ -359,7 +330,6 @@ def load_valid_labels(path):
     -------
     Set[int]
         Segment IDs that can be assigned to nodes.
-
     """
     valid_labels = set()
     for label_str in read_txt(path):
@@ -380,7 +350,6 @@ def kdtree_query(kdtree, xyz):
     -------
     Tuple[float]
         Coordinate of the nearest neighbor in the given KD-Tree.
-
     """
     _, idx = kdtree.query(xyz)
     return tuple(kdtree.data[idx])
@@ -399,7 +368,6 @@ def sample_once(my_container):
     -------
     Hashable
         Random element from the given container.
-
     """
     return sample(my_container, 1)[0]
 
@@ -417,11 +385,6 @@ def save_results(path, stats):
         Dictionary where the keys are SWC IDs (as strings) and the values
         are dictionaries containing metrics as keys and their respective
         values.
-
-    Returns
-    -------
-    None
-
     """
     # Initialize
     wb = Workbook()
