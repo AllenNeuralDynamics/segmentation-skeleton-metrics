@@ -23,7 +23,7 @@ from segmentation_skeleton_metrics.utils import swc_util, util
 
 class GraphLoader:
     """
-    A class that builds a graph from SWC files.
+    A class that builds a graphs from SWC files.
     """
 
     def __init__(
@@ -69,9 +69,8 @@ class GraphLoader:
 
     def run(self, swc_pointer):
         """
-        Builds graphs by reading SWC files to extract content which is then
-        loaded into a custom SkeletonGraph object. Optionally, the nodes are
-        labeled if a "label_mask" is provided.
+        Builds a graphs by reading SWC files to extract content to load into a
+        SkeletonGraph object. Nodes are labeled if a label_mask is provided.
 
         Parameters
         ----------
@@ -81,7 +80,7 @@ class GraphLoader:
         Returns
         -------
         dict
-            A dictionary where the keys are unique identifiers (i.e. filenames
+            Dictionary where the keys are unique identifiers (i.e. filenames
             of SWC files) and values are the corresponding SkeletonGraph.
         """
         graph_dict = self._build_graphs_from_swcs(swc_pointer)
@@ -104,8 +103,8 @@ class GraphLoader:
         Returns
         -------
         dict
-            A dictionary where the keys are unique identifiers (i.e. filenames
-            of SWC files) and values are the corresponding SkeletonGraph.
+            Dictionary where the keys are unique identifiers (i.e. SWC
+            filenames) and values are the corresponding SkeletonGraphs.
         """
         # Initializations
         swc_dicts = self.swc_reader.read(swc_pointer)
@@ -186,7 +185,7 @@ class GraphLoader:
             threads = list()
             visited = set()
             for i, j in nx.dfs_edges(graph):
-                # Check if starting new batch
+                # Check whether to start new batch
                 if len(batch) == 0:
                     root = i
                     batch.add(i)
@@ -235,7 +234,7 @@ class GraphLoader:
         Returns
         -------
         dict
-            A dictionary that maps node IDs to their respective labels.
+            Dictionary that maps node IDs to their respective labels.
         """
         bbox = graph.get_bbox(nodes)
         label_patch = self.label_mask.read_with_bbox(bbox)
@@ -248,7 +247,7 @@ class GraphLoader:
 
     def to_local_voxels(self, graph, i, offset):
         """
-        Convert a global voxel coordinate to a local voxel coordinate.
+        Converts a global voxel coordinate to a local voxel coordinate.
 
         Parameters
         ----------
@@ -271,11 +270,32 @@ class GraphLoader:
 
 
 class LabelHandler:
+    """
+    Handles mapping between raw segmentation labels and consolidated class IDs.
 
-    def __init__(self, connections_path=None, valid_labels=None):
+    The class is designed to manage cases where multiple segment IDs are merged
+    into a single equivalence class. It supports:
+      - Building mappings from a file of pairwise segment connections.
+      - Mapping individual labels to class IDs.
+      - Retrieving all labels belonging to a given class.
+      - Enforcing constraints on which labels are considered valid.
+
+    Attributes
+    ----------
+    mapping : Dict[int, int]
+        Maps a raw label (segment ID) to its class ID.
+    inverse_mapping : Dict[int, Set[int]]
+        Maps a class ID back to the set of raw labels it contains.
+    processed_labels : Set[int]
+        Labels that have been processed during initialization.
+    valid_labels : Set[int]
+        Labels that are allowed to be assigned (after filtering).
+    """
+
+    def __init__(self, connections_path=None, valid_labels=set()):
         """
-        Instantiates a LabelHandler object and builds the label mappings if a
-        connections path is provided.
+        Instantiates a LabelHandler object and optionally builds label
+        mappings.
 
         Parameters
         ----------
@@ -283,14 +303,14 @@ class LabelHandler:
             Path to file containing pairs of segment IDs that were merged.
             Default is None.
         valid_labels : Set[int], optional
-            Segment IDs that can be assigned to nodes. This argument accounts
-            for segments that were been removed due to some type of filtering.
-            Default is None.
+            Subset of labels that are considered to be valid. This argument
+            accounts for segments removed due to filtering. Default is an
+            empty set.
         """
         self.mapping = dict()  # Maps label to equivalent class id
         self.inverse_mapping = dict()  # Maps class id to list of labels
         self.processed_labels = set()
-        self.valid_labels = valid_labels or set()
+        self.valid_labels = valid_labels
         if connections_path:
             self.init_mappings(connections_path)
 
@@ -317,15 +337,15 @@ class LabelHandler:
 
     def build_labels_graph(self, connections_path):
         """
-        Builds a graph from a list of labels and connection data. The nodes
-        are initialized with "self.valid_labels", then edges are added between
-        nodes based on a list of connections specified in a file.
+        Builds a graph of labels from valid labels and merge connections.
+        Nodes correspond to "self.valid_labels", and edges are added between
+        labels that were merged according to the file.
 
         Parameters
         ----------
         connections_path : str
-            Path to a text file containing connections. Each line represents a
-            connection between two segmentation ids.
+            Path to a text file containing merge connections. Each line should
+            specify a pair of segment IDs separated by a comma.
 
         Returns
         -------
@@ -348,6 +368,19 @@ class LabelHandler:
 
     # --- Main ---
     def get(self, label):
+        """
+        Maps a raw label to its class ID.
+
+        Parameters
+        ----------
+        label : int
+            Raw label (segment ID) to be mapped.
+
+        Returns
+        -------
+        int
+            Class ID corresponding to the label.
+        """
         if self.use_mapping():
             return self.mapping.get(label, 0)
         elif self.valid_labels:
@@ -355,16 +388,37 @@ class LabelHandler:
         return label
 
     def get_class(self, label):
+        """
+        Gets all raw labels associated with a class ID.
+
+        Parameters
+        ----------
+        label : int
+            Class ID or raw label.
+
+        Returns
+        -------
+        List[int] or Set[int]
+            Labels corresponding to the class.
+        """
         return self.inverse_mapping[label] if self.use_mapping() else [label]
 
     def use_mapping(self):
+        """
+        Check whether mappings have been initialized.
+
+        Returns
+        -------
+        bool
+            True if mappings are active, False otherwise.
+        """
         return True if len(self.mapping) > 0 else False
 
 
 # --- Helpers ---
 def count_splits(graph):
     """
-    Counts the number of splits in the given graph.
+    Counts the number of split mistakes in the given graph.
 
     Parameters
     ----------
@@ -374,7 +428,7 @@ def count_splits(graph):
     Returns
     -------
     int
-        Number of splits in the given graph.
+        Number of split mistakes in the given graph.
     """
     return max(nx.number_connected_components(graph) - 1, 0)
 
@@ -397,5 +451,17 @@ def get_leafs(graph):
 
 
 def write_graph(graph, zip_writer):
-    if graph.filename not in writer.namelist():
+    """
+    Writes a graph to ZIP archive containing SWC files if it has not already
+    been written.
+
+    Parameters
+    ----------
+    graph : SkeletonGraph
+        Graph to be written to an SWC file.
+    zip_writer : zipfile.ZipFile
+        An open ZipFile handle in write or append mode where the SWC file will
+        be written.
+    """
+    if graph.filename not in zip_writer.namelist():
         graph.to_zipped_swc(zip_writer)

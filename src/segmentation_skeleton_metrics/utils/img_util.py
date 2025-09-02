@@ -18,7 +18,6 @@ import tensorstore as ts
 class ImageReader(ABC):
     """
     Abstract base class for creating image reader subclasses.
-
     """
 
     def __init__(self, img_path):
@@ -72,7 +71,7 @@ class ImageReader(ABC):
 
     def read_with_bbox(self, bbox):
         """
-        Reads the image patch defined by a given bounding box.
+        Reads the image patch defined by the given bounding box.
 
         Parameters
         ----------
@@ -103,7 +102,6 @@ class ImageReader(ABC):
 class TensorStoreReader(ImageReader):
     """
     Class that reads an image with the TensorStore library.
-
     """
 
     def __init__(self, img_path, driver):
@@ -167,7 +165,6 @@ class TensorStoreReader(ImageReader):
 class TiffReader(ImageReader):
     """
     Class that reads an image with the Tifffile library.
-
     """
 
     def __init__(self, img_path):

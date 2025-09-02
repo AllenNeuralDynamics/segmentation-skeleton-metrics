@@ -41,12 +41,14 @@ class SkeletonMetric:
     the following metrics:
         (1) # Splits
         (2) # Merges
-        (3) Omit Edge Ratio
-        (4) Split Edge Ratio
-        (5) Merged Edge Ratio
-        (6) Edge accuracy
-        (7) Expected Run Length (ERL)
-        (8) Normalized ERL
+        (3) Split Rate
+        (4) Merge Rate
+        (5) Omit Edge Ratio
+        (6) Split Edge Ratio
+        (7) Merged Edge Ratio
+        (8) Edge accuracy
+        (9) Expected Run Length (ERL)
+        (10) Normalized ERL
     """
 
     def __init__(
@@ -159,7 +161,10 @@ class SkeletonMetric:
             use_anisotropy=False,
         )
         self.graphs = graph_loader.run(swc_pointer)
-        self.gt_graphs = deepcopy(self.graphs)
+
+        # Save initial graphs (if applicable)
+        if self.save_merges:
+            self.gt_graphs = deepcopy(self.graphs)
 
     def load_fragments(self, swc_pointer):
         """
@@ -300,8 +305,8 @@ class SkeletonMetric:
     # -- Split Detection --
     def detect_splits(self):
         """
-        Detects split and omit edges in the labeled ground truth graphs, then
-        removes omit nodes.
+        Perform split detection across all graphs, update graph structures,
+        and compute several skeleton metrics.
         """
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
         with ProcessPoolExecutor(max_workers=4) as executor:
@@ -318,9 +323,9 @@ class SkeletonMetric:
                 n_before = self.graphs[key].graph["n_initial_edges"]
                 n_after = self.graphs[key].number_of_edges()
 
-                n_missing = n_before - n_after
+                n_missing_edges = n_before - n_after
                 n_splits = gutil.count_splits(self.graphs[key])
-                p_omit = 100 * (n_missing + n_split_edges) / n_before
+                p_omit = 100 * (n_missing_edges + n_split_edges) / n_before
                 p_split = 100 * n_split_edges / n_before
                 rl = np.sum(self.graphs[key].run_lengths())
                 gt_rl = self.graphs[key].run_length
@@ -331,7 +336,7 @@ class SkeletonMetric:
                 self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
                 self.metrics.loc[key, "GT Run Length"] = round(gt_rl, 2)
                 pbar.update(1)
-                    
+
     # -- Merge Detection --
     def detect_merges(self):
         """
@@ -352,7 +357,7 @@ class SkeletonMetric:
             self.process_merge_sites()
 
         # Detect merges by finding ground truth graphs with common node labels
-        for (key_1, key_2), label in self.find_label_intersections():
+        for (key_1, key_2), label in self.detect_merge_conflicts():
             self.process_merge(key_1, label, -1)
             self.process_merge(key_2, label, -1)
 
@@ -512,22 +517,27 @@ class SkeletonMetric:
             # Update counter
             for key in self.graphs.keys():
                 idx_mask = self.merge_sites["GroundTruth_ID"] == key
-                self.metrics.loc[key, "# Merges"] = int(idx_mask.sum())
+                n_merges = int(idx_mask.sum())
+                rl = np.sum(self.graphs[key].run_lengths())
+
+                self.metrics.loc[key, "# Merges"] = n_merges
+                self.metrics.loc[key, "Merge Rate"] = rl / max(n_merges, 1)
 
             # Save results
             path = os.path.join(self.output_dir, "merge_sites.csv")
             self.merge_sites.to_csv(path, index=True)
 
-    def find_label_intersections(self):
+    def detect_merge_conflicts(self):
         """
-        Detects merges between ground truth graphs, namely distinct graphs that
-        contain nodes with the same label.
+        Detects pairs of distinct graphs that contain nodes that share the
+        same label.
 
         Returns
         -------
-        Set[tuple]
-            Set of tuples containing a tuple of graph ids and common label
-            between the graphs.
+        Set[Tuple[Frozenset[str], int]]
+            Set of merge conflicts, where each entry is a tuple containing:
+            - Frozenset of two graph IDs (the graphs that share a label)
+            - label that is present in both graphs
         """
         label_intersections = set()
         visited = set()
