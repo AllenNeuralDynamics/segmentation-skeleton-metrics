@@ -29,11 +29,6 @@ class ImageReader(ABC):
         ----------
         img_path : str
             Path to an image.
-
-        Returns
-        -------
-        None
-
         """
         self.img = None
         self.img_path = img_path
@@ -44,15 +39,6 @@ class ImageReader(ABC):
         """
         This method should be implemented by subclasses to load the image
         based on the "img_path" attribute.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         pass
 
@@ -72,7 +58,6 @@ class ImageReader(ABC):
         -------
         numpy.ndarray
             Image patch.
-
         """
         v1 = voxel
         v2 = [v1[i] + shape[i] for i in range(3)]
@@ -99,7 +84,6 @@ class ImageReader(ABC):
         -------
         numpy.ndarray
             Image patch.
-
         """
         shape = [bbox["max"][i] - bbox["min"][i] for i in range(3)]
         return self.read(bbox["min"], shape)
@@ -108,15 +92,10 @@ class ImageReader(ABC):
         """
         Gets the shape of image.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         Tuple[int]
             Shape of image.
-
         """
         return self.img.shape
 
@@ -137,11 +116,6 @@ class TensorStoreReader(ImageReader):
             Path to image.
         driver : str
             Storage driver needed to read the image.
-
-        Returns
-        -------
-        None
-
         """
         self.driver = driver
         super().__init__(img_path)
@@ -149,15 +123,6 @@ class TensorStoreReader(ImageReader):
     def _load_image(self):
         """
         Loads image using the TensorStore library.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         self.img = ts.open(
             {
@@ -194,7 +159,6 @@ class TensorStoreReader(ImageReader):
         -------
         numpy.ndarray
             Image patch.
-
         """
         img_patch = super().read(voxel, shape)
         return img_patch.read().result()
@@ -213,27 +177,13 @@ class TiffReader(ImageReader):
         Parameters
         ----------
         img_path : str
-            Path to image.
-
-        Returns
-        -------
-        None
-
+            Path to a TIFF image.
         """
         super().__init__(img_path)
 
     def _load_image(self):
         """
         Loads image using the Tifffile library.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         self.img = imread(self.img_path)
 
@@ -256,7 +206,6 @@ def to_physical(voxel, anisotropy):
     -------
     Tuple[float]
         Physical coordinate.
-
     """
     return tuple([voxel[i] * anisotropy[i] for i in range(3)])
 
@@ -277,6 +226,5 @@ def to_voxels(xyz, anisotropy):
     -------
     Tuple[int]
         Voxel coordinate.
-
     """
     return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)])
