@@ -21,7 +21,7 @@ from segmentation_skeleton_metrics.utils import util
 class SkeletonGraph(nx.Graph):
     """
     A subclass of the NetworkX.Graph designed for graphs built from SWC files.
-    This class extends the functionality of the standard Graph by adding
+    This class extends the functionality of the standard Graph class by adding
     support for handling node labels and voxel coordinates. In this subclass,
     node IDs serve as direct indices for accessing the labels and voxels
     attributes.
@@ -31,10 +31,15 @@ class SkeletonGraph(nx.Graph):
     anisotropy : numpy.ndarray
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope.
-    run_length : float
-        Physical path length of the graph.
+    filename : str
+        Filename of SWC file that graph is built from.
+    is_groundtruth : bool
+        Indication of whether this graph corresponds to a ground truth
+        tracing.
     labels : numpy.ndarray
         A 1D array that contains a label value associated with each node.
+    run_length : float
+        Physical path length of the graph.
     voxels : numpy.ndarray
         A 3D array that contains a voxel coordinate for each node.
     """
@@ -63,7 +68,6 @@ class SkeletonGraph(nx.Graph):
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
             tracing. Default is False.
-        None
         """
         # Call parent class
         super(SkeletonGraph, self).__init__()
@@ -145,7 +149,7 @@ class SkeletonGraph(nx.Graph):
         Returns
         -------
         numpy.ndarray
-            A 1D array of node IDs that have the specified label.
+            Node IDs that have the specified label.
         """
         return np.where(self.labels == label)[0]
 
