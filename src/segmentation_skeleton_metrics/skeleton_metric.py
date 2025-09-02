@@ -47,7 +47,6 @@ class SkeletonMetric:
         (6) Edge accuracy
         (7) Expected Run Length (ERL)
         (8) Normalized ERL
-
     """
 
     def __init__(
@@ -79,30 +78,25 @@ class SkeletonMetric:
             Path to directory wehere results are written.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
-            stored at "fragments_pointer". The default is (1.0, 1.0, 1.0).
+            stored at "fragments_pointer". Default is (1.0, 1.0, 1.0).
         connections_path : str, optional
             Path to a txt file containing pairs of segment IDs that represents
-            fragments that were merged. The default is None.
+            fragments that were merged. Default is None.
         fragments_pointer : Any, optional
             Pointer to SWC files corresponding to "label_mask", see
             "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
             applied to these SWC files and (2) these SWC files are required
-            for counting merges. The default is None.
+            for counting merges. Default is None.
         save_merges: bool, optional
-            Indication of whether to save fragments with a merge mistake. The
-            default is None.
+            Indication of whether to save fragments with a merge mistake.
+            Default is None.
         save_fragments : bool, optional
             Indication of whether to save fragments that project onto each
-            ground truth skeleton. The default is False.
+            ground truth skeleton. Default is False.
         valid_labels : set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
-            The default is None.
-
-        Returns
-        -------
-        None
-
+            Default is None.
         """
         # Instance attributes
         self.anisotropy = anisotropy
@@ -152,11 +146,6 @@ class SkeletonMetric:
             Pointer to ground truth SWC files.
         label_mask : ImageReader
             Predicted segmentation mask.
-
-        Returns
-        -------
-        None
-
         """
         # Build graphs
         print("\n(1) Load Ground Truth")
@@ -179,11 +168,6 @@ class SkeletonMetric:
         ----------
         swc_pointer : Any
             Pointer to predicted SWC files if provided.
-
-        Returns
-        -------
-        None
-
         """
         print("\n(2) Load Fragments")
         if swc_pointer:
@@ -202,15 +186,6 @@ class SkeletonMetric:
         """
         Sets the "fragment_ids" attribute by extracting unique segment IDs
         from the "fragment_graphs" keys.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         self.fragment_ids = set()
         for key in self.fragment_graphs:
@@ -220,15 +195,10 @@ class SkeletonMetric:
         """
         Gets the set of unique node labels from all graphs in "self.graphs".
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         Set[int]
             Set of unique node labels from all graphs.
-
         """
         all_labels = set()
         inverse_bool = self.label_handler.use_mapping()
@@ -246,16 +216,15 @@ class SkeletonMetric:
         ----------
         key : str
             Unique identifier of graph from which to retrieve the node labels.
-        inverse_bool : bool
+        inverse_bool : bool, optional
             Indication of whether to return the labels (from "labels_mask") or
             a remapping of these labels in the case when "connections_path" is
-            provided. The default is False.
+            provided. Default is False.
 
         Returns
         -------
         Set[int]
             Labels corresponding to nodes in the graph identified by "key".
-
         """
         if inverse_bool:
             output = set()
@@ -269,15 +238,6 @@ class SkeletonMetric:
         """
         Initializes "self.merge_writer" attribute by setting up a directory for
         output files and creating ZIP files for each graph in "self.graphs".
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Fragments writer
         if self.save_fragments:
@@ -303,15 +263,6 @@ class SkeletonMetric:
     def run(self):
         """
         Computes skeleton-based metrics.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         print("\n(3) Evaluation")
 
@@ -349,15 +300,6 @@ class SkeletonMetric:
         """
         Detects split and omit edges in the labeled ground truth graphs, then
         removes omit nodes.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         pbar = tqdm(total=len(self.graphs), desc="Split Detection")
         with ProcessPoolExecutor(max_workers=4) as executor:
@@ -391,15 +333,6 @@ class SkeletonMetric:
         """
         Detects merges in the predicted segmentation, then deletes node and
         edges in "self.graphs" that correspond to a merge.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         # Initilizations
         self.n_merged_edges = {key: 0 for key in self.graphs}
@@ -437,11 +370,6 @@ class SkeletonMetric:
             Unique identifier of graph to detect merges.
         kdtree : scipy.spatial.KDTree
             A KD-tree built from voxels in graph corresponding to "key".
-
-        Returns
-        -------
-        None
-
         """
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
@@ -466,12 +394,7 @@ class SkeletonMetric:
             Label contained in "labels" attribute in the graph corresponding
             to "key".
         kdtree : scipy.spatial.KDTree
-            A KD-tree built from voxels in graph corresponding to "key".
-
-        Returns
-        -------
-        None
-
+            KD-tree built from voxels in graph corresponding to "key".
         """
         for fragment_graph in self.find_graph_from_label(label):
             if fragment_graph.run_length < 10 ** 6:
@@ -596,16 +519,11 @@ class SkeletonMetric:
         Detects merges between ground truth graphs, namely distinct graphs that
         contain nodes with the same label.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
         Set[tuple]
             Set of tuples containing a tuple of graph ids and common label
             between the graphs.
-
         """
         label_intersections = set()
         visited = set()
@@ -628,15 +546,10 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        str
+        key : str
             Key associated with the graph to be searched.
-        int
+        label : int
             Label in prediction that is assocatied with a merge.
-
-        Returns
-        -------
-        None
-
         """
         if label in self.graphs[key].get_labels():
             # Compute metrics
@@ -652,15 +565,6 @@ class SkeletonMetric:
     def quantify_merges(self):
         """
         Computes the percentage of merged edges for each graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         for key in self.graphs:
             n_edges = max(self.graphs[key].graph["n_edges"], 1)
@@ -671,15 +575,6 @@ class SkeletonMetric:
     def compute_edge_accuracy(self):
         """
         Computes the edge accuracy of each self.graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         for key in self.graphs:
             p_omit = self.metrics.loc[key, "% Omit"]
@@ -690,15 +585,6 @@ class SkeletonMetric:
     def compute_erl(self):
         """
         Computes the expected run length (ERL) of each graph.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
         """
         total_run_length = 0
         for key in self.graphs:
@@ -726,18 +612,17 @@ class SkeletonMetric:
         ----------
         graph : networkx.Graph
             Graph to be searched.
-        kdtree : ...
+        kdtree : scipy.spatial.KDTree
             KDTree containing voxel coordinates from a ground truth tracing.
         root : int
             Root of search.
         radius : float, optional
-            Distance to search from root. The default is 100.
+            Distance to search from root. Default is 100.
 
         Returns
         -------
         int
             Root node or closest branching node within distance "radius".
-
         """
         queue = list([(root, 0)])
         visited = set({root})
@@ -766,25 +651,24 @@ class SkeletonMetric:
                 graphs.append(self.fragment_graphs[key])
         return graphs
 
-    def physical_dist(self, voxel_1, voxel_2):
+    def physical_dist(self, voxel1, voxel2):
         """
         Computes the physical distance between the given voxel coordinates.
 
         Parameters
         ----------
-        voxel_1 : Tuple[int]
+        voxel1 : Tuple[int]
             Voxel coordinate.
-        voxel_2 : Tuple[int]
+        voxel2 : Tuple[int]
             Voxel coordinate.
 
         Returns
         -------
         float
             Physical distance between the given voxel coordinates.
-
         """
-        xyz_1 = img_util.to_physical(voxel_1, self.anisotropy)
-        xyz_2 = img_util.to_physical(voxel_2, self.anisotropy)
+        xyz_1 = img_util.to_physical(voxel1, self.anisotropy)
+        xyz_2 = img_util.to_physical(voxel2, self.anisotropy)
         return distance.euclidean(xyz_1, xyz_2)
 
     def to_local_voxels(self, key, i, offset):
