@@ -12,6 +12,7 @@ Code for reading images.
 from abc import ABC, abstractmethod
 from tifffile import imread
 
+import numpy as np
 import tensorstore as ts
 
 
