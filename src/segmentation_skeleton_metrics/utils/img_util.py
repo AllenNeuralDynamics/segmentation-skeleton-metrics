@@ -178,11 +178,11 @@ class TiffReader(ImageReader):
         swap_axes : bool, optional
             Indication of whether to swap axes 0 and 2. Default is True.
         """
-        # Call parent class
-        super().__init__(img_path)
-
         # Instance attributes
         self.swap_axes = swap_axes
+
+        # Call parent class
+        super().__init__(img_path)
 
     def _load_image(self):
         """
