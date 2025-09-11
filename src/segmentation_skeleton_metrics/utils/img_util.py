@@ -167,7 +167,7 @@ class TiffReader(ImageReader):
     Class that reads an image with the Tifffile library.
     """
 
-    def __init__(self, img_path):
+    def __init__(self, img_path, swap_axes=True):
         """
         Instantiates a TiffReader image reader.
 
@@ -175,14 +175,22 @@ class TiffReader(ImageReader):
         ----------
         img_path : str
             Path to a TIFF image.
+        swap_axes : bool, optional
+            Indication of whether to swap axes 0 and 2. Default is True.
         """
+        # Call parent class
         super().__init__(img_path)
+
+        # Instance attributes
+        self.swap_axes = swap_axes
 
     def _load_image(self):
         """
         Loads image using the Tifffile library.
         """
         self.img = imread(self.img_path)
+        if self.swap_axes:
+            self.img = np.swapaxes(self.img, 0, 2)
 
 
 # --- Miscellaneous ---
