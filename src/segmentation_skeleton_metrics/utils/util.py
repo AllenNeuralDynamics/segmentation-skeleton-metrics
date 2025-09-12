@@ -369,7 +369,7 @@ def read_txt_from_s3(bucket_name, path):
     """
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     obj = s3.get_object(Bucket=bucket_name, Key=path)
-    return obj['Body'].read().decode('utf-8').splitlines()
+    return obj['Body'].read().decode('utf-8')
 
 
 # --- Miscellaneous ---
