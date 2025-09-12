@@ -426,7 +426,7 @@ class Reader:
                         swc_dicts.append(result)
         return swc_dicts
 
-    def read_from_s3_swcs(self, s3_path):
+    def read_from_s3(self, s3_path):
         # List filenames
         bucket_name, prefix = parse_cloud_path(s3_path)
         swc_paths = util.list_s3_paths(bucket_name, prefix, extension=".swc")
@@ -434,7 +434,11 @@ class Reader:
         # Parse SWC files
         swc_dicts = deque()
         for path in swc_paths:
-            contents = util.read_txt_from_s3(bucket_name, path)
+            content = util.read_txt_from_s3(bucket_name, path).splitlines()
+            filename = os.path.basename(path)
+            result = self.parse(content, filename)
+            if result:
+                swc_dicts.append(result)
         return swc_dicts
 
     def confirm_read(self, filename):
