@@ -15,10 +15,12 @@ readme = "README.md"
 dynamic = ["version"]
 
 dependencies = [
+    "boto3",
     "google-cloud-storage",
     "networkx",
     "numpy",
     "pandas",
+    "s3fs==2025.7.0",
     "scikit-image",
     "tensorstore",
     "tifffile",
