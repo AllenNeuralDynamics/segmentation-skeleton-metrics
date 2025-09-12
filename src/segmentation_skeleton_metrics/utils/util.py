@@ -16,6 +16,9 @@ from io import BytesIO
 from xlwt import Workbook
 from zipfile import ZipFile
 
+import boto3
+from botocore import UNSIGNED
+from botocore.client import Config
 import os
 import pandas as pd
 import shutil
@@ -153,7 +156,24 @@ def update_txt(path, text):
         file.write(text + "\n")
 
 
-# -- GCS utils --
+# -- GCS Utils --
+def is_gcs_path(path):
+    """
+    Checks if the path is a GCS path.
+
+    Parameters
+    ----------
+    path : str
+        Path to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether the path is a GCS path.
+    """
+    return path.startswith("gs://")
+
+
 def list_files_in_zip(zip_content):
     """
     Lists all files in a zip file stored in a GCS bucket.
@@ -172,14 +192,16 @@ def list_files_in_zip(zip_content):
         return zip_file.namelist()
 
 
-def list_gcs_filenames(gcs_dict, extension):
+def list_gcs_filenames(bucket_name, prefix, extension):
     """
     Lists all files in a GCS bucket with the given extension.
 
     Parameters
     ----------
-    gcs_dict : dict
-        ...
+    bucket_name : str
+        Name of bucket to be searched.
+    prefix : str
+        Path to location within bucket to be searched.
     extension : str
         File extension of filenames to be listed.
 
@@ -188,8 +210,8 @@ def list_gcs_filenames(gcs_dict, extension):
     List[str]
         Filenames stored at "cloud" path with the given extension.
     """
-    bucket = storage.Client().bucket(gcs_dict["bucket_name"])
-    blobs = bucket.list_blobs(prefix=gcs_dict["path"])
+    bucket = storage.Client().bucket(bucket_name)
+    blobs = bucket.list_blobs(prefix=prefix)
     return [blob.name for blob in blobs if extension in blob.name]
 
 
@@ -227,7 +249,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-def read_txt_from_gcs(bucket_name, filename):
+def read_txt_from_gcs(bucket_name, path):
     """
     Reads a txt file stored in a GCS bucket.
 
@@ -235,8 +257,8 @@ def read_txt_from_gcs(bucket_name, filename):
     ----------
     bucket_name : str
         Name of bucket to be read from.
-    filename : str
-        Name of txt file to be read.
+    path : str
+        Path to txt file to be read.
 
     Returns
     -------
@@ -275,6 +297,79 @@ def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
             # Upload the file
             blob = bucket.blob(blob_path)
             blob.upload_from_filename(local_path)
+
+
+# --- S3 Utils ---
+def is_s3_path(path):
+    """
+    Checks if the given path is an S3 path.
+
+    Parameters
+    ----------
+    path : str
+        Path to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether the path is an S3 path.
+    """
+    return path.startswith("s3://")
+
+
+def list_s3_paths(bucket_name, prefix, extension=""):
+    """
+    Lists all object keys in a public S3 bucket under a given prefix,
+    optionally filters by file extension.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of the S3 bucket.
+    prefix : str
+        The S3 "directory" prefix to search under.
+    extension : str, optional
+        File extension to filter by. Default is an empty string, which returns
+        all files.
+
+    Returns
+    -------
+    List[str]
+        List of S3 object keys that match the prefix and extension filter.
+    """
+    # Create an anonymous client for public buckets
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+
+    # List all objects under the prefix
+    filenames = list()
+    if "Contents" in response:
+        for obj in response["Contents"]:
+            filename = obj["Key"]
+            if filename.endswith(extension):
+                filenames.append(filename)
+    return filenames
+
+
+def read_txt_from_s3(bucket_name, path):
+    """
+    Reads a txt file stored in an S3 bucket.
+
+    Parameters
+    ----------
+    bucket_name : str
+        Name of bucket to be read from.
+    path : str
+        Path to txt file to be read.
+
+    Returns
+    -------
+    str
+        Contents of txt file.
+    """
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    obj = s3.get_object(Bucket=bucket_name, Key=path)
+    return obj['Body'].read().decode('utf-8').splitlines()
 
 
 # --- Miscellaneous ---
