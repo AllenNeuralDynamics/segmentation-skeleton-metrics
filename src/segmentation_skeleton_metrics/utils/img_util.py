@@ -12,8 +12,10 @@ Code for reading images.
 from abc import ABC, abstractmethod
 from tifffile import imread
 
+import io
 import numpy as np
 import tensorstore as ts
+import zipfile
 
 
 class ImageReader(ABC):
@@ -168,18 +170,22 @@ class TiffReader(ImageReader):
     Class that reads an image with the Tifffile library.
     """
 
-    def __init__(self, img_path, swap_axes=True):
+    def __init__(self, img_path, inner_tiff_filename=None, swap_axes=True):
         """
         Instantiates a TiffReader image reader.
 
         Parameters
         ----------
         img_path : str
-            Path to a TIFF image.
+            Path to a TIFF image or ZIP archive containing a TIFF image.
+        inner_tiff_filename : str or None, optional
+            If img_path is a ZIP file, specifies the TIFF filename inside the
+            ZIP. Default is None.
         swap_axes : bool, optional
             Indication of whether to swap axes 0 and 2. Default is True.
         """
         # Instance attributes
+        self.inner_tiff_filename = inner_tiff_filename
         self.swap_axes = swap_axes
 
         # Call parent class
@@ -189,7 +195,15 @@ class TiffReader(ImageReader):
         """
         Loads image using the Tifffile library.
         """
-        self.img = imread(self.img_path)
+        #  Read image
+        if self.img_path.lower().endswith(".zip"):
+            with zipfile.ZipFile(self.img_path, "r") as z:
+                with z.open(self.inner_tiff_filename) as f:
+                    self.img = imread(io.BytesIO(f.read()))
+        else:
+            self.img = imread(self.img_path)
+
+        # Swap axes (if applicable)
         if self.swap_axes:
             self.img = np.swapaxes(self.img, 0, 2)
 

@@ -267,7 +267,7 @@ def read_txt_from_gcs(bucket_name, path):
     """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
-    blob = bucket.blob(filename)
+    blob = bucket.blob(path)
     return blob.download_as_text()
 
 
