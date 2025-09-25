@@ -74,26 +74,21 @@ from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
-def evaluate():
-    segmentation = TiffReader(segmentation_path)
-    skeleton_metric = SkeletonMetric(
-        groundtruth_pointer,
-        segmentation,
-        fragments_pointer=fragments_pointer,
-        output_dir=output_dir,
-    )
-    skeleton_metric.run()
+# Initializations
+output_dir = "./"
+segmentation_path = "./pred_labels.tif"
+fragments_pointer = "./pred_swcs.zip"
+groundtruth_pointer = "./target_swcs.zip"
 
-
-if __name__ == "__main__":
-    # Initializations
-    output_dir = "./"
-    segmentation_path = "./pred_labels.tif"
-    fragments_pointer = "./pred_swcs.zip"
-    groundtruth_pointer = "./target_swcs.zip"
-
-    # Run
-    evaluate()
+# Run
+segmentation = TiffReader(segmentation_path)
+skeleton_metric = SkeletonMetric(
+   groundtruth_pointer,
+   segmentation,
+   fragments_pointer=fragments_pointer,
+   output_dir=output_dir,
+)
+skeleton_metric.run()
 ```
 
 <p>
