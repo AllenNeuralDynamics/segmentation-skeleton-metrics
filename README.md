@@ -82,7 +82,7 @@ def evaluate():
         fragments_pointer=fragments_pointer,
         output_dir=output_dir,
     )
-    full_results, avg_results = skeleton_metric.run()
+    skeleton_metric.run()
 
 
 if __name__ == "__main__":
