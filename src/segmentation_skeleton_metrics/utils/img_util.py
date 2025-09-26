@@ -14,6 +14,7 @@ from tifffile import imread
 
 import io
 import numpy as np
+import os
 import tensorstore as ts
 import zipfile
 
@@ -170,7 +171,7 @@ class TiffReader(ImageReader):
     Class that reads an image with the Tifffile library.
     """
 
-    def __init__(self, img_path, inner_tiff_filename=None, swap_axes=True):
+    def __init__(self, img_path, inner_tiff=None, swap_axes=True):
         """
         Instantiates a TiffReader image reader.
 
@@ -178,14 +179,14 @@ class TiffReader(ImageReader):
         ----------
         img_path : str
             Path to a TIFF image or ZIP archive containing a TIFF image.
-        inner_tiff_filename : str or None, optional
+        inner_tiff : str or None, optional
             If img_path is a ZIP file, specifies the TIFF filename inside the
             ZIP. Default is None.
         swap_axes : bool, optional
             Indication of whether to swap axes 0 and 2. Default is True.
         """
         # Instance attributes
-        self.inner_tiff_filename = inner_tiff_filename
+        self.inner_tiff = inner_tiff
         self.swap_axes = swap_axes
 
         # Call parent class
@@ -197,15 +198,36 @@ class TiffReader(ImageReader):
         """
         #  Read image
         if self.img_path.lower().endswith(".zip"):
-            with zipfile.ZipFile(self.img_path, "r") as z:
-                with z.open(self.inner_tiff_filename) as f:
-                    self.img = imread(io.BytesIO(f.read()))
+            assert self.inner_tiff is not None, "Must provide TIFF filename!"
+            self._load_zipped_image()
         else:
             self.img = imread(self.img_path)
 
         # Swap axes (if applicable)
         if self.swap_axes:
             self.img = np.swapaxes(self.img, 0, 2)
+
+    def _load_zipped_image(self):
+        """
+        Loads an image in a ZIP archive using the Tifffile library.
+        """
+        with zipfile.ZipFile(self.img_path, "r") as z:
+            # Collect only valid TIFF files, ignoring __MACOSX junk
+            tiff_files = [
+                f for f in z.namelist()
+                if f.lower().endswith((".tif", ".tiff"))
+                and not os.path.basename(f).startswith("._")
+            ]
+
+            # Choose file
+            matches = [f for f in tiff_files if f.endswith(self.inner_tiff)]
+            if not matches:
+                raise FileNotFoundError(f"{self.inner_tiff} not found in ZIP")
+            filename = matches[0]
+
+            # Load TIFF
+            with z.open(filename) as f:
+                self.img = imread(io.BytesIO(f.read()))
 
 
 # --- Miscellaneous ---
