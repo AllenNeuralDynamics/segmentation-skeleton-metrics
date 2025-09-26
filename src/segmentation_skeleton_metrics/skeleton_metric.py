@@ -63,6 +63,7 @@ class SkeletonMetric:
         save_fragments=False,
         use_anisotropy=True,
         valid_labels=None,
+        verbose=True
     ):
         """
         Instantiates a SkeletonMetric object that evaluates the topological
@@ -75,7 +76,7 @@ class SkeletonMetric:
             documentation. These SWC files are assumed to be stored in voxel
             coordinates.
         label_mask : ImageReader
-            Predicted segmentation mask.
+            Predicted segmentation.
          output_dir : str
             Path to directory wehere results are written.
         anisotropy : Tuple[float], optional
@@ -95,10 +96,12 @@ class SkeletonMetric:
         save_fragments : bool, optional
             Indication of whether to save fragments that project onto each
             ground truth skeleton. Default is False.
-        valid_labels : set[int], optional
+        valid_labels : Set[int], optional
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
             Default is None.
+        verbose : bool, optional
+            Indication of whether to printout updates. Default is True.
         """
         # Instance attributes
         self.anisotropy = anisotropy
@@ -107,6 +110,7 @@ class SkeletonMetric:
         self.save_merges = save_merges
         self.save_fragments = save_fragments
         self.use_anisotropy = use_anisotropy
+        self.verbose = verbose
 
         # Label handler
         self.label_handler = gutil.LabelHandler(
@@ -151,8 +155,10 @@ class SkeletonMetric:
         label_mask : ImageReader
             Predicted segmentation mask.
         """
+        if self.verbose:
+            print("\n(1) Load Ground Truth")
+
         # Build graphs
-        print("\n(1) Load Ground Truth")
         graph_loader = gutil.GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=True,
@@ -176,7 +182,9 @@ class SkeletonMetric:
         swc_pointer : Any
             Pointer to predicted SWC files if provided.
         """
-        print("\n(2) Load Fragments")
+        if self.verbose:
+            print("\n(2) Load Fragments")
+
         if swc_pointer:
             graph_loader = gutil.GraphLoader(
                 anisotropy=self.anisotropy,
@@ -271,7 +279,8 @@ class SkeletonMetric:
         """
         Computes skeleton-based metrics.
         """
-        print("\n(3) Evaluation")
+        if self.verbose:
+            print("\n(3) Evaluation")
 
         # Compute metrics
         self.detect_splits()
@@ -308,7 +317,9 @@ class SkeletonMetric:
         Perform split detection across all graphs, update graph structures,
         and compute several skeleton metrics.
         """
-        pbar = tqdm(total=len(self.graphs), desc="Split Detection")
+        if self.verbose:
+            pbar = tqdm(total=len(self.graphs), desc="Split Detection")
+
         with ProcessPoolExecutor(max_workers=4) as executor:
             # Assign processes
             pending = dict()
@@ -335,7 +346,9 @@ class SkeletonMetric:
                 self.metrics.loc[key, "% Split Edges"] = round(p_split, 2)
                 self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
                 self.metrics.loc[key, "GT Run Length"] = round(gt_rl, 2)
-                pbar.update(1)
+
+                if self.verbose:
+                    pbar.update(1)
 
     # -- Merge Detection --
     def detect_merges(self):
