@@ -512,17 +512,17 @@ class Reader:
 
         Returns
         -------
-        tuple
-            A tuple containing the following:
-            - "content" (List[str]): lines from an SWC file after comments.
-            - "offset" (Tuple[int]): offset used to shift coordinate.
+        content : List[str]
+            Lines from an SWC file after comments.
+        offset : Tuple[int]
+            Offset used to shift coordinate.
         """
         offset = (0, 0, 0)
         for i, line in enumerate(content):
             if line.startswith("# OFFSET"):
                 parts = line.split()
                 offset = self.read_voxel(parts[2:5])
-            if not line.startswith("#"):
+            if not line.startswith("#") and len(line.strip()) > 0:
                 return content[i:], offset
 
     def read_voxel(self, xyz_str, offset):
