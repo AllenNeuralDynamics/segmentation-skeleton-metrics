@@ -129,6 +129,8 @@ class SkeletonMetric:
         row_names = list(self.graphs.keys())
         row_names.sort()
         col_names = [
+            "SWC Name",
+            "SWC Run Length",
             "# Splits",
             "# Merges",
             "Split Rate",
@@ -139,9 +141,9 @@ class SkeletonMetric:
             "Edge Accuracy",
             "ERL",
             "Normalized ERL",
-            "GT Run Length",
         ]
         self.metrics = pd.DataFrame(index=row_names, columns=col_names)
+        self.metrics["SWC Name"] = self.metrics.index
 
     # --- Load Data ---
     def load_groundtruth(self, swc_pointer, label_mask):
@@ -293,13 +295,13 @@ class SkeletonMetric:
         path = f"{self.output_dir}/{prefix}results.csv"
         if self.fragment_graphs is None:
             self.metrics = self.metrics.drop("# Merges", axis=1)
-        self.metrics.to_csv(path, index=True)
+        self.metrics.to_csv(path, index=False)
 
         # Report results
         path = os.path.join(self.output_dir, f"{prefix}results-overview.txt")
         util.update_txt(path, "Average Results...")
         for column_name in self.metrics.columns:
-            if column_name != "GT Run Length":
+            if column_name != "SWC Run Length" and column_name != "SWC Name":
                 avg = self.compute_weighted_avg(column_name)
                 util.update_txt(path, f"  {column_name}: {avg:.4f}")
 
@@ -345,7 +347,7 @@ class SkeletonMetric:
                 self.metrics.at[key, "Split Rate"] = rl / max(n_splits, 1)
                 self.metrics.loc[key, "% Split Edges"] = round(p_split, 2)
                 self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
-                self.metrics.loc[key, "GT Run Length"] = round(gt_rl, 2)
+                self.metrics.loc[key, "SWC Run Length"] = round(gt_rl, 2)
 
                 if self.verbose:
                     pbar.update(1)
@@ -532,9 +534,10 @@ class SkeletonMetric:
                 idx_mask = self.merge_sites["GroundTruth_ID"] == key
                 n_merges = int(idx_mask.sum())
                 rl = np.sum(self.graphs[key].run_lengths())
+                merge_rate = rl / n_merges if n_merges > 0 else np.nan
 
                 self.metrics.loc[key, "# Merges"] = n_merges
-                self.metrics.loc[key, "Merge Rate"] = rl / max(n_merges, 1)
+                self.metrics.loc[key, "Merge Rate"] = merge_rate
 
             # Save results
             path = os.path.join(self.output_dir, "merge_sites.csv")
@@ -626,8 +629,20 @@ class SkeletonMetric:
             self.metrics.loc[key, "Normalized ERL"] = n_erl
 
     def compute_weighted_avg(self, column_name):
-        wgt = self.metrics["GT Run Length"]
-        return (self.metrics[column_name] * wgt).sum() / wgt.sum()
+        # Extract values
+        values = self.metrics[column_name]
+        weights = self.metrics["SWC Run Length"]
+
+        # Ignore NaNs
+        mask = values.notna() & weights.notna()
+        values = values[mask]
+        weights = weights[mask]
+
+        # Compute weighted mean
+        if weights.sum() == 0:
+            return float("nan")
+        else:
+            return (values * weights).sum() / weights.sum()
 
     # -- Helpers --
     def branch_search(self, graph, kdtree, root, radius=100):
