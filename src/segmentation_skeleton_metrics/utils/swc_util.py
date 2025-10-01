@@ -65,7 +65,7 @@ class Reader:
 
         Parameters
         ----------
-        swc_pointer : dict, list, str
+        swc_pointer : str or List[str]
             Object that points to SWC files to be read, must be one of:
                 - swc_path (str): Path to single SWC file.
                 - swc_dir_path (str): Path to local directory containing SWC files.
