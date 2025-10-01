@@ -290,7 +290,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         # List filenames
@@ -320,7 +320,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
@@ -379,7 +379,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         swc_dicts = deque()
@@ -400,7 +400,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         # Initialize cloud reader
