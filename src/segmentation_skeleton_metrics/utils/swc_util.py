@@ -70,11 +70,11 @@ class Reader:
                 - swc_path (str): Path to single SWC file.
                 - swc_dir_path (str): Path to local directory containing SWC files.
                 - swc_zip_path (str): Path to a local ZIP archive containing SWC files.
-                - swc_zip_dir_path (str): Path to directory of ZIPs with SWC files.
+                - swc_zip_dir_path (str): Path to a local directory of ZIPs with SWC files.
                 - swc_s3_dir_path (str): Path to S3 directory containing SWC files.
                 - swc_gcs_dir_path (str): Path to GCS directory containing SWC files.
                 - swc_gcs_zip_dir_path (str): Path to GCS directory containing ZIP archives of SWC files.
-                - swc_path_list (List[str]): List of paths to SWC files on local machine.
+                - swc_path_list (List[str]): List of paths to local SWC files.
 
         Returns
         -------
