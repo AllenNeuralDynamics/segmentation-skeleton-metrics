@@ -61,7 +61,7 @@ class SkeletonMetric:
         fragments_pointer=None,
         save_merges=False,
         save_fragments=False,
-        use_anisotropy=True,
+        use_anisotropy=False,
         valid_labels=None,
         verbose=True
     ):
@@ -310,6 +310,7 @@ class SkeletonMetric:
         util.update_txt(path, "  # Splits: " + str(n_splits))
 
         if self.fragment_graphs is not None:
+            self.metrics["# Merges"].fillna(0, inplace=True)
             n_merges = self.metrics["# Merges"].sum()
             util.update_txt(path, "  # Merges: " + str(n_merges))
 
@@ -398,7 +399,7 @@ class SkeletonMetric:
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 100:
+            if len(nodes) > 70:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
@@ -427,7 +428,7 @@ class SkeletonMetric:
                 for leaf in gutil.get_leafs(fragment_graph):
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
-                    if self.physical_dist(gt_voxel, voxel) > 60:
+                    if self.physical_dist(gt_voxel, voxel) > 50:
                         self.find_merge_site(
                             key, kdtree, fragment_graph, leaf, visited
                         )
@@ -717,3 +718,4 @@ class SkeletonMetric:
         voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
+
