@@ -146,7 +146,9 @@ class SkeletonMetric:
             "ERL",
             "Normalized ERL",
         ]
-        self.metrics = pd.DataFrame(index=row_names, columns=col_names)
+        self.metrics = pd.DataFrame(np.nan, index=row_names, columns=col_names)
+        self.metrics["# Merges"] = 0
+        self.metrics["# Splits"] = 0
         self.metrics["SWC Name"] = self.metrics.index
 
     # --- Load Data ---
@@ -314,7 +316,6 @@ class SkeletonMetric:
         util.update_txt(path, "  # Splits: " + str(n_splits))
 
         if self.fragment_graphs is not None:
-            self.metrics["# Merges"].fillna(0, inplace=True)
             n_merges = self.metrics["# Merges"].sum()
             util.update_txt(path, "  # Merges: " + str(n_merges))
 
