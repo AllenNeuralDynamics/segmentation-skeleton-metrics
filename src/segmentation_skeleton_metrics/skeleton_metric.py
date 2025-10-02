@@ -61,7 +61,7 @@ class SkeletonMetric:
         fragments_pointer=None,
         save_merges=False,
         save_fragments=False,
-        use_anisotropy=True,
+        use_anisotropy=False,
         valid_labels=None,
         verbose=True
     ):
@@ -100,6 +100,10 @@ class SkeletonMetric:
             Segment IDs that can be assigned to nodes. This argument accounts
             for segments that were been removed due to some type of filtering.
             Default is None.
+        use_anisotropy : bool, optional
+            Indication of whether coordinates in fragment SWC files should be
+            converted from physical to image coordinates using the given
+            anisotropy. Default is False.
         verbose : bool, optional
             Indication of whether to printout updates. Default is True.
         """
@@ -342,9 +346,10 @@ class SkeletonMetric:
                 p_split = 100 * n_split_edges / n_before
                 rl = np.sum(self.graphs[key].run_lengths())
                 gt_rl = self.graphs[key].run_length
+                split_rate = rl / n_splits if n_splits > 0 else np.nan
 
                 self.metrics.at[key, "# Splits"] = n_splits
-                self.metrics.at[key, "Split Rate"] = rl / max(n_splits, 1)
+                self.metrics.at[key, "Split Rate"] = split_rate
                 self.metrics.loc[key, "% Split Edges"] = round(p_split, 2)
                 self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
                 self.metrics.loc[key, "SWC Run Length"] = round(gt_rl, 2)
@@ -427,7 +432,7 @@ class SkeletonMetric:
                 for leaf in gutil.get_leafs(fragment_graph):
                     voxel = fragment_graph.voxels[leaf]
                     gt_voxel = util.kdtree_query(kdtree, voxel)
-                    if self.physical_dist(gt_voxel, voxel) > 60:
+                    if self.physical_dist(gt_voxel, voxel) > 40:
                         self.find_merge_site(
                             key, kdtree, fragment_graph, leaf, visited
                         )
