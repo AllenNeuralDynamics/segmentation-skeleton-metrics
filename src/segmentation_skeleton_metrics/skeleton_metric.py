@@ -314,6 +314,7 @@ class SkeletonMetric:
         util.update_txt(path, "  # Splits: " + str(n_splits))
 
         if self.fragment_graphs is not None:
+            self.metrics["# Merges"].fillna(0, inplace=True)
             n_merges = self.metrics["# Merges"].sum()
             util.update_txt(path, "  # Merges: " + str(n_merges))
 
@@ -403,7 +404,7 @@ class SkeletonMetric:
         # Iterate over fragments that intersect with GT skeleton
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 100:
+            if len(nodes) > 70:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
                         self.is_fragment_merge(key, label, kdtree)
@@ -722,3 +723,4 @@ class SkeletonMetric:
         voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
+

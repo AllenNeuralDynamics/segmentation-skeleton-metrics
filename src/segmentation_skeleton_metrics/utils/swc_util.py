@@ -65,13 +65,16 @@ class Reader:
 
         Parameters
         ----------
-        swc_pointer : dict, list, str
+        swc_pointer : str or List[str]
             Object that points to SWC files to be read, must be one of:
-                - swc_dir (str): Path to directory containing SWC files.
                 - swc_path (str): Path to single SWC file.
-                - swc_path_list (List[str]): List of paths to SWC files.
-                - swc_zip (str): Path to a ZIP archive containing SWC files.
-                - swc_zip_dir (str): Path to directory of ZIPs with SWC files.
+                - swc_dir_path (str): Path to local directory containing SWC files.
+                - swc_zip_path (str): Path to a local ZIP archive containing SWC files.
+                - swc_zip_dir_path (str): Path to a local directory of ZIPs with SWC files.
+                - swc_s3_dir_path (str): Path to S3 directory containing SWC files.
+                - swc_gcs_dir_path (str): Path to GCS directory containing SWC files.
+                - swc_gcs_zip_dir_path (str): Path to GCS directory containing ZIP archives of SWC files.
+                - swc_path_list (List[str]): List of paths to local SWC files.
 
         Returns
         -------
@@ -287,7 +290,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         # List filenames
@@ -317,7 +320,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
@@ -376,7 +379,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         swc_dicts = deque()
@@ -397,7 +400,7 @@ class Reader:
         Returns
         -------
         Dequeue[dict]
-            List of dictionaries whose keys and values are the attribute
+            Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
         # Initialize cloud reader
