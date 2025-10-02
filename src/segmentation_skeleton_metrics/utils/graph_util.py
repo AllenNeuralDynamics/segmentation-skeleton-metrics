@@ -52,8 +52,9 @@ class GraphLoader:
             Only SWC files with an swc_id contained in this set are read.
             Default is None.
         use_anisotropy : bool, optional
-            Indication of whether to apply anisotropy to coordinates in SWC
-            files. Default is True.
+            Indication of whether coordinates in SWC files should be converted
+            from physical to image coordinates using the given anisotropy.
+            Default is True.
         """
         # Instance attributes
         self.anisotropy = anisotropy
