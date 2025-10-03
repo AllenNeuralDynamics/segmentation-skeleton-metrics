@@ -301,6 +301,7 @@ class SkeletonMetric:
         path = f"{self.output_dir}/{prefix}results.csv"
         if self.fragment_graphs is None:
             self.metrics = self.metrics.drop("# Merges", axis=1)
+            self.metrics = self.metrics.drop("Merge Rate", axis=1)
         self.metrics.to_csv(path, index=False)
 
         # Report results
@@ -337,27 +338,38 @@ class SkeletonMetric:
 
             # Store results
             for process in as_completed(pending.keys()):
+                # Update graph
                 key = pending.pop(process)
-                self.graphs[key], n_split_edges = process.result()
-                n_before = self.graphs[key].graph["n_initial_edges"]
-                n_after = self.graphs[key].number_of_edges()
+                graph, n_split_edges = process.result()
+                self.graphs[key] = graph
 
-                n_missing_edges = n_before - n_after
-                n_splits = gutil.count_splits(self.graphs[key])
-                p_omit = 100 * (n_missing_edges + n_split_edges) / n_before
-                p_split = 100 * n_split_edges / n_before
-                rl = np.sum(self.graphs[key].run_lengths())
-                gt_rl = self.graphs[key].run_length
-                split_rate = rl / n_splits if n_splits > 0 else np.nan
-
-                self.metrics.at[key, "# Splits"] = n_splits
-                self.metrics.at[key, "Split Rate"] = split_rate
-                self.metrics.loc[key, "% Split Edges"] = round(p_split, 2)
-                self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
-                self.metrics.loc[key, "SWC Run Length"] = round(gt_rl, 2)
-
+                # Compute metrics
+                self.compute_split_metrics(key, n_split_edges)
                 if self.verbose:
                     pbar.update(1)
+
+    def compute_split_metrics(self, key, n_split_edges):
+        # Edge counts
+        n_edges_before = self.graphs[key].graph["n_initial_edges"]
+        n_edges_after = self.graphs[key].number_of_edges()
+        n_edge_missing = n_edges_before - n_edges_after
+
+        # Split statistics
+        n_splits = gutil.count_splits(self.graphs[key])
+        p_omit = 100 * (n_edge_missing + n_split_edges) / n_edges_before
+        p_split = 100 * n_split_edges / n_edges_before
+
+        # Run lengths
+        rl = np.sum(self.graphs[key].run_lengths())
+        gt_rl = self.graphs[key].run_length
+        split_rate = rl / n_splits if n_splits > 0 else np.nan
+
+        # Update metrics
+        self.metrics.at[key, "# Splits"] = n_splits
+        self.metrics.at[key, "Split Rate"] = split_rate
+        self.metrics.at[key, "% Split Edges"] = round(p_split, 2)
+        self.metrics.at[key, "% Omit Edges"] = round(p_omit, 2)
+        self.metrics.at[key, "SWC Run Length"] = round(gt_rl, 2)
 
     # -- Merge Detection --
     def detect_merges(self):
@@ -724,4 +736,3 @@ class SkeletonMetric:
         voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
-
