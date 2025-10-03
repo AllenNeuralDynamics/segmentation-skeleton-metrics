@@ -67,21 +67,21 @@ class Reader:
         ----------
         swc_pointer : str or List[str]
             Object that points to SWC files to be read, must be one of:
-                - swc_path (str): Path to single SWC file.
-                - swc_dir_path (str): Path to local directory containing SWC files.
-                - swc_zip_path (str): Path to a local ZIP archive containing SWC files.
-                - swc_zip_dir_path (str): Path to a local directory of ZIPs with SWC files.
-                - swc_s3_dir_path (str): Path to S3 directory containing SWC files.
-                - swc_gcs_dir_path (str): Path to GCS directory containing SWC files.
-                - swc_gcs_zip_dir_path (str): Path to GCS directory containing ZIP archives of SWC files.
-                - swc_path_list (List[str]): List of paths to local SWC files.
+                - file_path (str): Path to single SWC file
+                - dir_path (str): Path to local directory with SWC files
+                - zip_path (str): Path to local ZIP with SWC files
+                - zip_dir_path (str): Path to local directory of ZIPs with SWC files
+                - s3_dir_path (str): Path to S3 directory with SWC files
+                - gcs_dir_path (str): Path to GCS directory with SWC files
+                - gcs_zip_dir_path (str): Path to GCS directory with ZIPs of SWC files
+                - path_list (List[str]): List of paths to local SWC files
 
         Returns
         -------
         Deque[dict]
-            List of dictionaries whose keys and values are the attribute names
-            and values from the SWC files. Each dictionary contains the
-            following items:
+            Dictionaries whose keys and values are the attribute names and
+            values from the SWC files. Each dictionary contains the following:
+            items:
                 - "id": unique identifier of each node in an SWC file.
                 - "pid": parent ID of each node.
                 - "radius": radius value corresponding to each node.
