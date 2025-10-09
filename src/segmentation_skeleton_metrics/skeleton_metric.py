@@ -4,7 +4,6 @@ Created on Wed Dec 21 19:00:00 2022
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Implementation of class that computes skeleton-based metrics by comparing a
 predicted neuron segmentation to a set of ground truth graphs.
 
@@ -736,3 +735,4 @@ class SkeletonMetric:
         voxel = np.array(self.graphs[key].voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
+
