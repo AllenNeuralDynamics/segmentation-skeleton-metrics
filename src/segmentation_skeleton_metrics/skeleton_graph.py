@@ -4,7 +4,6 @@ Created on Wed Dec 21 19:00:00 2022
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Implementation of a custom subclass of NetworkX.Graph called SkeletonGraph.
 
 """
