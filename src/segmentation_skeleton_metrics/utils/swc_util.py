@@ -4,7 +4,6 @@ Created on Wed June 5 16:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Routines for working with SWC files. An SWC file is a text-based file format
 used to represent the directed graphical structure of a neuron. It contains a
 series of nodes such that each has the following attributes:
