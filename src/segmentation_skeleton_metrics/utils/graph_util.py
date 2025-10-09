@@ -4,7 +4,6 @@ Created on Wed Aug 15 12:00:00 2023
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Code for building a custom graph object called a SkeletonGraph and helper
 routines for working with graph.
 
