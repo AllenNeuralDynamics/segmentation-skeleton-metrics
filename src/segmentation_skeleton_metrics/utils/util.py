@@ -206,7 +206,7 @@ def list_gcs_filenames(bucket_name, prefix, extension):
     Returns
     -------
     List[str]
-        Filenames stored at "cloud" path with the given extension.
+        Filenames stored at the GCS path with the given extension.
     """
     bucket = storage.Client().bucket(bucket_name)
     blobs = bucket.list_blobs(prefix=prefix)
@@ -501,3 +501,4 @@ def save_results(path, stats):
             sheet.write(i + 1, j + 1, round(stats[swc_id][metric], 4))
 
     wb.save(path)
+
