@@ -5,7 +5,6 @@ Created on Wed Dec 21 19:00:00 2022
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
 Code for helper routines.
 
 """
@@ -35,7 +34,7 @@ def mkdir(path, delete=False):
         Path of directory to be created.
     delete : bool, optional
         Indication of whether to delete directory at path if it already
-        exists. The default is False.
+        exists. Default is False.
     """
     if delete:
         rmdir(path)
@@ -66,7 +65,7 @@ def list_dir(directory, extension=None):
     directory : str
         Path to directory to be searched.
     extension : str, optional
-       Extension of filenames to be returned. The default is None.
+       Extension of filenames to be returned. Default is None.
 
     Returns
     -------
@@ -116,7 +115,6 @@ def read_zip(zip_file, path):
     -------
     str
         Contents of a TXT file.
-
     """
     with zip_file.open(path) as f:
         return f.read().decode("utf-8")
@@ -208,7 +206,7 @@ def list_gcs_filenames(bucket_name, prefix, extension):
     Returns
     -------
     List[str]
-        Filenames stored at "cloud" path with the given extension.
+        Filenames stored at the GCS path with the given extension.
     """
     bucket = storage.Client().bucket(bucket_name)
     blobs = bucket.list_blobs(prefix=prefix)
@@ -438,6 +436,8 @@ def kdtree_query(kdtree, xyz):
 
     Parameters
     ----------
+    kdtree : scipy.spatial.KDTree
+        KD-Tree to be searched.
     xyz : ArrayLike
         Coordinate to be queried.
 
@@ -501,3 +501,4 @@ def save_results(path, stats):
             sheet.write(i + 1, j + 1, round(stats[swc_id][metric], 4))
 
     wb.save(path)
+

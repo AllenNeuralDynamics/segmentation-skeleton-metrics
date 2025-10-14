@@ -4,8 +4,7 @@ Created on Sat May 9 11:00:00 2024
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-
-Code for reading images.
+Code for reading and processing images.
 
 """
 
