@@ -16,6 +16,7 @@ dynamic = ["version"]
 
 dependencies = [
     "boto3",
+    'cloud-volume[crackle,seg-codecs]',
     "google-cloud-storage",
     "networkx",
     "numpy",

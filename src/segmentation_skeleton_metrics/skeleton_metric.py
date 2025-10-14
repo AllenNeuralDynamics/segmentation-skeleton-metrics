@@ -364,7 +364,7 @@ class SkeletonMetric:
         gt_rl = self.graphs[key].run_length
         split_rate = rl / n_splits if n_splits > 0 else np.nan
 
-        # Update metrics
+        # Record metrics
         self.metrics.at[key, "# Splits"] = n_splits
         self.metrics.at[key, "Split Rate"] = split_rate
         self.metrics.at[key, "% Split Edges"] = round(p_split, 2)
@@ -404,7 +404,7 @@ class SkeletonMetric:
         """
         Counts the number of label merges for a given graph key based on
         whether the fragment graph corresponding to a label has a node that is
-        more that 200ums away from the nearest point in
+        more that 40ums away from the nearest point in
         "kdtree".
 
         Parameters
@@ -414,20 +414,19 @@ class SkeletonMetric:
         kdtree : scipy.spatial.KDTree
             A KD-tree built from voxels in graph corresponding to "key".
         """
-        # Iterate over fragments that intersect with GT skeleton
+        # Iterate over fragments that intersect with GT graphs
         for label in self.get_node_labels(key):
             nodes = self.graphs[key].nodes_with_label(label)
-            if len(nodes) > 70:
+            if len(nodes) > 60:
                 for label in self.label_handler.get_class(label):
                     if label in self.fragment_ids:
-                        self.is_fragment_merge(key, label, kdtree)
+                        self.check_fragment_for_merges(key, label, kdtree)
 
-    def is_fragment_merge(self, key, label, kdtree):
+    def check_fragment_for_merges(self, key, label, kdtree):
         """
-        Determines whether fragment corresponding to "label" is falsely merged
-        to graph corresponding to "key". A fragment is said to be merged if
-        there is a node in the fragment more than 200ums away from the nearest
-        point in "kdtree".
+        Checks whether the fragment corresponding to "label" has a merge
+        mistake. A fragment has a merge mistake if it has a leaf node more
+        than 40μm away from the ground-truth graph corresponding to "key".
 
         Parameters
         ----------
@@ -501,7 +500,7 @@ class SkeletonMetric:
                             gutil.write_graph(
                                 self.gt_graphs[key], self.merge_writer
                             )
-                        return
+                        return None
 
     def is_valid_merge(self, graph, kdtree, root):
         n_hits = 0
