@@ -9,6 +9,7 @@ Code for reading and processing images.
 """
 
 from abc import ABC, abstractmethod
+from cloudvolume import CloudVolume
 from tifffile import imread
 
 import io
@@ -16,6 +17,8 @@ import numpy as np
 import os
 import tensorstore as ts
 import zipfile
+
+from segmentation_skeleton_metrics.utils import util
 
 
 class ImageReader(ABC):
@@ -118,20 +121,43 @@ class TensorStoreReader(ImageReader):
         driver : str
             Storage driver needed to read the image.
         """
-        self.driver = driver
+        self.driver = self.get_driver(img_path)
         super().__init__(img_path)
+
+    def get_driver(self, img_path):
+        """
+        Gets the storage driver needed to read the image.
+
+        Returns
+        -------
+        str
+            Storage driver needed to read the image.
+        """
+        if ".zarr" in img_path:
+            return "zarr"
+        elif ".n5" in img_path:
+            return "n5"
+        elif is_neuroglancer_precomputed(img_path):
+            return "neuroglancer_precomputed"
+        else:
+            raise ValueError(f"Unsupported image format: {img_path}")
 
     def _load_image(self):
         """
         Loads image using the TensorStore library.
         """
+        # Extract metadata
+        bucket_name, path = util.parse_cloud_path(self.img_path)
+        storage_driver = get_storage_driver(self.img_path)
+
+        # Load image
         self.img = ts.open(
             {
                 "driver": self.driver,
                 "kvstore": {
-                    "driver": "gcs",
-                    "bucket": "allen-nd-goog",
-                    "path": self.img_path,
+                    "driver": storage_driver,
+                    "bucket": bucket_name,
+                    "path": path,
                 },
                 "context": {
                     "cache_pool": {"total_bytes_limit": 1000000000},
@@ -141,8 +167,6 @@ class TensorStoreReader(ImageReader):
                 "recheck_cached_data": "open",
             }
         ).result()
-        if self.driver == "neuroglancer_precomputed":
-            return self.img[ts.d["channel"][0]]
 
     def read(self, voxel, shape):
         """
@@ -229,7 +253,51 @@ class TiffReader(ImageReader):
                 self.img = imread(io.BytesIO(f.read()))
 
 
-# --- Miscellaneous ---
+# --- Helpers ---
+def get_storage_driver(img_path):
+    """
+    Gets the storage driver needed to read the image.
+
+    Parameters
+    ----------
+    img_path : str
+        Image path to be checked.
+
+    Returns
+    -------
+    str
+        Storage driver needed to read the image.
+    """
+    if util.is_s3_path(img_path):
+        return "s3"
+    elif util.is_gcs_path(img_path):
+        return "gcs"
+    else:
+        raise ValueError(f"Unsupported path type: {img_path}")
+
+
+def is_neuroglancer_precomputed(path):
+    """
+    Checks if the path points to a neuroglancer precomputed dataset.
+
+    Parameters
+    ----------
+    path : str
+        Path to be checked.
+
+    Returns
+    -------
+    bool
+        Indication of whether the path points to a neuroglancer precomputed
+        dataset.
+    """
+    try:
+        vol = CloudVolume(path)
+        return all(k in vol.info for k in ["data_type", "scales", "type"])
+    except Exception:
+        return False
+
+
 def to_physical(voxel, anisotropy):
     """
     Converts a voxel coordinate to a physical coordinate by applying the
