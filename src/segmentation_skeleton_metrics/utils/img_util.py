@@ -110,7 +110,7 @@ class TensorStoreReader(ImageReader):
     Class that reads an image with the TensorStore library.
     """
 
-    def __init__(self, img_path, driver):
+    def __init__(self, img_path):
         """
         Instantiates a TensorStore image reader.
 
@@ -118,8 +118,6 @@ class TensorStoreReader(ImageReader):
         ----------
         img_path : str
             Path to image.
-        driver : str
-            Storage driver needed to read the image.
         """
         self.driver = self.get_driver(img_path)
         super().__init__(img_path)
