@@ -293,7 +293,7 @@ class Reader:
             names and values from an SWC file.
         """
         # List filenames
-        bucket_name, prefix = parse_cloud_path(gcs_path)
+        bucket_name, prefix = util.parse_cloud_path(gcs_path)
         swc_paths = util.list_gcs_filenames(bucket_name, prefix, ".swc")
         zip_paths = util.list_gcs_filenames(bucket_name, prefix, ".zip")
 
@@ -430,7 +430,7 @@ class Reader:
 
     def read_from_s3(self, s3_path):
         # List filenames
-        bucket_name, prefix = parse_cloud_path(s3_path)
+        bucket_name, prefix = util.parse_cloud_path(s3_path)
         swc_paths = util.list_s3_paths(bucket_name, prefix, extension=".swc")
 
         # Parse SWC files
@@ -548,37 +548,6 @@ class Reader:
 
 
 # --- Helpers ---
-def parse_cloud_path(path):
-    """
-    Parses a cloud storage path into its bucket name and key/prefix. Supports
-    paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
-
-    Parameters
-    ----------
-    path : str
-        Path to be parsed.
-
-    Returns
-    -------
-    bucket_name : str
-        Name of the bucket.
-    prefix : str
-        Cloud prefix.
-    """
-    # Remove s3:// if present
-    if path.startswith("s3://"):
-        path = path[len("s3://"):]
-
-    # Remove gs:// if present
-    if path.startswith("gs://"):
-        path = path[len("gs://"):]
-
-    parts = path.split("/", 1)
-    bucket_name = parts[0]
-    prefix = parts[1] if len(parts) > 1 else ""
-    return bucket_name, prefix
-
-
 def to_zipped_point(zip_writer, filename, xyz):
     """
     Writes a point to an SWC file format, which is then stored in a ZIP

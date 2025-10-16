@@ -8,6 +8,7 @@ Implementation of a custom subclass of NetworkX.Graph called SkeletonGraph.
 
 """
 
+from collections import defaultdict
 from io import StringIO
 from scipy.spatial import distance
 
@@ -292,27 +293,28 @@ class SkeletonGraph(nx.Graph):
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
         """
+        # Subroutines
+        def write_entry(node, parent):
+            x, y, z = tuple(self.voxels[i] * self.anisotropy)
+            r = self.node_radius[node] if preserve_radius else 2
+            node_id = len(node_to_idx) + 1
+            node_to_idx[node] = node_id
+            text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
+
+        # Main
         with StringIO() as text_buffer:
             # Preamble
-            text_buffer.write(self.get_color())
             text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
             # Write entries
-            node_to_idx = dict()
-            r = 2 if self.is_groundtruth else 3
+            node_to_idx = defaultdict(lambda: -1)
             for i, j in nx.dfs_edges(self):
                 # Special Case: Root
-                x, y, z = tuple(self.voxels[i] * self.anisotropy)
                 if len(node_to_idx) == 0:
-                    parent = -1
-                    node_to_idx[i] = 1
-                    text_buffer.write("\n" + f"1 2 {x} {y} {z} {r} {parent}")
+                    write_entry(i, node_to_idx[i])
 
-                # General Case
-                node = len(node_to_idx) + 1
-                parent = node_to_idx[i]
-                node_to_idx[j] = node
-                text_buffer.write("\n" + f"{node} 2 {x} {y} {z} {r} {parent}")
+                # General Case: Non-Root
+                write_entry(j, node_to_idx[i])
 
             # Finish
             zip_writer.writestr(self.filename, text_buffer.getvalue())

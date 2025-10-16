@@ -450,6 +450,38 @@ def kdtree_query(kdtree, xyz):
     return tuple(kdtree.data[idx])
 
 
+def parse_cloud_path(path):
+    """
+    Parses a cloud storage path into its bucket name and key/prefix. Supports
+    paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
+
+    Parameters
+    ----------
+    path : str
+        Path to be parsed.
+
+    Returns
+    -------
+    bucket_name : str
+        Name of the bucket.
+    prefix : str
+        Cloud prefix.
+    """
+    # Remove s3:// if present
+    if is_s3_path(path):
+        path = path[len("s3://"):]
+
+    # Remove gs:// if present
+    if is_gcs_path(path):
+        path = path[len("gs://"):]
+
+    # Extract bucket and prefix
+    parts = path.split("/", 1)
+    bucket_name = parts[0]
+    prefix = parts[1] if len(parts) > 1 else ""
+    return bucket_name, prefix
+
+
 def sample_once(my_container):
     """
     Samples a single element from "my_container".
