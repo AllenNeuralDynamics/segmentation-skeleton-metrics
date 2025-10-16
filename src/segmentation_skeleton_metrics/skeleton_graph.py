@@ -304,7 +304,6 @@ class SkeletonGraph(nx.Graph):
         # Main
         with StringIO() as text_buffer:
             # Preamble
-            text_buffer.write(self.get_color())
             text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
             # Write entries
