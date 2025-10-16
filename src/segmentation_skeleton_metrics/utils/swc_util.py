@@ -326,10 +326,14 @@ class Reader:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
+            cnt = 0
             for path in swc_paths:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
+                cnt += 1
+                if cnt > 2:
+                    break  # temp
 
             # Store results
             swc_dicts = deque()
