@@ -296,7 +296,7 @@ class SkeletonGraph(nx.Graph):
         # Subroutines
         def write_entry(node, parent):
             x, y, z = tuple(self.voxels[i] * self.anisotropy)
-            r = self.node_radius[node] if preserve_radius else 2
+            r = 2 if self.is_groundtruth else 3
             node_id = len(node_to_idx) + 1
             node_to_idx[node] = node_id
             text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
@@ -304,6 +304,7 @@ class SkeletonGraph(nx.Graph):
         # Main
         with StringIO() as text_buffer:
             # Preamble
+            text_buffer.write(self.get_color())
             text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
             # Write entries
