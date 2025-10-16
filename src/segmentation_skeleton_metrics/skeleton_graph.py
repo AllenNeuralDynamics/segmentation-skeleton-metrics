@@ -297,24 +297,28 @@ class SkeletonGraph(nx.Graph):
         def write_entry(node, parent):
             x, y, z = tuple(self.voxels[i] * self.anisotropy)
             r = 2 if self.is_groundtruth else 3
-            node_id = len(node_to_idx) + 1
+            node_id = cnt
+            parent_id = node_to_idx[parent]
             node_to_idx[node] = node_id
-            text_buffer.write("\n" + f"{node_id} 2 {x} {y} {z} {r} {parent}")
+            text_buffer.write(f"\n{node_id} 2 {x} {y} {z} {r} {parent_id}")
 
         # Main
         with StringIO() as text_buffer:
             # Preamble
-            text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
+            text_buffer.write(self.get_color())
+            text_buffer.write("\n# id, type, z, y, x, r, pid")
 
             # Write entries
+            cnt = 1
             node_to_idx = defaultdict(lambda: -1)
             for i, j in nx.dfs_edges(self):
                 # Special Case: Root
                 if len(node_to_idx) == 0:
-                    write_entry(i, node_to_idx[i])
+                    write_entry(i, -1)
 
                 # General Case: Non-Root
-                write_entry(j, node_to_idx[i])
+                cnt += 1
+                write_entry(j, i)
 
             # Finish
             zip_writer.writestr(self.filename, text_buffer.getvalue())

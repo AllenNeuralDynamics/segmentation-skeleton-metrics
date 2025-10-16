@@ -533,4 +533,3 @@ def save_results(path, stats):
             sheet.write(i + 1, j + 1, round(stats[swc_id][metric], 4))
 
     wb.save(path)
-
