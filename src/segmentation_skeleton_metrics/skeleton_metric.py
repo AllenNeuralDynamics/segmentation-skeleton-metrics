@@ -23,6 +23,7 @@ import numpy as np
 import os
 import pandas as pd
 
+from segmentation_skeleton_metrics.data_handling.graph_loading import LabelHandler
 from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
@@ -116,7 +117,7 @@ class SkeletonMetric:
         self.verbose = verbose
 
         # Label handler
-        self.label_handler = gutil.LabelHandler(
+        self.label_handler = LabelHandler(
             connections_path=connections_path, valid_labels=valid_labels
         )
 
@@ -200,18 +201,8 @@ class SkeletonMetric:
                 use_anisotropy=self.use_anisotropy,
             )
             self.fragment_graphs = graph_loader.run(swc_pointer)
-            self.set_fragment_ids()
         else:
             self.fragment_graphs = None
-
-    def set_fragment_ids(self):
-        """
-        Sets the "fragment_ids" attribute by extracting unique segment IDs
-        from the "fragment_graphs" keys.
-        """
-        self.fragment_ids = set()
-        for key in self.fragment_graphs:
-            self.fragment_ids.add(util.get_segment_id(key))
 
     def get_all_node_labels(self):
         """
@@ -223,38 +214,10 @@ class SkeletonMetric:
             Unique node labels across all graphs.
         """
         all_node_labels = set()
-        inverse_bool = self.label_handler.use_mapping()
-        for key in self.graphs:
-            node_labels = self.get_node_labels(key, inverse_bool=inverse_bool)
+        for graph in self.graphs.values():
+            node_labels = self.label_handler.get_node_labels(graph)
             all_node_labels = all_node_labels.union(node_labels)
         return all_node_labels
-
-    def get_node_labels(self, key, inverse_bool=False):
-        """
-        Gets the set of unique node labels from the graph corresponding to the
-        given key.
-
-        Parameters
-        ----------
-        key : str
-            Unique identifier of graph from which to retrieve the node labels.
-        inverse_bool : bool, optional
-            Indication of whether to return the labels (from "labels_mask") or
-            a remapping of these labels in the case when "connections_path" is
-            provided. Default is False.
-
-        Returns
-        -------
-        Set[int]
-            Labels corresponding to nodes in the graph identified by "key".
-        """
-        if inverse_bool:
-            output = set()
-            for l in self.graphs[key].get_labels():
-                output = output.union(self.label_handler.inverse_mapping[l])
-            return output
-        else:
-            return self.graphs[key].get_labels()
 
     def init_writers(self):
         """
@@ -413,12 +376,17 @@ class SkeletonMetric:
         kdtree : scipy.spatial.KDTree
             A KD-tree built from voxels in graph corresponding to "key".
         """
+        # Set fragment ids - change
+        fragment_ids = set()
+        for fragment_id in self.fragment_graphs:
+            fragment_ids.add(util.get_segment_id(fragment_id))
+
         # Iterate over fragments that intersect with GT graphs
-        for label in self.get_node_labels(key):
+        for label in self.label_handler.get_node_labels(self.graphs[key]):
             nodes = self.graphs[key].nodes_with_label(label)
             if len(nodes) > 60:
                 for label in self.label_handler.get_class(label):
-                    if label in self.fragment_ids:
+                    if label in fragment_ids:
                         self.check_fragment_for_merges(key, label, kdtree)
 
     def check_fragment_for_merges(self, key, label, kdtree):
