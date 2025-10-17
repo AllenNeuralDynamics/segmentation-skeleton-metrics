@@ -23,6 +23,7 @@ import numpy as np
 import os
 import pandas as pd
 
+from segmentation_skeleton_metrics.data_handling.graph_loading import LabelHandler
 from segmentation_skeleton_metrics import split_detection
 from segmentation_skeleton_metrics.utils import (
     graph_util as gutil,
