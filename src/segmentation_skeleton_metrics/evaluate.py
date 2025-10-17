@@ -9,7 +9,9 @@ Created on Thu Oct 16 12:00:00 2025
 """
 
 from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
-from segmentation_skeleton_metrics.data_handling.graph_loading import DataLoader
+from segmentation_skeleton_metrics.data_handling.graph_loading import (
+    DataLoader, LabelHandler
+)
 
 
 def evaluate(
@@ -25,28 +27,48 @@ def evaluate(
     valid_labels=None,
     verbose=True
 ):
+    """
+    ...
+
+    Parameters
+    ----------
+    gt_pointer : str
+        Pointer to ground truth SWC files, see "swc_util.Reader" for
+        documentation. These SWC files are assumed to be stored in voxel
+        coordinates.
+    label_mask : ImageReader
+        Predicted segmentation.
+    anisotropy : Tuple[float], optional
+        ...
+    connections_path : str, optional
+        Path to a txt file containing pairs of segment IDs that represents
+        fragments that were merged. Default is None.
+    fragments_pointer : str, optional
+        Pointer to SWC files corresponding to "label_mask", see
+        "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
+        applied to these SWC files and (2) these SWC files are required
+        for counting merges. Default is None.
+    """
     # Load data
+    label_handler = LabelHandler(connections_path, valid_labels)
     dataloader = DataLoader(
+        label_handler,
         anisotropy=anisotropy,
-        connections_path=connections_path,
         use_anisotropy=use_anisotropy,
-        valid_labels=valid_labels,
         verbose=verbose
-    )
+    )    
     gt_graphs = dataloader.load_groundtruth(gt_pointer, label_mask)
-    fragments_graph = dataloader.load_fragments(fragments_pointer, gt_graphs)
+    fragment_graphs = dataloader.load_fragments(fragments_pointer, gt_graphs)
 
     # Evaluator
     skeleton_metric = SkeletonMetric(
-        gt_pointer,
-        label_mask,
+        gt_graphs,
+        fragment_graphs,
+        label_handler,
         anisotropy=anisotropy,
-        connections_path=connections_path,
-        fragments_pointer=fragments_pointer,
         output_dir=output_dir,
         save_merges=save_merges,
         save_fragments=save_fragments,
-        use_anisotropy=use_anisotropy,
     )
     skeleton_metric.run()
 

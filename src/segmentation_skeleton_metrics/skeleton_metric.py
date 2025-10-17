@@ -53,16 +53,13 @@ class SkeletonMetric:
 
     def __init__(
         self,
-        gt_pointer,
-        label_mask,
+        gt_graphs,
+        fragment_graphs,
+        label_handler,
         output_dir,
         anisotropy=(1.0, 1.0, 1.0),
-        connections_path=None,
-        fragments_pointer=None,
         save_merges=False,
         save_fragments=False,
-        use_anisotropy=False,
-        valid_labels=None,
         verbose=True
     ):
         """
@@ -71,59 +68,41 @@ class SkeletonMetric:
 
         Parameters
         ----------
-        gt_pointer : Any
-            Pointer to ground truth SWC files, see "swc_util.Reader" for
-            documentation. These SWC files are assumed to be stored in voxel
-            coordinates.
-        label_mask : ImageReader
-            Predicted segmentation.
-         output_dir : str
+        gt_graphs : SkeletonGraph
+            ...
+        fragment_graphs ; SkeletonGraph
+            ...
+        label_handler : LabelHandler
+            ...
+        output_dir : str
             Path to directory wehere results are written.
         anisotropy : Tuple[float], optional
             Image to physical coordinate scaling factors applied to SWC files
             stored at "fragments_pointer". Default is (1.0, 1.0, 1.0).
-        connections_path : str, optional
-            Path to a txt file containing pairs of segment IDs that represents
-            fragments that were merged. Default is None.
-        fragments_pointer : Any, optional
-            Pointer to SWC files corresponding to "label_mask", see
-            "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
-            applied to these SWC files and (2) these SWC files are required
-            for counting merges. Default is None.
+        output_dir : str
+            ...
         save_merges: bool, optional
             Indication of whether to save fragments with a merge mistake.
             Default is None.
         save_fragments : bool, optional
             Indication of whether to save fragments that project onto each
             ground truth skeleton. Default is False.
-        valid_labels : Set[int], optional
-            Segment IDs that can be assigned to nodes. This argument accounts
-            for segments that were been removed due to some type of filtering.
-            Default is None.
-        use_anisotropy : bool, optional
-            Indication of whether coordinates in fragment SWC files should be
-            converted from physical to image coordinates using the given
-            anisotropy. Default is False.
         verbose : bool, optional
             Indication of whether to printout updates. Default is True.
         """
         # Instance attributes
         self.anisotropy = anisotropy
-        self.connections_path = connections_path
         self.output_dir = output_dir
         self.save_merges = save_merges
         self.save_fragments = save_fragments
-        self.use_anisotropy = use_anisotropy
         self.verbose = verbose
 
-        # Label handler
-        self.label_handler = LabelHandler(
-            connections_path=connections_path, valid_labels=valid_labels
-        )
+        # Core data structures
+        self.graphs = gt_graphs
+        self.fragment_graphs = fragment_graphs
+        self.label_handler = label_handler
 
-        # Load data
-        self.load_groundtruth(gt_pointer, label_mask)
-        self.load_fragments(fragments_pointer)
+        self.gt_graphs = deepcopy(self.graphs)
 
         # Initialize metrics
         util.mkdir(output_dir)
@@ -150,74 +129,6 @@ class SkeletonMetric:
         self.metrics["# Merges"] = 0
         self.metrics["# Splits"] = 0
         self.metrics["SWC Name"] = self.metrics.index
-
-    # --- Load Data ---
-    def load_groundtruth(self, swc_pointer, label_mask):
-        """
-        Loads ground truth graphs and initializes the "graphs" attribute.
-
-        Parameters
-        ----------
-        swc_pointer : Any
-            Pointer to ground truth SWC files.
-        label_mask : ImageReader
-            Predicted segmentation mask.
-        """
-        if self.verbose:
-            print("\n(1) Load Ground Truth")
-
-        # Build graphs
-        graph_loader = gutil.GraphLoader(
-            anisotropy=self.anisotropy,
-            is_groundtruth=True,
-            label_handler=self.label_handler,
-            label_mask=label_mask,
-            use_anisotropy=False,
-        )
-        self.graphs = graph_loader.run(swc_pointer)
-
-        # Save initial graphs (if applicable)
-        if self.save_merges:
-            self.gt_graphs = deepcopy(self.graphs)
-
-    def load_fragments(self, swc_pointer):
-        """
-        Loads fragments generated from the segmentation and initializes the
-        "fragment_graphs" attribute.
-
-        Parameters
-        ----------
-        swc_pointer : Any
-            Pointer to predicted SWC files if provided.
-        """
-        if self.verbose:
-            print("\n(2) Load Fragments")
-
-        if swc_pointer:
-            graph_loader = gutil.GraphLoader(
-                anisotropy=self.anisotropy,
-                is_groundtruth=False,
-                selected_ids=self.get_all_node_labels(),
-                use_anisotropy=self.use_anisotropy,
-            )
-            self.fragment_graphs = graph_loader.run(swc_pointer)
-        else:
-            self.fragment_graphs = None
-
-    def get_all_node_labels(self):
-        """
-        Gets the set of unique node labels across all graphs in "self.graphs".
-
-        Returns
-        -------
-        Set[int]
-            Unique node labels across all graphs.
-        """
-        all_node_labels = set()
-        for graph in self.graphs.values():
-            node_labels = self.label_handler.get_node_labels(graph)
-            all_node_labels = all_node_labels.union(node_labels)
-        return all_node_labels
 
     def init_writers(self):
         """
@@ -259,7 +170,7 @@ class SkeletonMetric:
         self.compute_erl()
 
         # Save results
-        prefix = "corrected-" if self.connections_path else ""
+        prefix = "corrected-" if self.label_handler.use_mapping() else ""
         path = f"{self.output_dir}/{prefix}results.csv"
         if self.fragment_graphs is None:
             self.metrics = self.metrics.drop("# Merges", axis=1)

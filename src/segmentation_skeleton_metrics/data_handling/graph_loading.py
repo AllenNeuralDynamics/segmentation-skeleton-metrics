@@ -18,33 +18,29 @@ import networkx as nx
 import numpy as np
 
 from segmentation_skeleton_metrics.data_handling.skeleton_graph import SkeletonGraph
-from segmentation_skeleton_metrics.utils import graph_util as gutil, swc_util, util
+from segmentation_skeleton_metrics.utils import swc_util, util
 
 
 class DataLoader:
 
     def __init__(
         self,
+        label_handler,
         anisotropy=(1.0, 1.0, 1.0),
-        connections_path=None,
         use_anisotropy=False,
-        valid_labels=None,
         verbose=True
     ):
         # Instance attributes
         self.anisotropy = anisotropy
+        self.label_handler = label_handler
         self.use_anisotropy = use_anisotropy
-        self.valid_labels = valid_labels
         self.verbose = verbose
-
-        # Label handler
-        self.label_handler = LabelHandler(connections_path, valid_labels)
 
     # --- Core Routines ---
     def load_groundtruth(self, swc_pointer, label_mask):
         """
         Loads ground truth graphs.
-    
+
         Parameters
         ----------
         swc_pointer : str
@@ -60,7 +56,7 @@ class DataLoader:
         if self.verbose:
             print("\n(1) Load Ground Truth")
 
-        graph_loader = gutil.GraphLoader(
+        graph_loader = GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=True,
             label_handler=self.label_handler,
@@ -94,7 +90,7 @@ class DataLoader:
 
         # Load fragments
         selected_ids = self.get_all_node_labels(gt_graphs)
-        graph_loader = gutil.GraphLoader(
+        graph_loader = GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=False,
             selected_ids=selected_ids,
