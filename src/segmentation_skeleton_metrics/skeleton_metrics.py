@@ -184,7 +184,7 @@ class MergedEdgePercentMetric(SkeletonMetric):
             # Count number of edges associated with a merge
             num_merged_edges = 0
             for label in graph.labels_with_merge:
-                num_merged_edges += len(graph.get_nodes_with_label(label))
+                num_merged_edges += len(graph.get_nodes_with_label(label)) - 1
 
             # Compute result
             percent = 100 * num_merged_edges / graph.number_of_edges()
