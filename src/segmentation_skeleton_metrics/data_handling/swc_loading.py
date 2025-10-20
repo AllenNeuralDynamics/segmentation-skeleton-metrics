@@ -25,7 +25,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
 )
 from google.cloud import storage
-from io import BytesIO, StringIO
+from io import BytesIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -326,14 +326,10 @@ class Reader:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            cnt = 0
             for path in swc_paths:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                cnt += 1
-                if cnt > 2:
-                    break  # temp
 
             # Store results
             swc_dicts = deque()
@@ -485,14 +481,14 @@ class Reader:
             values from an SWC file.
         """
         # Initializations
-        swc_id, _ = os.path.splitext(filename)
+        swc_name, _ = os.path.splitext(filename)
         content, offset = self.process_content(content)
         if len(content) > 30:
             swc_dict = {
                 "id": np.zeros((len(content)), dtype=int),
                 "pid": np.zeros((len(content)), dtype=int),
                 "voxel": np.zeros((len(content), 3), dtype=np.int32),
-                "swc_id": swc_id,
+                "swc_name": swc_name,
             }
 
             # Parse content
@@ -549,31 +545,3 @@ class Reader:
         """
         xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
         return img_util.to_voxels(xyz, self.anisotropy)
-
-
-# --- Helpers ---
-def to_zipped_point(zip_writer, filename, xyz):
-    """
-    Writes a point to an SWC file format, which is then stored in a ZIP
-    archive.
-
-    Parameters
-    ----------
-    zip_writer : zipfile.ZipFile
-        A ZipFile object that will store the generated SWC file.
-    filename : str
-        Filename of SWC file.
-    xyz : ArrayLike
-        Point to be written to SWC file.
-    """
-    with StringIO() as text_buffer:
-        # Preamble
-        text_buffer.write("# COLOR 1.0 0.0 0.0")
-        text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
-
-        # Write entry
-        x, y, z = tuple(xyz)
-        text_buffer.write("\n" + f"1 2 {x} {y} {z} 10 -1")
-
-        # Finish
-        zip_writer.writestr(filename, text_buffer.getvalue())

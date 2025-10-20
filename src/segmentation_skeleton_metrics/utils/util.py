@@ -9,15 +9,14 @@ Code for helper routines.
 
 """
 
+from botocore import UNSIGNED
+from botocore.client import Config
 from random import sample
 from google.cloud import storage
-from io import BytesIO
-from xlwt import Workbook
+from io import BytesIO, StringIO
 from zipfile import ZipFile
 
 import boto3
-from botocore import UNSIGNED
-from botocore.client import Config
 import os
 import pandas as pd
 import shutil
@@ -55,6 +54,11 @@ def rmdir(path):
         shutil.rmtree(path)
 
 
+def rm_file(path):
+    if os.path.exists(path):
+        os.remove(path)
+
+
 def list_dir(directory, extension=None):
     """
     Lists filenames in the given directory. If "extension" is provided,
@@ -76,6 +80,24 @@ def list_dir(directory, extension=None):
         return [f for f in os.listdir(directory)]
     else:
         return [f for f in os.listdir(directory) if f.endswith(extension)]
+
+
+def list_files_in_zip(zip_content):
+    """
+    Lists all files in a zip file stored in a GCS bucket.
+
+    Parameters
+    ----------
+    zip_content : str
+        Content stored in a ZIP archive in the form of a string of bytes.
+
+    Returns
+    -------
+    List[str]
+        Filenames in a ZIP archive file.
+    """
+    with ZipFile(BytesIO(zip_content), "r") as zip_file:
+        return zip_file.namelist()
 
 
 def list_paths(directory, extension=None):
@@ -154,6 +176,65 @@ def update_txt(path, text):
         file.write(text + "\n")
 
 
+# --- Graph Utils ---
+def get_leafs(graph):
+    """
+    Gets all leafs nodes in the given graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+
+    Returns
+    -------
+    List[int]
+        Leaf nodes in the given graph.
+    """
+    return [node for node in graph.nodes if graph.degree[node] == 1]
+
+
+def search_branching_node(graph, kdtree, root, radius=100):
+    """
+    Searches for a branching node within distance "radius" from the given
+    root node.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Graph to be searched.
+    kdtree : scipy.spatial.KDTree
+        KDTree containing voxel coordinates from a ground truth tracing.
+    root : int
+        Root of search.
+    radius : float, optional
+        Distance to search from root. Default is 100.
+
+    Returns
+    -------
+    int
+        Root node or closest branching node within distance "radius".
+    """
+    queue = list([(root, 0)])
+    visited = set({root})
+    while queue:
+        # Visit node
+        i, d_i = queue.pop()
+        xyz_i = graph.get_xyz(i)
+        if graph.degree[i] > 2:
+            dist, _ = kdtree.query(xyz_i)
+            if dist < 16:
+                return i
+
+        # Update queue
+        for j in graph.neighbors(i):
+            d_j = d_i + graph.physical_dist(i, j)
+            if j not in visited and d_j < radius:
+                queue.append((j, d_j))
+                visited.add(j)
+    return root
+
+
 # -- GCS Utils --
 def is_gcs_path(path):
     """
@@ -170,24 +251,6 @@ def is_gcs_path(path):
         Indication of whether the path is a GCS path.
     """
     return path.startswith("gs://")
-
-
-def list_files_in_zip(zip_content):
-    """
-    Lists all files in a zip file stored in a GCS bucket.
-
-    Parameters
-    ----------
-    zip_content : str
-        Content stored in a ZIP archive in the form of a string of bytes.
-
-    Returns
-    -------
-    List[str]
-        Filenames in a ZIP archive file.
-    """
-    with ZipFile(BytesIO(zip_content), "r") as zip_file:
-        return zip_file.namelist()
 
 
 def list_gcs_filenames(bucket_name, prefix, extension):
@@ -499,37 +562,28 @@ def sample_once(my_container):
     return sample(my_container, 1)[0]
 
 
-def save_results(path, stats):
+def to_zipped_point(zip_writer, filename, xyz):
     """
-    Saves the evaluation results generated from skeleton-based metrics to an
-    Excel file.
+    Writes a point to an SWC file format, which is then stored in a ZIP
+    archive.
 
     Parameters
     ----------
-    path : str
-        Path where the Excel file will be saved.
-    stats : dict
-        Dictionary where the keys are SWC IDs (as strings) and the values
-        are dictionaries containing metrics as keys and their respective
-        values.
+    zip_writer : zipfile.ZipFile
+        A ZipFile object that will store the generated SWC file.
+    filename : str
+        Filename of SWC file.
+    xyz : ArrayLike
+        Point to be written to SWC file.
     """
-    # Initialize
-    wb = Workbook()
-    sheet = wb.add_sheet("Results")
-    sheet.write(0, 0, "swc_id")
+    with StringIO() as text_buffer:
+        # Preamble
+        text_buffer.write("# COLOR 1.0 0.0 0.0")
+        text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
-    # Label rows and columns
-    swc_ids = list(stats.keys())
-    for i, swc_id in enumerate(swc_ids):
-        sheet.write(i + 1, 0, swc_id)
+        # Write entry
+        x, y, z = tuple(xyz)
+        text_buffer.write("\n" + f"1 2 {x} {y} {z} 10 -1")
 
-    metrics = list(stats[swc_id].keys())
-    for i, metric in enumerate(metrics):
-        sheet.write(0, i + 1, metric)
-
-    # Write stats
-    for i, swc_id in enumerate(swc_ids):
-        for j, metric in enumerate(metrics):
-            sheet.write(i + 1, j + 1, round(stats[swc_id][metric], 4))
-
-    wb.save(path)
+        # Finish
+        zip_writer.writestr(filename, text_buffer.getvalue())

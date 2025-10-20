@@ -8,34 +8,24 @@ Code that runs of demo of using this library to compute skeleton metrics.
 
 """
 
-from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.evaluate import evaluate
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
-def evaluate():
+def main():
     """
     Evaluates the accuracy of a predicted segmentation by comparing it to a
     set of ground truth skeletons, then reports and saves various performance
     metrics.
-
-    Parameters
-    ----------
-    None
-
-    Returns
-    -------
-    None
-
     """
     # Initializations
     pred_labels = TiffReader(pred_labels_path, swap_axes=False)
-    skeleton_metric = SkeletonMetric(
+    skeleton_metric = evaluate(
         groundtruth_pointer,
         pred_labels,
+        output_dir,
         fragments_pointer=fragments_pointer,
-        output_dir=output_dir,
     )
-    skeleton_metric.run()
 
 
 if __name__ == "__main__":
@@ -46,4 +36,4 @@ if __name__ == "__main__":
     groundtruth_pointer = "./data/target_swcs.zip"
 
     # Run
-    evaluate()
+    main()
