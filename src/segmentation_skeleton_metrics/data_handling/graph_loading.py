@@ -17,8 +17,11 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from segmentation_skeleton_metrics.data_handling.skeleton_graph import SkeletonGraph
-from segmentation_skeleton_metrics.utils import swc_util, util
+from segmentation_skeleton_metrics.data_handling import swc_loading
+from segmentation_skeleton_metrics.data_handling.skeleton_graph import (
+    FragmentGraph, LabeledGraph
+)
+from segmentation_skeleton_metrics.utils import util
 
 
 class DataLoader:
@@ -93,6 +96,7 @@ class DataLoader:
         graph_loader = GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=False,
+            label_handler=self.label_handler,
             selected_ids=selected_ids,
             use_anisotropy=self.use_anisotropy,
         )
@@ -112,10 +116,10 @@ class DataLoader:
         labels : Set[int]
             Unique node labels across all graphs.
         """
-        labels = set()
+        node_labels = set()
         for graph in graphs.values():
-            labels |= self.label_handler.get_node_labels(graph)
-        return labels
+            node_labels |= self.label_handler.get_node_labels(graph)
+        return node_labels
 
 
 class GraphLoader:
@@ -146,7 +150,7 @@ class GraphLoader:
         label_mask : ImageReader, optional
             Predicted segmentation mask.
         selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read.
+            Only SWC files with a name contained in this set are read.
             Default is None.
         use_anisotropy : bool, optional
             Indication of whether coordinates in SWC files should be converted
@@ -161,7 +165,7 @@ class GraphLoader:
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
-        self.swc_reader = swc_util.Reader(
+        self.swc_reader = swc_loading.Reader(
             anisotropy, selected_ids=selected_ids
         )
 
@@ -181,11 +185,11 @@ class GraphLoader:
             Dictionary where the keys are unique identifiers (i.e. filenames
             of SWC files) and values are the corresponding SkeletonGraph.
         """
-        graph_dict = self._build_graphs_from_swcs(swc_pointer)
+        graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
-            for key in graph_dict:
-                self._label_graph(graph_dict[key])
-        return graph_dict
+            for name in graphs:
+                self._label_graph(graphs[name])
+        return graphs
 
     # --- Build Graphs ---
     def _build_graphs_from_swcs(self, swc_pointer):
@@ -246,14 +250,9 @@ class GraphLoader:
             Graph built from an SWC file.
         """
         # Initialize graph
-        graph = SkeletonGraph(
-            anisotropy=self.anisotropy, is_groundtruth=self.is_groundtruth
-        )
-        graph.init_voxels(swc_dict["voxel"])
-        graph.set_filename(swc_dict["swc_id"] + ".swc")
-        graph.set_nodes(len(swc_dict["id"]))
+        graph = self._init_graph(swc_dict)
 
-        # Build graph
+        # Build graph structure
         id_lookup = dict()
         for i, id_i in enumerate(swc_dict["id"]):
             id_lookup[id_i] = i
@@ -261,10 +260,30 @@ class GraphLoader:
                 parent = id_lookup[swc_dict["pid"][i]]
                 graph.add_edge(i, parent)
                 graph.run_length += graph.dist(i, parent)
+        graph.prune_branches()
+        return {graph.name: graph}
 
-        # Set graph-level attributes
-        graph.graph["n_initial_edges"] = graph.number_of_edges()
-        return {swc_dict["swc_id"]: graph}
+    def _init_graph(self, swc_dict):
+        # Instantiate graph
+        if self.is_groundtruth:
+            graph = LabeledGraph(
+                anisotropy=self.anisotropy, name=swc_dict["swc_name"]
+            )
+        else:
+            segment_id = util.get_segment_id(swc_dict["swc_name"])
+            label = self.label_handler.get(segment_id)
+            graph = FragmentGraph(
+                anisotropy=self.anisotropy,
+                name=swc_dict["swc_name"],
+                label=label,
+                segment_id=segment_id
+            )
+
+        # Set class attributes
+        graph.init_voxels(swc_dict["voxel"])
+        graph.set_filename(swc_dict["swc_name"] + ".swc")
+        graph.set_nodes(len(swc_dict["id"]))
+        return graph
 
     # --- Label Graphs ---
     def _label_graph(self, graph):
@@ -311,11 +330,11 @@ class GraphLoader:
             )
 
             # Store results
-            graph.init_labels()
+            graph.init_node_labels()
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
-                    graph.labels[i] = label
+                    graph.node_labels[i] = label
 
     def get_patch_labels(self, graph, nodes):
         """
@@ -365,6 +384,9 @@ class GraphLoader:
         voxel = np.array(graph.voxels[i])
         offset = np.array(offset)
         return tuple(voxel - offset)
+
+    def fix_label_misalignments(self, graph):
+        pass
 
 
 class LabelHandler:
@@ -527,7 +549,7 @@ class LabelHandler:
         labels : Set[int]
             Labels corresponding to nodes in the graph identified by "key".
         """
-        labels = graph.get_labels()
+        labels = graph.get_node_labels()
         if self.use_mapping():
             labels = set().union(*(self.inverse_mapping[l] for l in labels))
         return labels
