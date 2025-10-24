@@ -141,14 +141,24 @@ class Evaluator:
 
         # Save report
         path = f"{self.output_dir}/{self.results_filename}.csv"
-        results.to_csv(path, index=False)
+        results.to_csv(path, index=True)
         self.report_summary(results)
 
     def init_results(self, gt_graphs):
-        cols = list(self.metrics.keys()) + list(self.derived_metrics.keys())
+        # Create dataframe
+        cols = (
+            ["SWC Run Length"] +
+            list(self.metrics.keys()) +
+            list(self.derived_metrics.keys())
+        )
         index = list(gt_graphs.keys())
         index.sort()
-        return pd.DataFrame(np.nan, index=index, columns=cols)
+        results = pd.DataFrame(np.nan, index=index, columns=cols)
+
+        # Populate SWC Run Length column
+        for key, graph in gt_graphs.items():
+            results.loc[key, "SWC Run Length"] = graph.run_length
+        return results
 
     def report_summary(self, results):
         pass
