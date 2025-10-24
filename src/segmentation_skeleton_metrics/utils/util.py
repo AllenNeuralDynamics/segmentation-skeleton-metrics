@@ -55,6 +55,14 @@ def rmdir(path):
 
 
 def rm_file(path):
+    """
+    Removes the file at the given path.
+
+    Parameters
+    ----------
+    path : str
+        Path to file to be removed.
+    """
     if os.path.exists(path):
         os.remove(path)
 
@@ -434,6 +442,40 @@ def read_txt_from_s3(bucket_name, path):
 
 
 # --- Miscellaneous ---
+def compute_weighted_avg(df, column_name):
+    """
+    Compute the weighted average of a specified column in a DataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Input DataFrame containing the target column and a 'SWC Run Length'
+        column used as weights.
+    column_name : str
+        Name of the column for which to compute the weighted average.
+
+    Returns
+    -------
+    float
+        Weighted average of the specified column, ignoring rows where either
+        the value or weight is NaN. Returns NaN if the total weight is zero.
+    """
+    # Extract values
+    values = df[column_name]
+    weights = df["SWC Run Length"]
+
+    # Ignore NaNs
+    mask = values.notna() & weights.notna()
+    values = values[mask]
+    weights = weights[mask]
+
+    # Compute weighted mean
+    if weights.sum() == 0:
+        return float("nan")
+    else:
+        return (values * weights).sum() / weights.sum()
+
+
 def get_segment_id(filename):
     """
     Gets the segment ID correspionding to the given filename, assuming that

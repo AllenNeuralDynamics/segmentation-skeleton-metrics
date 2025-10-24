@@ -429,6 +429,20 @@ class Reader:
         return swc_dicts
 
     def read_from_s3(self, s3_path):
+        """
+        Reads and parses SWC files from an S3 directory.
+
+        Parameters
+        ----------
+        s3_path : str
+            Path to a directory in an S3 bucket containing SWC files.
+
+        Returns
+        -------
+        Dequeue[dict]
+            Dictionaries whose keys and values are the attribute
+            names and values from an SWC file.
+        """
         # List filenames
         bucket_name, prefix = util.parse_cloud_path(s3_path)
         swc_paths = util.list_s3_paths(bucket_name, prefix, extension=".swc")

@@ -65,6 +65,7 @@ class DataLoader:
             label_handler=self.label_handler,
             label_mask=label_mask,
             use_anisotropy=False,
+            verbose=self.verbose
         )
         return graph_loader.run(swc_pointer)
 
@@ -99,6 +100,7 @@ class DataLoader:
             label_handler=self.label_handler,
             selected_ids=selected_ids,
             use_anisotropy=self.use_anisotropy,
+            verbose=self.verbose
         )
         return graph_loader.run(swc_pointer)
 
@@ -110,6 +112,7 @@ class DataLoader:
         Parameters
         ----------
         graphs : Dict[str, SkeletonGraph]
+            Graph to be searched.
 
         Returns
         -------
@@ -135,6 +138,7 @@ class GraphLoader:
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
+        verbose=True
     ):
         """
         Instantiates a GraphLoader object.
@@ -156,12 +160,15 @@ class GraphLoader:
             Indication of whether coordinates in SWC files should be converted
             from physical to image coordinates using the given anisotropy.
             Default is True.
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
         """
         # Instance attributes
         self.anisotropy = anisotropy
         self.is_groundtruth = is_groundtruth
         self.label_handler = label_handler
         self.label_mask = label_mask
+        self.verbose = verbose
 
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
@@ -210,7 +217,8 @@ class GraphLoader:
         """
         # Initializations
         swc_dicts = self.swc_reader.read(swc_pointer)
-        pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
+        if self.verbose:
+            pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
 
         # Main
         graph_dict = dict()
@@ -218,9 +226,10 @@ class GraphLoader:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
                 graph_dict.update(self.to_graph(swc_dict))
-                pbar.update(1)
+                if self.verbose:
+                    pbar.update(1)
         else:
-            with ProcessPoolExecutor() as executor:
+            with ProcessPoolExecutor(max_workers=1) as executor:
                 # Assign processes
                 processes = list()
                 while len(swc_dicts) > 0:
@@ -230,7 +239,8 @@ class GraphLoader:
                 # Store results
                 for process in as_completed(processes):
                     graph_dict.update(process.result())
-                    pbar.update(1)
+                    if self.verbose:
+                        pbar.update(1)
         return graph_dict
 
     def to_graph(self, swc_dict):
