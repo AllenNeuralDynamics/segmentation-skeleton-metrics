@@ -26,6 +26,14 @@ class SkeletonMetric(ABC):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a SkeletonMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Instance attributes
         self.verbose = verbose
 
@@ -37,9 +45,37 @@ class SkeletonMetric(ABC):
         pass
 
     def get_pbar(self, total):
+        """
+        Gets a progress bar to be displayed.
+
+        Parameters
+        ----------
+        total : int
+            Size of progress bar.
+
+        Returns
+        -------
+        tqdm.tqdm or None
+            Progress bar to be displayed if verose; otherwise, None.
+        """
         return tqdm(total=total, desc=self.name) if self.verbose else None
 
     def reformat(self, results):
+        """
+        Converts a dictionary of results into a pandas DataFrame.
+
+        Parameters
+        ----------
+        results : Dict[str, float]
+            Dictionary where keys will become the DataFrame index and values
+            are used as the single column data.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         results = pd.DataFrame.from_dict(
             results, orient="index", columns=[self.name]
         )
@@ -68,6 +104,20 @@ class SplitEdgePercentMetric(SkeletonMetric):
         self.name = "% Split Edges"
 
     def compute(self, gt_graphs):
+        """
+        Computes the percentage of split edges in the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():
@@ -89,7 +139,7 @@ class SplitEdgePercentMetric(SkeletonMetric):
         Parameters
         ----------
         graph : LabeledGraph
-            Graph to be searched.
+            Graph to be evaluated.
 
         Returns
         -------
@@ -126,6 +176,20 @@ class OmitEdgePercentMetric(SkeletonMetric):
         self.name = "% Omit Edges"
 
     def compute(self, gt_graphs):
+        """
+        Computes the percentage of omit edges in the given graphs.
+
+        Parameters
+        ----------
+        graph : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():
@@ -147,7 +211,7 @@ class OmitEdgePercentMetric(SkeletonMetric):
         Parameters
         ----------
         graph : LabeledGraph
-            Graph to be searched.
+            Graph to be evaluated.
 
         Returns
         -------
@@ -168,6 +232,14 @@ class MergedEdgePercentMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a MergedEdgePercentMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -175,6 +247,20 @@ class MergedEdgePercentMetric(SkeletonMetric):
         self.name = "% Merged Edges"
 
     def compute(self, gt_graphs):
+        """
+        Computes the percentage of merged edges in the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graph to be evaluated.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         # Find graphs with common labels
         self.detect_label_intersections(gt_graphs)
 
@@ -198,8 +284,8 @@ class MergedEdgePercentMetric(SkeletonMetric):
 
         Parameters
         ----------
-        gt_graphs : LabeledGraph
-            Ground truth graphs to be searched for intersecting labels.
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be searched for intersecting labels.
         """
         visited = set()
         pbar = self.get_pbar(len(gt_graphs))
@@ -230,6 +316,14 @@ class SplitCountMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a SplitCountMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -237,11 +331,19 @@ class SplitCountMetric(SkeletonMetric):
         self.name = "# Splits"
 
     def compute(self, gt_graphs):
+        """
+        Counts the number of split mistakes in each of the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        """
         results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():
             # Compute result
-            num_splits = len(graph.get_node_labels()) - 1
+            num_splits = max(len(graph.get_node_labels()) - 1, 0)
             results[name] = int(num_splits)
 
             # Update progress bar
@@ -256,6 +358,14 @@ class MergeCountMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a MergeCountMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -266,6 +376,17 @@ class MergeCountMetric(SkeletonMetric):
 
     # --- Core Routines ---
     def compute(self, gt_graphs, fragment_graphs):
+        """
+        Counts the number of split merges in each of the given ground truth
+        graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        fragment_graphs : Dict[str, FragmentGraph]
+            Graphs corresponding to the predicted segmentation.
+        """
         # Main
         pbar = self.get_pbar(len(gt_graphs))
         for gt_graph in gt_graphs.values():
@@ -299,10 +420,10 @@ class MergeCountMetric(SkeletonMetric):
 
         Parameters
         ----------
-        gt_graph : SkeletonGraph
-            Ground truth graph.
-        fragment_graph : SkeletonGraph
-            Fragment graph to be checked for merges.
+        gt_graph : LabeledGraph
+            Graph to be evaluated.
+        fragment_graph : FragmentGraph
+            Graph corresponding to a segment in the predicted segmentation.
         """
         visited = set()
         for leaf in util.get_leafs(fragment_graph):
@@ -325,16 +446,16 @@ class MergeCountMetric(SkeletonMetric):
 
         Parameters
         ----------
-        gt_graph : SkeletonGraph
-            Ground truth graph.
-        fragment_graph : SkeletonGraph
-            Fragment graph to be checked for merges.
+        gt_graphs : dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        fragment_graphs : FragmentGraph
+            Graph corresponding to a segment in the predicted segmentation.
         source : int
             Starting node ID in the fragment graph from which to begin
             traversal.
         visited : Set[int]
-            Node IDs that have already been visited, used to avoid redundant
-            exploration.
+            Node IDs from "fragment_graphs" that have already been visited,
+            used to avoid redundant exploration.
         """
         # Traverse until close to ground truth
         for _, node in nx.dfs_edges(fragment_graph, source=source):
@@ -350,6 +471,22 @@ class MergeCountMetric(SkeletonMetric):
                 break
 
     def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
+        """
+        Verify whether a given site in a fragment graph corresponds to a merge
+        mistake relative to the ground truth graph. If so, the site is saved
+        in an internal data structure.
+
+        Parameters
+        ----------
+        gt_graph : LabeledGraph
+            Graph to be evaluated.
+        fragment_graphs : dict[str, FragmentGraph]
+            Graph corresponding to a segment in the predicted segmentation.
+        gt_node : int or hashable
+            Node ID in the ground truth graph corresponding to the site.
+        fragment_node : int or hashable
+            Node ID in the fragment graph corresponding to the candidate site.
+            """
         # Check if pass through site without merge mistake
         if self.is_nonmerge_pass_thru(gt_graph, fragment_graph, gt_node):
             return
@@ -374,6 +511,26 @@ class MergeCountMetric(SkeletonMetric):
         )
 
     def is_nonmerge_pass_thru(self, gt_graph, fragment_graph, gt_node):
+        """
+        Determine whether a ground truth node belongs to a small connected
+        component of the same label in the ground truth graph, indicating a
+        likely non-merge pass-through.
+
+        Parameters
+        ----------
+        gt_graph : LabeledGraph
+            Graph to be evaluated.
+        fragment_graph : FragmentGraph
+            Graph corresponding to a segment in the predicted segmentation.
+        gt_node : int or hashable
+            Node ID in the ground truth graph to evaluate.
+
+        Returns
+        -------
+        bool
+            True is the node is a likely non-merge detection; otherwise, the
+            site is considered to be a merge mistake.
+        """
         nodes = gt_graph.get_nodes_with_label(fragment_graph.label)
         subgraph = gt_graph.subgraph(nodes)
         for nodes_cc in nx.connected_components(subgraph):
@@ -383,12 +540,19 @@ class MergeCountMetric(SkeletonMetric):
 
     # --- Helpers ---
     def add_merge_site_names(self):
+        """
+        Assign unique name to each detected merge site.
+        """
         row_names = list()
         for i, _ in enumerate(self.merge_sites.index, 1):
             row_names.append(f"merge-{i + 1}.swc")
         self.merge_sites.index = row_names
 
     def remove_repeat_merge_sites(self):
+        """
+        Remove spatially redundant merge sites within a fixed distance
+        threshold.
+        """
         if len(self.merge_sites) > 0:
             # Build kdtree from merge sites
             kdtree = KDTree([s["World"] for s in self.merge_sites])
@@ -414,6 +578,14 @@ class ERLMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose):
+        """
+        Instantiates an ERL object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -421,6 +593,18 @@ class ERLMetric(SkeletonMetric):
         self.name = "ERL"
 
     def compute(self, gt_graphs):
+        """
+        Comptues the expected run length (ERL) for the given graphs.
+
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():
@@ -435,6 +619,19 @@ class ERLMetric(SkeletonMetric):
 
     @staticmethod
     def compute_graph_erl(graph):
+        """
+        Computes the ERL for the given graph.
+
+        Parameters
+        ----------
+        graph : LabeledGraph
+            Graph to be evaluated.
+
+        Returns
+        -------
+        float
+            ERL of the given graph.
+        """
         wgts = list()
         run_lengths = list()
         for label in graph.get_node_labels():
@@ -448,7 +645,7 @@ class ERLMetric(SkeletonMetric):
             run_lengths.append(
                 0 if label in graph.labels_with_merge else run_length
             )
-        return np.average(run_lengths, weights=wgts)
+        return np.average(run_lengths, weights=wgts) if len(wgts) > 0 else 0
 
 
 # --- Derived Skeleton Metrics ---
@@ -458,6 +655,14 @@ class SplitRateMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a SplitRateMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -465,6 +670,22 @@ class SplitRateMetric(SkeletonMetric):
         self.name = "Split Rate"
 
     def compute(self, gt_graphs, results):
+        """
+        Computes split rates for the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        results : pandas.DataFrame
+            Data frame containing the skeleton metric results computed so far.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         new_results = dict()
         pbar = self.get_pbar(len(results.index))
         for name, graph in gt_graphs.items():
@@ -487,6 +708,14 @@ class MergeRateMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a MergeRateMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -494,6 +723,22 @@ class MergeRateMetric(SkeletonMetric):
         self.name = "Merge Rate"
 
     def compute(self, gt_graphs, results):
+        """
+        Computes merge rates for the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        results : pandas.DataFrame
+            Data frame containing the skeleton metric results computed so far.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         new_results = dict()
         pbar = self.get_pbar(len(results.index))
         for name, graph in gt_graphs.items():
@@ -516,6 +761,14 @@ class EdgeAccuracyMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates an EdgeAccuracyMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -523,6 +776,22 @@ class EdgeAccuracyMetric(SkeletonMetric):
         self.name = "Edge Accuracy"
 
     def compute(self, gt_graphs, results):
+        """
+        Computes the edge accuracy of the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        results : pandas.DataFrame
+            Data frame containing the skeleton metric results computed so far.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         new_results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for idx in results.index:
@@ -546,6 +815,14 @@ class NormalizedERLMetric(SkeletonMetric):
     """
 
     def __init__(self, verbose=True):
+        """
+        Instantiates a NormalizedERLMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Call parent class
         super().__init__(verbose=verbose)
 
@@ -553,6 +830,22 @@ class NormalizedERLMetric(SkeletonMetric):
         self.name = "Normalized ERL"
 
     def compute(self, gt_graphs, results):
+        """
+        Computes the normalized ERL of the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        results : pandas.DataFrame
+            Data frame containing the skeleton metric results computed so far.
+
+        Returns
+        -------
+        pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
         new_results = dict()
         pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():

@@ -161,7 +161,22 @@ class Evaluator:
         return results
 
     def report_summary(self, results):
-        pass
+        # Averaged results
+        filename = f"{self.results_filename}-overview.txt"
+        path = os.path.join(self.output_dir, filename)
+        util.update_txt(path, "Average Results...")
+        for column in results.columns:
+            if column != "SWC Run Length" and column != "SWC Name":
+                avg = util.compute_weighted_avg(results, column)
+                util.update_txt(path, f"  {column}: {avg:.4f}")
+
+        # Total results
+        n_splits = results["# Splits"].sum()
+        util.update_txt(path, "\nTotal Results...")
+        util.update_txt(path, f"  # Splits: {n_splits}")
+        if "# Merges" in results.columns:
+            n_merges = results["# Merges"].sum()
+            util.update_txt(path, f"  # Merges: {n_merges}")
 
     # --- Writers ---
     def save_fragments(self):
