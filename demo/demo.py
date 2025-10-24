@@ -20,7 +20,7 @@ def main():
     """
     # Initializations
     pred_labels = TiffReader(pred_labels_path, swap_axes=False)
-    skeleton_metric = evaluate(
+    evaluate(
         groundtruth_pointer,
         pred_labels,
         output_dir,

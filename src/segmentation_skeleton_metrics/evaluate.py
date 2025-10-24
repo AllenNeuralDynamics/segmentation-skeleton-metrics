@@ -80,26 +80,24 @@ def evaluate(
     fragment_graphs = dataloader.load_fragments(fragments_pointer, gt_graphs)
 
     # Run evaluation
-    evaluator = Evaluator(output_dir, save_merges, save_fragments, verbose)
+    evaluator = Evaluator(output_dir, results_filename, verbose)
     evaluator.run(gt_graphs, fragment_graphs)
+
+    # Optional saves
+    if save_merges:
+        evaluator.save_merge_results()
+
+    if save_fragments and fragment_graphs:
+        evaluator.save_fragments(gt_graphs, fragment_graphs)
 
 
 # --- Evaluator ---
 class Evaluator:
 
-    def __init__(
-        self,
-        output_dir,
-        results_filename,
-        save_merges,
-        save_fragments,
-        verbose=True
-    ):
+    def __init__(self, output_dir, results_filename, verbose=True):
         # Instance attributes
         self.output_dir = output_dir
         self.results_filename = results_filename
-        self.save_merges = save_merges
-        self.save_fragments = save_fragments
         self.verbose = verbose
 
         # Set core metrics
@@ -131,9 +129,9 @@ class Evaluator:
         for name, metric in self.metrics.items():
             if name == "# Merges" and fragment_graphs:
                 results[name] = metric.compute(gt_graphs, fragment_graphs)
+                print(results[name])
             elif name != "# Merges":
                 results.update(metric.compute(gt_graphs))
-        print(results["# Merges"])
 
         # Compute derived metrics
         for name, metric in self.derived_metrics.items():
@@ -144,27 +142,30 @@ class Evaluator:
 
         # Save report
         path = f"{self.output_dir}/{self.results_filename}.csv"
-        results.to_csv(path, index=False)
+        results.to_csv(path, index=True)
         self.report_summary(results)
 
-        # Optional saves
-        if self.save_merges:
-            self.save_merge_results()
-
-        if self.save_fragments and fragment_graphs:
-            self.save_intersecting_fragments(gt_graphs, fragment_graphs)
-
     def init_results(self, gt_graphs):
-        cols = list(self.metrics.keys()) + list(self.derived_metrics.keys())
+        # Create dataframe
+        cols = (
+            ["SWC Run Length"] +
+            list(self.metrics.keys()) +
+            list(self.derived_metrics.keys())
+        )
         index = list(gt_graphs.keys())
         index.sort()
-        return pd.DataFrame(np.nan, index=index, columns=cols)
+        results = pd.DataFrame(np.nan, index=index, columns=cols)
+
+        # Populate SWC Run Length column
+        for key, graph in gt_graphs.items():
+            results.loc[key, "SWC Run Length"] = graph.run_length
+        return results
 
     def report_summary(self, results):
         pass
 
     # --- Writers ---
-    def save_intersecting_fragments(self):
+    def save_fragments(self):
         pass
 
     def save_merge_results(self, gt_graphs, fragment_graphs, output_dir):
