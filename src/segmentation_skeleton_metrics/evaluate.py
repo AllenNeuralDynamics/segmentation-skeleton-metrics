@@ -129,7 +129,6 @@ class Evaluator:
         for name, metric in self.metrics.items():
             if name == "# Merges" and fragment_graphs:
                 results[name] = metric.compute(gt_graphs, fragment_graphs)
-                print(results[name])
             elif name != "# Merges":
                 results.update(metric.compute(gt_graphs))
 
