@@ -47,7 +47,8 @@ def evaluate(
     verbose=True
 ):
     """
-    ...
+    Loads data, calls an evaluator object that compute skeleton-based
+    segmentation, and saves the results.
 
     Parameters
     ----------
@@ -164,19 +165,19 @@ class Evaluator:
         # Averaged results
         filename = f"{self.results_filename}-overview.txt"
         path = os.path.join(self.output_dir, filename)
-        util.update_txt(path, "Average Results...")
+        util.update_txt(path, "Average Results...", self.verbose)
         for column in results.columns:
             if column != "SWC Run Length" and column != "SWC Name":
                 avg = util.compute_weighted_avg(results, column)
-                util.update_txt(path, f"  {column}: {avg:.4f}")
+                util.update_txt(path, f"  {column}: {avg:.4f}", self.verbose)
 
         # Total results
         n_splits = results["# Splits"].sum()
-        util.update_txt(path, "\nTotal Results...")
-        util.update_txt(path, f"  # Splits: {n_splits}")
+        util.update_txt(path, "\nTotal Results...", self.verbose)
+        util.update_txt(path, f"  # Splits: {n_splits}", self.verbose)
         if "# Merges" in results.columns:
             n_merges = results["# Merges"].sum()
-            util.update_txt(path, f"  # Merges: {n_merges}")
+            util.update_txt(path, f"  # Merges: {n_merges}", self.verbose)
 
     # --- Writers ---
     def save_fragments(self):

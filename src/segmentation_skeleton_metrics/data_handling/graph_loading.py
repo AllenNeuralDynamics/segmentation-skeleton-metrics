@@ -9,6 +9,7 @@ management.
 
 """
 
+from collections import deque
 from concurrent.futures import (
     as_completed, ProcessPoolExecutor, ThreadPoolExecutor
 )
@@ -346,6 +347,8 @@ class GraphLoader:
                 for i, label in node_to_label.items():
                     graph.node_labels[i] = label
 
+        GraphLoader.fix_label_misalignments(graph)
+
     def get_patch_labels(self, graph, nodes):
         """
         Gets the segment labels for a given set of nodes within a specified
@@ -395,8 +398,68 @@ class GraphLoader:
         offset = np.array(offset)
         return tuple(voxel - offset)
 
-    def fix_label_misalignments(self, graph):
-        pass
+    @staticmethod
+    def fix_label_misalignments(graph):
+        """
+        Adjusts misalignments between the labeled graph and segmentation.
+
+        Parameters
+        ----------
+        graph : LabeledGraph
+            Graph to be searched.
+        """
+        visited_edges = set()
+        for i, j in deque(nx.dfs_edges(graph)):
+            # Check whether to visit edge
+            if frozenset({i, j}) in visited_edges:
+                continue
+
+            # Visit edge
+            if int(graph.node_labels[j]) == 0:
+                GraphLoader.check_misalignment(graph, visited_edges, i, j)
+            visited_edges.add(frozenset({i, j}))
+
+    @staticmethod
+    def check_misalignment(graph, visited_edges, nb, root):
+        """
+        Determines whether zero-valued label corresponds to a misalignment
+        between the graph and segmentation mask.
+
+        Parameters
+        ----------
+        graph : networkx.Graph
+            Graph that represents a ground truth neuron.
+        visited_edges : List[tuple]
+            List of edges in "graph" that have been visited.
+        nb : int
+            Neighbor of "root".
+        root : int
+            Node where possible split starts (i.e. zero-valued label).
+        """
+        # Search graph
+        label_collisions = set()
+        queue = deque([root])
+        visited = set()
+        while len(queue) > 0:
+            # Visit node
+            j = queue.popleft()
+            label_j = int(graph.node_labels[j])
+            if label_j != 0:
+                label_collisions.add(label_j)
+            visited.add(j)
+
+            # Update queue
+            if label_j == 0:
+                for k in graph.neighbors(j):
+                    if k not in visited:
+                        if frozenset({j, k}) not in visited_edges or k == nb:
+                            queue.append(k)
+                            visited_edges.add(frozenset({j, k}))
+
+        # Upd zero nodes
+        if len(label_collisions) == 1:
+            label = label_collisions.pop()
+            graph.update_node_labels(visited, label)
 
 
 class LabelHandler:
