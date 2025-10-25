@@ -26,6 +26,10 @@ from segmentation_skeleton_metrics.utils import util
 
 
 class DataLoader:
+    """
+    A class that loads ground truth and fragment graphs and provides tools for
+    labeling ground truth graphs.
+    """
 
     def __init__(
         self,
@@ -34,6 +38,23 @@ class DataLoader:
         use_anisotropy=False,
         verbose=True
     ):
+        """
+        Instantiates a DataLoader object.
+
+        Parameters
+        ----------
+        label_handler : LabelHander
+            Handles mapping between raw segmentation labels and consolidated
+            class IDs.
+        anisotropy : Tuple[int], optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
+        use_anisotropy : bool, optional
+            Indication of whether to apply the anisotropy to the coordinates
+            from the fragment SWC files. Default is False.
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
         # Instance attributes
         self.anisotropy = anisotropy
         self.label_handler = label_handler
@@ -275,6 +296,21 @@ class GraphLoader:
         return {graph.name: graph}
 
     def _init_graph(self, swc_dict):
+        """
+        Initializes and returns a graph object from a parsed SWC dictionary.
+
+        Parameters
+        ----------
+        swc_dict : dict
+            Dictionary whose keys and values are the attribute names and
+            values from an SWC file.
+    
+        Returns
+        -------
+        SkeletonGraph
+            An initialized LabeledGraph or FragmentGraph instance with voxel
+            data, filename, and node count set.
+        """
         # Instantiate graph
         if self.is_groundtruth:
             graph = LabeledGraph(
@@ -304,7 +340,7 @@ class GraphLoader:
 
         Parameters
         ----------
-        graph : SkeletonGraph
+        graph : LabeledGraph
             Graph to be labeled.
         """
         with ThreadPoolExecutor() as executor:
@@ -427,14 +463,14 @@ class GraphLoader:
 
         Parameters
         ----------
-        graph : networkx.Graph
+        graph : LabeledGraph
             Graph that represents a ground truth neuron.
-        visited_edges : List[tuple]
+        visited_edges : List[Frozenset[int]]
             List of edges in "graph" that have been visited.
         nb : int
             Neighbor of "root".
         root : int
-            Node where possible split starts (i.e. zero-valued label).
+            Node where possible misalignment starts (i.e. zero-valued label).
         """
         # Search graph
         label_collisions = set()
@@ -542,7 +578,7 @@ class LabelHandler:
 
         Returns
         -------
-        networkx.Graph
+        LabeledGraph
             Graph with nodes that represent labels and edges are based on the
             connections read from the "connections_path".
         """
@@ -614,7 +650,7 @@ class LabelHandler:
 
         Parameters
         ----------
-        graph : SkeletonGraph
+        graph : LabeledGraph
             Graph from which to retrieve the node labels.
 
         Returns

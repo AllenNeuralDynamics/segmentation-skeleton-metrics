@@ -4,7 +4,8 @@ Created on Thu Oct 16 12:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-...
+Code that provides a wrapper for loading data and calling the SkeletMetric
+subclasses.
 
 """
 
