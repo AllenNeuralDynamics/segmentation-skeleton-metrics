@@ -75,6 +75,15 @@ class SkeletonGraph(nx.Graph):
         self.voxels = None
 
     def init_kdtree(self, use_voxels=True):
+        """
+        Builds a KD-Tree from the node coordinates.
+
+        Parameters
+        ----------
+        use_voxeles : bool, optional
+            Indication of whether to use voxel or physical coordinates.
+            Default is True.
+        """
         if use_voxels:
             self.kdtree = KDTree(self.voxels)
         else:
@@ -194,6 +203,9 @@ class SkeletonGraph(nx.Graph):
         return 3
 
     def prune_branches(self):
+        """
+        Placeholder method to be implemented by subclasses.
+        """
         pass
 
     # --- Writers ---
@@ -209,6 +221,16 @@ class SkeletonGraph(nx.Graph):
         """
         # Subroutines
         def write_entry(node, parent):
+            """
+            Writes a line in an SWC file
+
+            Parameters
+            ----------
+            node : int
+                Node ID.
+            parent : int
+                Node ID of the parent of "node".
+            """
             x, y, z = tuple(self.voxels[i] * self.anisotropy)
             r = self.get_radius()
             node_id = cnt
@@ -239,8 +261,24 @@ class SkeletonGraph(nx.Graph):
 
 
 class LabeledGraph(SkeletonGraph):
+    """
+    Subclass of SkeletonGraph with the provides support for node-level
+    labeling and tracking label assignments.
+    """
 
     def __init__(self, anisotropy=(1.0, 1.0, 1.0), name=None):
+        """
+        Instantiates a LabeledGraph object.
+
+        Parameters
+        ----------
+        anisotropy : ArrayLike
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope.
+        name : str or None
+            Name of the graph which is derived from the SWC filename. Default
+            is None.
+        """
         # Call parent class
         super().__init__(anisotropy=anisotropy, name=name)
 
@@ -396,6 +434,9 @@ class LabeledGraph(SkeletonGraph):
 
 
 class FragmentGraph(SkeletonGraph):
+    """
+    Subclass of SkeletonGraph for skeletons derived from the segmentation.
+    """
 
     def __init__(
         self,
@@ -404,6 +445,24 @@ class FragmentGraph(SkeletonGraph):
         label=None,
         segment_id=None,
     ):
+        """
+        Instantiates a FragmentGraph object.
+
+        Parameters
+        ----------
+        anisotropy : ArrayLike, optional
+            Image to physical coordinates scaling factors to account for the
+            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
+        name : str or None, optional
+            Name of the graph which is derived from the SWC filename. Default
+            is None.
+        label : int, optional
+            Graph-level label that corresponds to a node-level label given to
+            a ground truth graph. Default is None.
+        segment_id : int, optional
+            Segment ID of the segment the given skeleton was obtained from.
+            Default is None.
+        """
         # Call parent class
         super().__init__(anisotropy=anisotropy, name=name)
 
