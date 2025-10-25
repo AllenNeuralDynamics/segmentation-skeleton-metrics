@@ -168,7 +168,7 @@ def read_txt(path):
         return f.read().splitlines()
 
 
-def update_txt(path, text):
+def update_txt(path, text, verbose=True):
     """
     Appends the given text to a specified text file and prints the text.
 
@@ -178,8 +178,14 @@ def update_txt(path, text):
         Path to txt file where the text will be appended.
     text : str
         Text to be written to the file.
+    verbose : bool, optional
+        Indication of whether to printout text. Default is True.
     """
-    print(text)
+    # Printout text (if applicable)
+    if verbose:
+        print(text)
+
+    # Update txt file
     with open(path, "a") as file:
         file.write(text + "\n")
 

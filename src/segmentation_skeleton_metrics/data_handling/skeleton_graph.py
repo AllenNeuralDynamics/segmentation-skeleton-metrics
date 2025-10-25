@@ -332,7 +332,7 @@ class LabeledGraph(SkeletonGraph):
                     visited.add(k)
         return run_length
 
-    def upd_node_labels(self, nodes, label):
+    def update_node_labels(self, nodes, label):
         """
         Updates the label of the given nodes with a specified label.
 
