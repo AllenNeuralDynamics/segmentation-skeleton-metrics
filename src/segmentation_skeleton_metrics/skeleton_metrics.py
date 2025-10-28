@@ -72,7 +72,7 @@ class SkeletonMetric(ABC):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -114,7 +114,7 @@ class SplitEdgePercentMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -186,7 +186,7 @@ class OmitEdgePercentMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -257,7 +257,7 @@ class MergedEdgePercentMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -338,6 +338,12 @@ class SplitCountMetric(SkeletonMetric):
         ----------
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
+
+        Results
+        -------
+        results : pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
         """
         results = dict()
         pbar = self.get_pbar(len(gt_graphs))
@@ -386,6 +392,12 @@ class MergeCountMetric(SkeletonMetric):
             Graphs to be evaluated.
         fragment_graphs : Dict[str, FragmentGraph]
             Graphs corresponding to the predicted segmentation.
+
+        Results
+        -------
+        results : pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
         """
         # Main
         pbar = self.get_pbar(len(gt_graphs))
@@ -472,7 +484,7 @@ class MergeCountMetric(SkeletonMetric):
 
     def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
         """
-        Verify whether a given site in a fragment graph corresponds to a merge
+        Verifies whether a given site in a fragment graph corresponds to a merge
         mistake relative to the ground truth graph. If so, the site is saved
         in an internal data structure.
 
@@ -486,7 +498,7 @@ class MergeCountMetric(SkeletonMetric):
             Node ID in the ground truth graph corresponding to the site.
         fragment_node : int or hashable
             Node ID in the fragment graph corresponding to the candidate site.
-            """
+        """
         # Check if pass through site without merge mistake
         if self.is_nonmerge_pass_thru(gt_graph, fragment_graph, gt_node):
             return
@@ -512,7 +524,7 @@ class MergeCountMetric(SkeletonMetric):
 
     def is_nonmerge_pass_thru(self, gt_graph, fragment_graph, gt_node):
         """
-        Determine whether a ground truth node belongs to a small connected
+        Determines whether a ground truth node belongs to a small connected
         component of the same label in the ground truth graph, indicating a
         likely non-merge pass-through.
 
@@ -541,7 +553,7 @@ class MergeCountMetric(SkeletonMetric):
     # --- Helpers ---
     def add_merge_site_names(self):
         """
-        Assign unique name to each detected merge site.
+        Assigns unique name to each detected merge site.
         """
         row_names = list()
         for i, _ in enumerate(self.merge_sites.index, 1):
@@ -550,7 +562,7 @@ class MergeCountMetric(SkeletonMetric):
 
     def remove_repeat_merge_sites(self):
         """
-        Remove spatially redundant merge sites within a fixed distance
+        Removes spatially redundant merge sites within a fixed distance
         threshold.
         """
         if len(self.merge_sites) > 0:
@@ -601,7 +613,7 @@ class ERLMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -682,7 +694,7 @@ class SplitRateMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -735,7 +747,7 @@ class MergeRateMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -788,7 +800,7 @@ class EdgeAccuracyMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
@@ -842,7 +854,7 @@ class NormalizedERLMetric(SkeletonMetric):
 
         Returns
         -------
-        pandas.DataFrame
+        results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """

@@ -60,7 +60,7 @@ class Reader:
     # --- Read Data ---
     def read(self, swc_pointer):
         """
-        Load SWCs files based on the type pointer provided.
+        Loads SWC files based on the type pointer provided.
 
         Parameters
         ----------
@@ -161,7 +161,7 @@ class Reader:
 
         Returns
         -------
-        Deque[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -194,7 +194,7 @@ class Reader:
 
         Returns
         -------
-        Deque[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -228,7 +228,7 @@ class Reader:
 
         Returns
         -------
-        Deque[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -304,7 +304,7 @@ class Reader:
             return self.read_from_gcs_zips(bucket_name, zip_paths)
 
         # Error
-        raise Exception(f"GCS Pointer is invalid -{gcs_path}-")
+        raise Exception(f"GCS Pointer is invalid {gcs_path}")
 
     def read_from_gcs_swcs(self, bucket_name, swc_paths):
         """
@@ -312,13 +312,14 @@ class Reader:
 
         Parameters
         ----------
-        gcs_dict : dict
-            Dictionary with the keys "bucket_name" and "path" that specify
-            where the SWC files are located in a GCS bucket.
+        bucket_name : str
+            Name of bucket containing SWC files.
+        swc_paths : List[str]
+            List of paths to SWC files to be read.
 
         Returns
         -------
-        Dequeue[dict]
+        swc_dicts : Dequeue[dict]
             Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -346,14 +347,15 @@ class Reader:
 
         Parameters
         ----------
-        gcs_dict : dict
-            Dictionary with the keys "bucket_name" and "path" that specify
-            where a single SWC file is located in a GCS bucket.
+        bucket_name : str
+            Name of bucket containing SWC file.
+        path : List[str]
+            Path to SWC file to be read.
 
         Returns
         -------
         dict
-            Dictionaries whose keys and values are the attribute names and
+            Dictionary whose keys and values are the attribute names and
             values from an SWC file.
         """
         # Initialize cloud reader
@@ -372,14 +374,16 @@ class Reader:
 
         Parameters
         ----------
-        zip_content : bytes
-            Content of a ZIP archive.
+        bucket_name : str
+            Name of bucket containing SWC files.
+        zip_paths : List[str]
+            List of paths to ZIP archives containing SWC files to be read.
 
         Returns
         -------
-        Dequeue[dict]
-            Dictionaries whose keys and values are the attribute
-            names and values from an SWC file.
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
         """
         swc_dicts = deque()
         for zip_path in tqdm(zip_paths, desc="Read SWCs"):
@@ -393,14 +397,16 @@ class Reader:
 
         Parameters
         ----------
-        zip_content : bytes
-            Content of a ZIP archive.
+        bucket_name : str
+            Name of bucket containing SWC files.
+        path : str
+            Path to ZIP archive containing SWC files to be read.
 
         Returns
         -------
-        Dequeue[dict]
-            Dictionaries whose keys and values are the attribute
-            names and values from an SWC file.
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
         """
         # Initialize cloud reader
         client = storage.Client()
@@ -435,13 +441,14 @@ class Reader:
         Parameters
         ----------
         s3_path : str
-            Path to a directory in an S3 bucket containing SWC files.
+            Path to a directory in an S3 bucket containing SWC files to be
+            read.
 
         Returns
         -------
-        Dequeue[dict]
-            Dictionaries whose keys and values are the attribute
-            names and values from an SWC file.
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
         """
         # List filenames
         bucket_name, prefix = util.parse_cloud_path(s3_path)
