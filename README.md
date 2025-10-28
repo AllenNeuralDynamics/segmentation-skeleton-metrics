@@ -70,25 +70,25 @@ pip install -e .
 Here is a simple example of evaluating a predicted segmentation.
 
 ```python
-from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.evaluate import evaluate
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
 # Initializations
 output_dir = "./"
-segmentation_path = "./pred_labels.tif"
-fragments_pointer = "./pred_swcs.zip"
-groundtruth_pointer = "./target_swcs.zip"
+segmentation_path = "path-to-predicted-segmentation"
+fragments_pointer = "path-to-predicted-skeletons"
+groundtruth_pointer = "path-to-groundtruth-skeletons"
 
 # Run
 segmentation = TiffReader(segmentation_path)
-skeleton_metric = SkeletonMetric(
+evaluate(
    groundtruth_pointer,
    segmentation,
+   output_dir,
    fragments_pointer=fragments_pointer,
-   output_dir=output_dir,
 )
-skeleton_metric.run()
+
 ```
 
 <p>

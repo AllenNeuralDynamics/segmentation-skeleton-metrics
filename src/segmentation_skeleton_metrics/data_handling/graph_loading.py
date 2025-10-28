@@ -304,7 +304,7 @@ class GraphLoader:
         swc_dict : dict
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
-
+    
         Returns
         -------
         graph : SkeletonGraph
