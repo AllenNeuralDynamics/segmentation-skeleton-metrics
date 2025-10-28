@@ -52,12 +52,13 @@ The process starts with a collection of ground truth graphs, each stored as an i
 Lastly, we compute the following skeleton-based metrics:
 
 - *\# Splits*: Number of connected components (minus 1) in a ground truth graph after removing omit nodes.
-- *\# Merges*: Number of ground truth graphs that contain at least one merge.
-- *Omit Edge Ratio*: Proportion of omitted edges.
-- *Split Edge Ratio*: Proportion of split edges.
-- *Merged Edge Ratio*: Proportion of merged edges.
+- *\# Merges*: Number of merge mistakes.
+- *\% Split Edges*: Percentage of split edges.
+- *\% Omit Edges*: Percentage of omit edges.
+- *\%Merged Edges*: Percentage of merged edges.
+- *Expected Run Length (ERL)*: Expected run length of ground truth graph after removing omit and merged nodes.
 - *Edge Accuracy*: Proportion of edges that are correct.
-- *Expected Run Length (ERL)*: Expected run length of ground truth graph after removing omit nodes.
+
 
 ## Installation
 To use the software, in the root directory, run
