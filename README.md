@@ -70,7 +70,7 @@ pip install -e .
 Here is a simple example of evaluating a predicted segmentation.
 
 ```python
-from segmentation_skeleton_metrics.skeleton_metric import SkeletonMetric
+from segmentation_skeleton_metrics.evaluate import evaluate
 from segmentation_skeleton_metrics.utils.img_util import TiffReader
 
 
