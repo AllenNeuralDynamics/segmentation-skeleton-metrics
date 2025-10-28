@@ -55,7 +55,7 @@ Lastly, we compute the following skeleton-based metrics:
 - *\# Merges*: Number of merge mistakes.
 - *\% Split Edges*: Percentage of split edges.
 - *\% Omit Edges*: Percentage of omit edges.
-- *\%Merged Edges*: Percentage of merged edges.
+- *\% Merged Edges*: Percentage of merged edges.
 - *Expected Run Length (ERL)*: Expected run length of ground truth graph after removing omit and merged nodes.
 - *Edge Accuracy*: Proportion of edges that are correct.
 
