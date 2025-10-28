@@ -225,6 +225,19 @@ class Evaluator:
         pass
 
     def save_merge_results(self, gt_graphs, fragment_graphs, output_dir):
+        """
+        Saves all detected merge results, including skeletons, merge sites,
+        and metadata.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentsGraph]
+            Graphs built from skeletons obtained from a predicted segmentation.
+        output_dir : str
+            Directory that results are written to.
+        """
         # Initialize a writer
         zip_path = os.path.join(output_dir, "merged_fragments.zip")
         util.rm_file(zip_path)
@@ -240,6 +253,14 @@ class Evaluator:
         self.merge_sites.to_csv(path, index=True)
 
     def save_merge_sites(self, zip_writer):
+        """
+        Saves merge site coordinates into a ZIP archive.
+
+        Parameters
+        ----------
+        zip_writer : zipfile.ZipFile
+            Open ZIP file handle used to store merge site data.
+        """
         merge_sites = self.metrics["# Merges"].merge_sites
         for i in range(len(merge_sites)):
             filename = merge_sites.index[i]
@@ -249,6 +270,19 @@ class Evaluator:
     def save_skeletons_with_merge(
         self, gt_graphs, fragment_graphs, zip_writer
     ):
+        """
+        Saves ground truth and fragment skeletons containing merge sites into
+        a ZIP archive.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentsGraph]
+            Graphs built from skeletons obtained from a predicted segmentation.
+        zip_writer : zipfile.ZipFile
+            Open ZIP file handle used to write SWC data.
+        """
         # Save ground truth skeletons
         for key in self.merge_sites["GroundTruth_ID"].unique():
             gt_graphs[key].to_zipped_swc(zip_writer)
