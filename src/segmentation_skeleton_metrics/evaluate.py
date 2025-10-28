@@ -113,8 +113,48 @@ def evaluate(
 
 # --- Evaluator ---
 class Evaluator:
+    """
+    A class that evaluates neuron reconstruction quality by computing a set of
+    skeleton-based metrics.
+
+    Attributes
+    ----------
+    output_dir : str
+        Directory where evaluation results will be saved.
+    results_filename : str
+        Filename (without extension) for the CSV report.
+    verbose : bool
+        Indication of whether to display progress bars and printout results.
+    metrics : dict
+        Core evaluation metrics mapping metric names to metric objects:
+        - "# Splits": SplitCountMetric
+        - "# Merges": MergeCountMetric
+        - "% Split Edges": SplitEdgePercentMetric
+        - "% Omit Edges": OmitEdgePercentMetric
+        - "% Merged Edges": MergedEdgePercentMetric
+        - "ERL": ERLMetric
+    derived_metrics : dict
+        Derived metrics computed from core metrics:
+        - "Normalized ERL": NormalizedERLMetric
+        - "Edge Accuracy": EdgeAccuracyMetric
+        - "Split Rate": SplitRateMetric
+        - "Merge Rate": MergeRateMetric
+    """
 
     def __init__(self, output_dir, results_filename, verbose=True):
+        """
+        Instantiates an Evaluator object.
+
+        Parameters
+        ----------
+        output_dir : str
+            Directory where evaluation results will be saved.
+        results_filename : str
+            Filename (without extension) for the CSV report.
+        verbose : bool, optional
+            Indication of whether to display progress bars and printout
+            results. Default is True.
+        """
         # Instance attributes
         self.output_dir = output_dir
         self.results_filename = results_filename
@@ -140,6 +180,19 @@ class Evaluator:
 
     # --- Core Routines ---
     def run(self, gt_graphs, fragment_graphs=None):
+        """
+        Computes evaluation metrics for neuron reconstructions and saves a CSV
+        report.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        fragment_graphs : Dict[str, FragmentsGraph], optional
+            Graphs built from skeletons obtained from a segmentation. This
+            parameter is required to compute the metric "# Merges". Default
+            is None.
+        """
         # Printout step
         if self.verbose:
             print("\n(3) Compute Metrics")
@@ -221,7 +274,8 @@ class Evaluator:
             util.update_txt(path, f"  # Merges: {n_merges}", self.verbose)
 
     # --- Writers ---
-    def save_fragments(self):
+    def save_fragments(self, gt_graphs, fragment_graphs):
+        assert fragment_graphs is not None
         pass
 
     def save_merge_results(self, gt_graphs, fragment_graphs, output_dir):
@@ -234,7 +288,7 @@ class Evaluator:
         gt_graphs : Dict[str, LabeledGraph]
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentsGraph]
-            Graphs built from skeletons obtained from a predicted segmentation.
+            Graphs built from skeletons obtained from a segmentation.
         output_dir : str
             Directory that results are written to.
         """
