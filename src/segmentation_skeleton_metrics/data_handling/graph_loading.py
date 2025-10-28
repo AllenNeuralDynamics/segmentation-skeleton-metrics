@@ -93,7 +93,7 @@ class DataLoader:
 
     def load_fragments(self, swc_pointer, gt_graphs):
         """
-        Load fragment graphs (predicted skeletons).
+        Loads fragment graphs (predicted skeletons).
 
         Parameters
         ----------
@@ -129,7 +129,7 @@ class DataLoader:
     # --- Helpers ---
     def get_all_node_labels(self, graphs):
         """
-        Get the set of unique node labels across all given graphs.
+        Gets the set of unique node labels across all given graphs.
 
         Parameters
         ----------
@@ -138,7 +138,7 @@ class DataLoader:
 
         Returns
         -------
-        labels : Set[int]
+        node_labels : Set[int]
             Unique node labels across all graphs.
         """
         node_labels = set()
@@ -149,7 +149,7 @@ class DataLoader:
 
 class GraphLoader:
     """
-    A class that builds a graphs from SWC files.
+    A class that builds graphs from SWC files.
     """
 
     def __init__(
@@ -176,8 +176,8 @@ class GraphLoader:
         label_mask : ImageReader, optional
             Predicted segmentation mask.
         selected_ids : Set[int], optional
-            Only SWC files with a name contained in this set are read.
-            Default is None.
+            Only SWC files with a name contained in this set are read. Default
+            is None.
         use_anisotropy : bool, optional
             Indication of whether coordinates in SWC files should be converted
             from physical to image coordinates using the given anisotropy.
@@ -210,7 +210,7 @@ class GraphLoader:
 
         Returns
         -------
-        dict
+        graphs : Dict[str, SkeletonGraph]
             Dictionary where the keys are unique identifiers (i.e. filenames
             of SWC files) and values are the corresponding SkeletonGraph.
         """
@@ -233,7 +233,7 @@ class GraphLoader:
 
         Returns
         -------
-        dict
+        graphs : Dict[str, SkeletonGraph]
             Dictionary where the keys are unique identifiers (i.e. SWC
             filenames) and values are the corresponding SkeletonGraphs.
         """
@@ -243,11 +243,11 @@ class GraphLoader:
             pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
 
         # Main
-        graph_dict = dict()
+        graphs = dict()
         if len(swc_dicts) > 10 ** 4:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
-                graph_dict.update(self.to_graph(swc_dict))
+                graphs.update(self.to_graph(swc_dict))
                 if self.verbose:
                     pbar.update(1)
         else:
@@ -260,10 +260,10 @@ class GraphLoader:
 
                 # Store results
                 for process in as_completed(processes):
-                    graph_dict.update(process.result())
+                    graphs.update(process.result())
                     if self.verbose:
                         pbar.update(1)
-        return graph_dict
+        return graphs
 
     def to_graph(self, swc_dict):
         """
@@ -278,7 +278,7 @@ class GraphLoader:
 
         Returns
         -------
-        SkeletonGraph
+        Dict[str, SkeletonGraph]
             Graph built from an SWC file.
         """
         # Initialize graph
@@ -307,7 +307,7 @@ class GraphLoader:
     
         Returns
         -------
-        SkeletonGraph
+        graph : SkeletonGraph
             An initialized LabeledGraph or FragmentGraph instance with voxel
             data, filename, and node count set.
         """
@@ -399,7 +399,7 @@ class GraphLoader:
 
         Returns
         -------
-        dict
+        node_to_label : Dict[int, int]
             Dictionary that maps node IDs to their respective labels.
         """
         bbox = graph.get_bbox(nodes)
@@ -578,7 +578,7 @@ class LabelHandler:
 
         Returns
         -------
-        LabeledGraph
+        labels_graph : networkx.Graph
             Graph with nodes that represent labels and edges are based on the
             connections read from the "connections_path".
         """
@@ -627,14 +627,14 @@ class LabelHandler:
 
         Returns
         -------
-        List[int] or Set[int]
+        List[int]
             Labels corresponding to the class.
         """
         return self.inverse_mapping[label] if self.use_mapping() else [label]
 
     def use_mapping(self):
         """
-        Check whether mappings have been initialized.
+        Checks whether mappings have been initialized.
 
         Returns
         -------

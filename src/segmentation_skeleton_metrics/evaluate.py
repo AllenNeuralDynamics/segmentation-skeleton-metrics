@@ -35,7 +35,7 @@ from segmentation_skeleton_metrics.utils import util
 
 def evaluate(
     gt_pointer,
-    label_mask,
+    segmentation,
     output_dir,
     anisotropy=(1.0, 1.0, 1.0),
     connections_path=None,
@@ -48,7 +48,7 @@ def evaluate(
     verbose=True
 ):
     """
-    Loads data, calls an evaluator object that compute skeleton-based
+    Loads data, calls an evaluator object that computes skeleton-based
     segmentation, and saves the results.
 
     Parameters
@@ -57,18 +57,36 @@ def evaluate(
         Pointer to ground truth SWC files, see "swc_util.Reader" for
         documentation. These SWC files are assumed to be stored in voxel
         coordinates.
-    label_mask : ImageReader
+    segmentation : ImageReader
         Predicted segmentation.
     anisotropy : Tuple[float], optional
-        ...
+        Image to physical coordinates scaling factors to account for the
+        anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
     connections_path : str, optional
         Path to a txt file containing pairs of segment IDs that represents
         fragments that were merged. Default is None.
     fragments_pointer : str, optional
-        Pointer to SWC files corresponding to "label_mask", see
+        Pointer to SWC files corresponding to "segmentation", see
         "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
         applied to these SWC files and (2) these SWC files are required
         for counting merges. Default is None.
+    results_filename : str, optional
+        Name of file that skeleton metric results are written to. Default is
+        "results".
+    save_merges : bool, optional
+        Indication of whether to save merge sites and fragments with a merge
+        mistake. Default is False.
+    save_fragments : bool, optional
+        Indication of whether to save fragments that intersect with each
+        ground truth skeleton. Default is False.
+    use_anisotropy : bool, optional
+        Indication of whether to apply the anisotropy to the coordinates from
+        the fragment SWC files. Default is False.
+    valid_labels : Set[int], optional
+        Labels that are allowed to be assigned. Default is None.
+    verbose : bool, optional
+        Indication of whether to display progress bars and printout results.
+        Default is True.
     """
     # Load data
     label_handler = LabelHandler(connections_path, valid_labels)
@@ -78,7 +96,7 @@ def evaluate(
         use_anisotropy=use_anisotropy,
         verbose=verbose
     )
-    gt_graphs = dataloader.load_groundtruth(gt_pointer, label_mask)
+    gt_graphs = dataloader.load_groundtruth(gt_pointer, segmentation)
     fragment_graphs = dataloader.load_fragments(fragments_pointer, gt_graphs)
 
     # Run evaluation
@@ -147,6 +165,20 @@ class Evaluator:
         self.report_summary(results)
 
     def init_results(self, gt_graphs):
+        """
+        Initializes a data frame that results from skeleton metrics will be
+        stored in.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+
+        Returns
+        -------
+        results : pandas.DataFrame
+            Data frame that results from skeleton metrics will be stored in.
+        """
         # Create dataframe
         cols = (
             ["SWC Run Length"] +
@@ -163,10 +195,18 @@ class Evaluator:
         return results
 
     def report_summary(self, results):
+        """
+        Generates and saves a summary report of evaluation results.
+
+        Parameters
+        ----------
+        results : pandas.DataFrame
+            DataFrame containing evaluation results for individual SWCs.
+        """
         # Averaged results
         filename = f"{self.results_filename}-overview.txt"
         path = os.path.join(self.output_dir, filename)
-        util.update_txt(path, "Average Results...", self.verbose)
+        util.update_txt(path, "\nAverage Results...", self.verbose)
         for column in results.columns:
             if column != "SWC Run Length" and column != "SWC Name":
                 avg = util.compute_weighted_avg(results, column)

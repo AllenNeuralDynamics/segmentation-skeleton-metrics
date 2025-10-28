@@ -9,10 +9,10 @@ Code for reading and processing images.
 """
 
 from abc import ABC, abstractmethod
-from cloudvolume import CloudVolume
 from tifffile import imread
 
 import io
+import json
 import numpy as np
 import os
 import tensorstore as ts
@@ -274,24 +274,34 @@ def get_storage_driver(img_path):
         raise ValueError(f"Unsupported path type: {img_path}")
 
 
-def is_neuroglancer_precomputed(path):
+def is_neuroglancer_precomputed(img_path):
     """
-    Checks if the path points to a neuroglancer precomputed dataset.
+    Checks if the path points to a Neuroglancer 'precomputed' dataset
+    using TensorStore (no CloudVolume dependency).
 
     Parameters
     ----------
     path : str
-        Path to be checked.
+        Path or URL to be checked (can be local or GCS/S3).
 
     Returns
     -------
     bool
-        Indication of whether the path points to a neuroglancer precomputed
-        dataset.
+        True if the path appears to be a Neuroglancer precomputed dataset.
     """
+    info_path = os.path.join(img_path, "info")
     try:
-        vol = CloudVolume(path)
-        return all(k in vol.info for k in ["data_type", "scales", "type"])
+        spec = {
+            "driver": "file",
+            "kvstore": {
+                "driver": "file",
+                "path": info_path
+            }
+        }
+        info_store = ts.open(spec, open=True).result()
+        info_json = info_store.read().result().decode("utf-8")
+        info = json.loads(info_json)
+        return all(k in info for k in ["data_type", "scales", "type"])
     except Exception:
         return False
 

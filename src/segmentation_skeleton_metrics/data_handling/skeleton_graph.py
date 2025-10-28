@@ -398,7 +398,7 @@ class LabeledGraph(SkeletonGraph):
 
         Returns
         -------
-        dict
+        Dict[str, Tuple[int]
             Dictionary containing the bounding box coordinates:
             - "min": minimum voxel coordinates along each axis.
             - "max": maximum voxel coordinates along each axis.
@@ -435,7 +435,7 @@ class LabeledGraph(SkeletonGraph):
 
 class FragmentGraph(SkeletonGraph):
     """
-    Subclass of SkeletonGraph for skeletons derived from the segmentation.
+    Subclass of SkeletonGraph for skeletons obtained from a segmentation.
     """
 
     def __init__(

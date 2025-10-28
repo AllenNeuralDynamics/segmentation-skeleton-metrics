@@ -13,3 +13,82 @@ Average Results...
 Total Results...
   # Splits: 27
   # Merges: 0
+Average Results...
+  # Splits: 7.2780
+  # Merges: nan
+  % Split Edges: 1.1997
+  % Omit Edges: 0.9740
+  % Merged Edges: 0.0000
+  ERL: 187.0877
+  Normalized ERL: 0.4006
+  Edge Accuracy: 97.8253
+  Split Rate: 116.9354
+  Merge Rate: nan
+
+Total Results...
+  # Splits: 27.0
+  # Merges: 0.0
+
+Average Results...
+  # Splits: 7.2780
+  # Merges: nan
+  % Split Edges: 1.1997
+  % Omit Edges: 0.9740
+  % Merged Edges: 0.0000
+  ERL: 187.0877
+  Normalized ERL: 0.4006
+  Edge Accuracy: 97.8253
+  Split Rate: 116.9354
+  Merge Rate: nan
+
+Total Results...
+  # Splits: 27.0
+  # Merges: 0.0
+
+Average Results...
+  # Splits: 7.2780
+  # Merges: nan
+  % Split Edges: 1.1997
+  % Omit Edges: 0.9740
+  % Merged Edges: 0.0000
+  ERL: 187.0877
+  Normalized ERL: 0.4006
+  Edge Accuracy: 97.8253
+  Split Rate: 116.9354
+  Merge Rate: nan
+
+Total Results...
+  # Splits: 27.0
+  # Merges: 0.0
+
+Average Results...
+  # Splits: 7.2780
+  # Merges: nan
+  % Split Edges: 1.1997
+  % Omit Edges: 0.9740
+  % Merged Edges: 0.0000
+  ERL: 187.0877
+  Normalized ERL: 0.4006
+  Edge Accuracy: 97.8253
+  Split Rate: 116.9354
+  Merge Rate: nan
+
+Total Results...
+  # Splits: 27.0
+  # Merges: 0.0
+
+Average Results...
+  # Splits: 7.2780
+  # Merges: nan
+  % Split Edges: 1.1997
+  % Omit Edges: 0.9740
+  % Merged Edges: 0.0000
+  ERL: 187.0877
+  Normalized ERL: 0.4006
+  Edge Accuracy: 97.8253
+  Split Rate: 116.9354
+  Merge Rate: nan
+
+Total Results...
+  # Splits: 27.0
+  # Merges: 0.0
