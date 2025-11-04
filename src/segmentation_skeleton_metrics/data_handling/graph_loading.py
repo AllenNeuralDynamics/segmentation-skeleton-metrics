@@ -19,7 +19,7 @@ import networkx as nx
 import numpy as np
 
 from segmentation_skeleton_metrics.data_handling import swc_loading
-from segmentation_skeleton_metrics.data_handling.skeleton_graph import (
+from segmentation_skeleton_metrics.data_handling.graph_classes import (
     FragmentGraph, LabeledGraph
 )
 from segmentation_skeleton_metrics.utils import util

@@ -484,9 +484,9 @@ class MergeCountMetric(SkeletonMetric):
 
     def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
         """
-        Verifies whether a given site in a fragment graph corresponds to a merge
-        mistake relative to the ground truth graph. If so, the site is saved
-        in an internal data structure.
+        Verifies whether a given site in a fragment graph corresponds to a
+        merge mistake relative to the ground truth graph. If so, the site is
+        saved in an internal data structure.
 
         Parameters
         ----------

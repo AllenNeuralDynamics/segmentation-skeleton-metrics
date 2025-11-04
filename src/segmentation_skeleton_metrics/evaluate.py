@@ -275,8 +275,52 @@ class Evaluator:
 
     # --- Writers ---
     def save_fragments(self, gt_graphs, fragment_graphs):
-        assert fragment_graphs is not None
-        pass
+        """
+        Saves ground-truth graphs and their intersecting fragment graphs to
+        zipped SWC files.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentsGraph]
+            Graphs built from skeletons obtained from a segmentation.
+        """
+        # Initializations
+        fragments_dir = os.path.join(self.output_dir, "fragments")
+        util.mkdir(fragments_dir, delete=True)
+
+        # Main
+        for key, graph in gt_graphs.items():
+            # Create zip writer
+            zip_path = os.path.join(fragments_dir, f"{graph.name}.zip")
+            zip_writer = ZipFile(zip_path, "a")
+
+            # Save skeletons
+            graph.to_zipped_swc(zip_writer)
+            self.save_intersecting_fragments(
+                graph, fragment_graphs, zip_writer
+            )
+
+    @staticmethod
+    def save_intersecting_fragments(gt_graph, fragment_graphs, zip_writer):
+        """
+        Saves SWC files for all fragment graphs whose label intersects with
+        the given ground-truth graph.
+
+        Parameters
+        ----------
+        gt_graph : LabeledGraph
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentGraph]
+            Graphs built from skeletons obtained from a segmentation.
+        zip_writer : zipfile.ZipFile
+            Open ZIP file handle used to write fragments.
+        """
+        intersecting_labels = gt_graph.get_node_labels()
+        for key, graph in fragment_graphs.items():
+            if graph.label in intersecting_labels:
+                graph.to_zipped_swc(zip_writer)
 
     def save_merge_results(self, gt_graphs, fragment_graphs, output_dir):
         """
@@ -313,7 +357,7 @@ class Evaluator:
         Parameters
         ----------
         zip_writer : zipfile.ZipFile
-            Open ZIP file handle used to store merge site data.
+            Open ZIP file handle used to write merge site data.
         """
         merge_sites = self.metrics["# Merges"].merge_sites
         for i in range(len(merge_sites)):
