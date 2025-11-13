@@ -276,13 +276,12 @@ def get_storage_driver(img_path):
 
 def is_neuroglancer_precomputed(img_path):
     """
-    Checks if the path points to a Neuroglancer 'precomputed' dataset
-    using TensorStore (no CloudVolume dependency).
+    Checks if the path points to a Neuroglancer precomputed dataset.
 
     Parameters
     ----------
-    path : str
-        Path or URL to be checked (can be local or GCS/S3).
+    img_path : str
+        Path to be checked (can be local, GCS, or S3).
 
     Returns
     -------
