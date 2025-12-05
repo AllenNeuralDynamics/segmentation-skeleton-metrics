@@ -135,7 +135,7 @@ class TensorStoreReader(ImageReader):
             return "zarr"
         elif ".n5" in img_path:
             return "n5"
-        elif is_neuroglancer_precomputed(img_path):
+        elif is_precomputed(img_path):
             return "neuroglancer_precomputed"
         else:
             raise ValueError(f"Unsupported image format: {img_path}")
@@ -274,7 +274,7 @@ def get_storage_driver(img_path):
         raise ValueError(f"Unsupported path type: {img_path}")
 
 
-def is_neuroglancer_precomputed(img_path):
+def is_precomputed(img_path):
     """
     Checks if the path points to a Neuroglancer precomputed dataset.
 
@@ -288,19 +288,22 @@ def is_neuroglancer_precomputed(img_path):
     bool
         True if the path appears to be a Neuroglancer precomputed dataset.
     """
-    info_path = os.path.join(img_path, "info")
     try:
-        spec = {
-            "driver": "file",
-            "kvstore": {
-                "driver": "file",
-                "path": info_path
-            }
-        }
-        info_store = ts.open(spec, open=True).result()
-        info_json = info_store.read().result().decode("utf-8")
-        info = json.loads(info_json)
-        return all(k in info for k in ["data_type", "scales", "type"])
+        # Build kvstore spec
+        bucket_name, path = util.parse_cloud_path(img_path)
+        kv = {"driver": "gcs", "bucket": bucket_name, "path": path}
+
+        # Open the info file
+        store = ts.KvStore.open(kv).result()
+        raw = store.read(b"info").result()
+
+        # Only proceed if the key exists and has content
+        if raw.state != "missing" and raw.value:
+            info = json.loads(raw.value.decode("utf8"))
+            is_valid_type = info.get("type") in ("image", "segmentation")
+            if isinstance(info, dict) and is_valid_type and "scales" in info:
+                return True
+        return False
     except Exception:
         return False
 

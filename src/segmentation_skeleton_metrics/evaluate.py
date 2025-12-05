@@ -105,7 +105,7 @@ def evaluate(
 
     # Optional saves
     if save_merges:
-        evaluator.save_merge_results()
+        evaluator.save_merge_results(gt_graphs, fragment_graphs, output_dir)
 
     if save_fragments and fragment_graphs:
         evaluator.save_fragments(gt_graphs, fragment_graphs)
@@ -266,7 +266,7 @@ class Evaluator:
                 util.update_txt(path, f"  {column}: {avg:.4f}", self.verbose)
 
         # Total results
-        n_splits = results["# Splits"].sum()
+        n_splits = int(results["# Splits"].sum())
         util.update_txt(path, "\nTotal Results...", self.verbose)
         util.update_txt(path, f"  # Splits: {n_splits}", self.verbose)
         if "# Merges" in results.columns:
