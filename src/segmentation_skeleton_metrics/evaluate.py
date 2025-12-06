@@ -348,7 +348,7 @@ class Evaluator:
 
         # Save CSV file
         path = os.path.join(output_dir, "merge_sites.csv")
-        self.merge_sites.to_csv(path, index=True)
+        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
     def save_merge_sites(self, zip_writer):
         """
@@ -382,9 +382,10 @@ class Evaluator:
             Open ZIP file handle used to write SWC data.
         """
         # Save ground truth skeletons
-        for key in self.merge_sites["GroundTruth_ID"].unique():
+        keys = self.metrics["# Merges"].merge_sites["GroundTruth_ID"]
+        for key in keys.unique():
             gt_graphs[key].to_zipped_swc(zip_writer)
 
         # Save fragments
-        for key in self.fragments_with_merge:
+        for key in self.metrics["# Merges"].fragments_with_merge:
             fragment_graphs[key].to_zipped_swc(zip_writer)
