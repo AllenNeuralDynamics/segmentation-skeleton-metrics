@@ -85,7 +85,7 @@ class SkeletonMetric(ABC):
 # --- Subclasses ---
 class SplitEdgePercentMetric(SkeletonMetric):
     """
-    A skeleton metric subclass that compute the percentage of split edges.
+    A skeleton metric subclass that computes the percentage of split edges.
     """
 
     def __init__(self, verbose=True):
@@ -157,12 +157,12 @@ class SplitEdgePercentMetric(SkeletonMetric):
 
 class OmitEdgePercentMetric(SkeletonMetric):
     """
-    A skeleton metric subclass that compute the percentage of omit edges.
+    A skeleton metric subclass that computes the percentage of omit edges.
     """
 
     def __init__(self, verbose=True):
         """
-        Instantiates a OmitEdgePercentMetric object.
+        Instantiates an OmitEdgePercentMetric object.
 
         Parameters
         ----------
@@ -606,7 +606,7 @@ class ERLMetric(SkeletonMetric):
 
     def compute(self, gt_graphs):
         """
-        Comptues the expected run length (ERL) for the given graphs.
+        Comptues the expected run length (ERL) of the given graphs.
 
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
@@ -632,7 +632,7 @@ class ERLMetric(SkeletonMetric):
     @staticmethod
     def compute_graph_erl(graph):
         """
-        Computes the ERL for the given graph.
+        Computes the ERL of the given graph.
 
         Parameters
         ----------
@@ -769,7 +769,7 @@ class MergeRateMetric(SkeletonMetric):
 
 class EdgeAccuracyMetric(SkeletonMetric):
     """
-    A skeleton metric subclass that computes the edge accuracy.
+    A skeleton metric subclass that computes edge accuracy.
     """
 
     def __init__(self, verbose=True):
@@ -801,7 +801,7 @@ class EdgeAccuracyMetric(SkeletonMetric):
         Returns
         -------
         results : pandas.DataFrame
-            DataFrame where the indices are the dictionary keys and values are
+            DataFrame where the indices are dictionary keys and values are
             stored under a column called "self.name".
         """
         new_results = dict()
@@ -822,7 +822,7 @@ class EdgeAccuracyMetric(SkeletonMetric):
 
 class NormalizedERLMetric(SkeletonMetric):
     """
-    A skeleton metric subclass that computes the normalized expected run
+    A skeleton metric subclass that computes normalized expected run
     length (ERL).
     """
 
