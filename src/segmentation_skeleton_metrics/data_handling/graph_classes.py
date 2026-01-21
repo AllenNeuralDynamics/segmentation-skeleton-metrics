@@ -74,20 +74,11 @@ class SkeletonGraph(nx.Graph):
         self.run_length = 0
         self.voxels = None
 
-    def init_kdtree(self, use_voxels=True):
+    def init_kdtree(self):
         """
-        Builds a KD-Tree from the node coordinates.
-
-        Parameters
-        ----------
-        use_voxeles : bool, optional
-            Indication of whether to use voxel or physical coordinates.
-            Default is True.
+        Builds a KD-Tree from the node physical coordinates.
         """
-        if use_voxels:
-            self.kdtree = KDTree(self.voxels)
-        else:
-            self.kdtree = KDTree(self.voxels * self.anisotropy)
+        self.kdtree = KDTree(self.voxels * self.anisotropy)
 
     def init_voxels(self, voxels):
         """
@@ -301,7 +292,7 @@ class LabeledGraph(SkeletonGraph):
 
         Returns
         -------
-        Set[int]
+        node_labels : Set[int]
             Unique non-zero label values assigned to nodes in the graph.
         """
         node_labels = set(np.unique(self.node_labels))
@@ -338,8 +329,8 @@ class LabeledGraph(SkeletonGraph):
 
     def run_length_from(self, root):
         """
-        Computes the path length of the label-based connected component that
-        contains "root".
+        Computes the physical path length of the label-based connected
+        component that contains "root".
 
         Parameters
         ----------
@@ -348,8 +339,8 @@ class LabeledGraph(SkeletonGraph):
 
         Returns
         -------
-        float
-            Path length.
+        run_length : float
+            Physical path length.
         """
         # Initializations
         root_label = self.node_labels[root]

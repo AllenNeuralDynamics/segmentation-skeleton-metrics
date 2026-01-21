@@ -11,6 +11,7 @@ Code for helper routines.
 
 from botocore import UNSIGNED
 from botocore.client import Config
+from collections import deque
 from random import sample
 from google.cloud import storage
 from io import BytesIO, StringIO
@@ -122,7 +123,7 @@ def list_paths(directory, extension=None):
 
     Returns
     -------
-    List[str]
+    paths : List[str]
         Paths of files in the given directory.
     """
     paths = list()
@@ -208,7 +209,7 @@ def get_leafs(graph):
     return [node for node in graph.nodes if graph.degree[node] == 1]
 
 
-def search_branching_node(graph, kdtree, root, radius=100):
+def search_branching_node(graph, kdtree, root, radius=40):
     """
     Searches for a branching node within distance "radius" from the given
     root node.
@@ -218,22 +219,22 @@ def search_branching_node(graph, kdtree, root, radius=100):
     graph : networkx.Graph
         Graph to be searched.
     kdtree : scipy.spatial.KDTree
-        KDTree containing voxel coordinates from a ground truth tracing.
+        KDTree containing physical coordinates from a ground truth tracing.
     root : int
         Root of search.
     radius : float, optional
-        Distance to search from root. Default is 100.
+        Distance to search from root. Default is 40.
 
     Returns
     -------
-    int
+    root : int
         Root node or closest branching node within distance "radius".
     """
-    queue = list([(root, 0)])
-    visited = set({root})
+    queue = deque([(root, 0)])
+    visited = {root}
     while queue:
         # Visit node
-        i, d_i = queue.pop()
+        i, d_i = queue.popleft()
         xyz_i = graph.get_xyz(i)
         if graph.degree[i] > 2:
             dist, _ = kdtree.query(xyz_i)
@@ -303,7 +304,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
 
     Returns
     -------
-    List[str]
+    subdirs : List[str]
          List of direct subdirectories.
     """
     # Load blobs
@@ -409,7 +410,7 @@ def list_s3_paths(bucket_name, prefix, extension=""):
 
     Returns
     -------
-    List[str]
+    filenames : List[str]
         List of S3 object keys that match the prefix and extension filter.
     """
     # Create an anonymous client for public buckets

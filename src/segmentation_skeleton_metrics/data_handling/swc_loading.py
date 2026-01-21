@@ -58,22 +58,21 @@ class Reader:
         self.selected_ids = selected_ids or set()
 
     # --- Read Data ---
-    def read(self, swc_pointer):
+    def __call__(self, swc_pointer):
         """
         Loads SWC files based on the type pointer provided.
 
         Parameters
         ----------
-        swc_pointer : str or List[str]
+        swc_pointer : str
             Object that points to SWC files to be read, must be one of:
-                - file_path (str): Path to single SWC file
-                - dir_path (str): Path to local directory with SWC files
-                - zip_path (str): Path to local ZIP with SWC files
-                - zip_dir_path (str): Path to local directory of ZIPs with SWC files
-                - s3_dir_path (str): Path to S3 directory with SWC files
-                - gcs_dir_path (str): Path to GCS directory with SWC files
-                - gcs_zip_dir_path (str): Path to GCS directory with ZIPs of SWC files
-                - path_list (List[str]): List of paths to local SWC files
+                - file_path: Path to single SWC file
+                - dir_path: Path to local directory with SWC files
+                - zip_path: Path to local ZIP with SWC files
+                - zip_dir_path: Path to local directory of ZIPs with SWC files
+                - s3_dir_path: Path to S3 prefix with SWC files
+                - gcs_dir_path: Path to GCS prefix with SWC files
+                - gcs_zip_dir_path: Path to GCS prefix with ZIPs of SWC files
 
         Returns
         -------
@@ -88,10 +87,6 @@ class Reader:
                 - "filename": filename of SWC file
                 - "swc_id": name of SWC file, minus the ".swc".
         """
-        # List of local paths to SWC files
-        if isinstance(swc_pointer, list):
-            return self.read_from_paths(swc_pointer)
-
         # Directory containing...
         if os.path.isdir(swc_pointer):
             # Local ZIP archives with SWC files

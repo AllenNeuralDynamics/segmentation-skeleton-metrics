@@ -10,6 +10,7 @@ predicted neuron segmentation to a set of ground truth graphs.
 """
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -38,7 +39,7 @@ class SkeletonMetric(ABC):
         self.verbose = verbose
 
     @abstractmethod
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Abstract method to be implemented by the subclasses.
         """
@@ -103,7 +104,7 @@ class SplitEdgePercentMetric(SkeletonMetric):
         # Instance attributes
         self.name = "% Split Edges"
 
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Computes the percentage of split edges in the given graphs.
 
@@ -175,13 +176,13 @@ class OmitEdgePercentMetric(SkeletonMetric):
         # Instance attributes
         self.name = "% Omit Edges"
 
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Computes the percentage of omit edges in the given graphs.
 
         Parameters
         ----------
-        graph : Dict[str, LabeledGraph]
+        gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
 
         Returns
@@ -246,7 +247,7 @@ class MergedEdgePercentMetric(SkeletonMetric):
         # Instance attributes
         self.name = "% Merged Edges"
 
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Computes the percentage of merged edges in the given graphs.
 
@@ -330,7 +331,7 @@ class SplitCountMetric(SkeletonMetric):
         # Instance attributes
         self.name = "# Splits"
 
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Counts the number of split mistakes in each of the given graphs.
 
@@ -381,7 +382,7 @@ class MergeCountMetric(SkeletonMetric):
         self.name = "# Merges"
 
     # --- Core Routines ---
-    def compute(self, gt_graphs, fragment_graphs):
+    def __call__(self, gt_graphs, fragment_graphs):
         """
         Counts the number of split merges in each of the given ground truth
         graphs.
@@ -403,13 +404,13 @@ class MergeCountMetric(SkeletonMetric):
         pbar = self.get_pbar(len(gt_graphs))
         for gt_graph in gt_graphs.values():
             # Build ground truth kd-tree
-            gt_graph.init_kdtree(use_voxels=False)
+            gt_graph.init_kdtree()
 
             # Search intersecting fragments
             labels = gt_graph.get_node_labels()
             for fragment_graph in fragment_graphs.values():
                 if fragment_graph.label in labels:
-                    self.search_for_merges(gt_graph, fragment_graph)
+                    self.search_for_merges(gt_graph, deepcopy(fragment_graph))
 
             # Update progress bar
             if self.verbose:
@@ -421,7 +422,10 @@ class MergeCountMetric(SkeletonMetric):
         # Compile results
         results = dict()
         for name in gt_graphs:
-            num_merges = (self.merge_sites["GroundTruth_ID"] == name).sum()
+            if len(self.merge_sites) > 0:
+                num_merges = (self.merge_sites["GroundTruth_ID"] == name).sum()
+            else:
+                num_merges = 0
             results[name] = num_merges
         return self.reformat(results)
 
@@ -437,6 +441,12 @@ class MergeCountMetric(SkeletonMetric):
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
         """
+        # Remove nodes that are too far
+        xyz_arr = fragment_graph.voxels * fragment_graph.anisotropy
+        dists, _ = gt_graph.kdtree.query(xyz_arr)
+        fragment_graph.remove_nodes_from(np.where(dists > 200)[0])
+
+        # Search remaining graph
         visited = set()
         for leaf in util.get_leafs(fragment_graph):
             # Check whether to visit
@@ -448,7 +458,7 @@ class MergeCountMetric(SkeletonMetric):
             dist, _ = gt_graph.kdtree.query(xyz)
 
             # Check if distance to ground truth flags a merge mistake
-            if dist > 40:
+            if dist > 50:
                 self.find_merge_site(gt_graph, fragment_graph, leaf, visited)
 
     def find_merge_site(self, gt_graph, fragment_graph, source, visited):
@@ -458,7 +468,7 @@ class MergeCountMetric(SkeletonMetric):
 
         Parameters
         ----------
-        gt_graphs : dict[str, LabeledGraph]
+        gt_graph : LabeledGraph
             Graphs to be evaluated.
         fragment_graphs : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
@@ -492,11 +502,11 @@ class MergeCountMetric(SkeletonMetric):
         ----------
         gt_graph : LabeledGraph
             Graph to be evaluated.
-        fragment_graphs : dict[str, FragmentGraph]
+        fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
-        gt_node : int or hashable
+        gt_node : int
             Node ID in the ground truth graph corresponding to the site.
-        fragment_node : int or hashable
+        fragment_node : int
             Node ID in the fragment graph corresponding to the candidate site.
         """
         # Check if pass through site without merge mistake
@@ -534,7 +544,7 @@ class MergeCountMetric(SkeletonMetric):
             Graph to be evaluated.
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
-        gt_node : int or hashable
+        gt_node : int
             Node ID in the ground truth graph to evaluate.
 
         Returns
@@ -557,7 +567,7 @@ class MergeCountMetric(SkeletonMetric):
         """
         row_names = list()
         for i, _ in enumerate(self.merge_sites.index, 1):
-            row_names.append(f"merge-{i + 1}.swc")
+            row_names.append(f"merge-{i}.swc")
         self.merge_sites.index = row_names
 
     def remove_repeat_merge_sites(self):
@@ -604,7 +614,7 @@ class ERLMetric(SkeletonMetric):
         # Instance attributes
         self.name = "ERL"
 
-    def compute(self, gt_graphs):
+    def __call__(self, gt_graphs):
         """
         Comptues the expected run length (ERL) of the given graphs.
 
@@ -681,7 +691,7 @@ class SplitRateMetric(SkeletonMetric):
         # Instance attributes
         self.name = "Split Rate"
 
-    def compute(self, gt_graphs, results):
+    def __call__(self, gt_graphs, results):
         """
         Computes split rates for the given graphs.
 
@@ -734,7 +744,7 @@ class MergeRateMetric(SkeletonMetric):
         # Instance attributes
         self.name = "Merge Rate"
 
-    def compute(self, gt_graphs, results):
+    def __call__(self, gt_graphs, results):
         """
         Computes merge rates for the given graphs.
 
@@ -787,7 +797,7 @@ class EdgeAccuracyMetric(SkeletonMetric):
         # Instance attributes
         self.name = "Edge Accuracy"
 
-    def compute(self, gt_graphs, results):
+    def __call__(self, gt_graphs, results):
         """
         Computes the edge accuracy of the given graphs.
 
@@ -841,7 +851,7 @@ class NormalizedERLMetric(SkeletonMetric):
         # Instance attributes
         self.name = "Normalized ERL"
 
-    def compute(self, gt_graphs, results):
+    def __call__(self, gt_graphs, results):
         """
         Computes the normalized ERL of the given graphs.
 
