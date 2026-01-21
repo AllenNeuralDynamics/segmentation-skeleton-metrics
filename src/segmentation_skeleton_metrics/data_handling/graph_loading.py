@@ -238,7 +238,7 @@ class GraphLoader:
             filenames) and values are the corresponding SkeletonGraphs.
         """
         # Initializations
-        swc_dicts = self.swc_reader.read(swc_pointer)
+        swc_dicts = self.swc_reader(swc_pointer)
         if self.verbose:
             pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
 
@@ -660,5 +660,5 @@ class LabelHandler:
         """
         labels = graph.get_node_labels()
         if self.use_mapping():
-            labels = set().union(*(self.inverse_mapping[l] for l in labels))
+            labels = set().union(*(self.inverse_mapping[u] for u in labels))
         return labels

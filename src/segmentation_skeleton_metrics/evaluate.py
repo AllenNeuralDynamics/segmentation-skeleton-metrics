@@ -201,16 +201,16 @@ class Evaluator:
         results = self.init_results(gt_graphs)
         for name, metric in self.metrics.items():
             if name == "# Merges" and fragment_graphs:
-                results[name] = metric.compute(gt_graphs, fragment_graphs)
+                results[name] = metric(gt_graphs, fragment_graphs)
             elif name != "# Merges":
-                results.update(metric.compute(gt_graphs))
+                results.update(metric(gt_graphs))
 
         # Compute derived metrics
         for name, metric in self.derived_metrics.items():
             if name == "Merge Rate" and fragment_graphs:
-                results[name] = metric.compute(gt_graphs, results)
+                results[name] = metric(gt_graphs, results)
             elif name != "Merge Rate":
-                results[name] = metric.compute(gt_graphs, results)
+                results[name] = metric(gt_graphs, results)
 
         # Save report
         path = f"{self.output_dir}/{self.results_filename}.csv"
