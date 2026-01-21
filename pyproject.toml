@@ -20,7 +20,7 @@ dependencies = [
     "networkx",
     "numpy",
     "pandas",
-    "s3fs==2025.7.0",
+    "s3fs==2025.6.0",
     "scikit-image",
     "tensorstore",
     "tifffile",
