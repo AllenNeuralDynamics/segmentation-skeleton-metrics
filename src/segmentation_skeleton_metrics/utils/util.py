@@ -483,7 +483,7 @@ def compute_weighted_avg(df, column_name):
         return (values * weights).sum() / weights.sum()
 
 
-def compute_segmented_run_length(graph, results):
+def compute_segmented_run_length(graph, results, name):
     """
     Computes the run length of a graph that was segmented.
 
@@ -499,8 +499,8 @@ def compute_segmented_run_length(graph, results):
     float
         Run length of a graph that was segmented.
     """
-    omit_run_length = graph.run_length * results["% Omit"] / 100
-    split_run_length = graph.run_length * results["% Split"] / 100
+    omit_run_length = graph.run_length * results["% Omit Edges"][name] / 100
+    split_run_length = graph.run_length * results["% Split Edges"][name] / 100
     return graph.run_length - omit_run_length - split_run_length
 
 

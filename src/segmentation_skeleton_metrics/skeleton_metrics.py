@@ -713,15 +713,14 @@ class SplitRateMetric(SkeletonMetric):
         for name, graph in gt_graphs.items():
             # Compute result
             if results["# Splits"][name] > 0:
-                rl = util.compute_segmented_run_length(graph, results)
-                rate = rl / results["# Splits"][name]
+                rl = util.compute_segmented_run_length(graph, results, name)
+                new_results[name] = round(rl / results["# Splits"][name], 2)
             else:
-                rate = np.nan
-            new_results[name] = round(rate, 2)
+                new_results[name] = np.nan
 
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
+        # Update progress bar
+        if self.verbose:
+            pbar.update(1)
         return self.reformat(new_results)
 
 
@@ -763,15 +762,14 @@ class MergeRateMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         new_results = dict()
-        pbar = self.get_pbar(len(results.index))
+        pbar = self.get_pbar(len(gt_graphs))
         for name, graph in gt_graphs.items():
             # Compute result
             if results["# Merges"][name] > 0:
-                rl = util.compute_segmented_run_length(graph, results)
-                rate = rl / results["# Merges"][name]
+                rl = util.compute_segmented_run_length(graph, results, name)
+                new_results[name] = round(rl / results["# Merges"][name], 2)
             else:
-                rate = np.nan
-            new_results[name] = round(rate, 2)
+                new_results[name] = np.nan
 
             # Update progress bar
             if self.verbose:
