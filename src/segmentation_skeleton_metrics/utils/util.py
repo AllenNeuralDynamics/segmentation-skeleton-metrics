@@ -483,6 +483,27 @@ def compute_weighted_avg(df, column_name):
         return (values * weights).sum() / weights.sum()
 
 
+def compute_segmented_run_length(graph, results):
+    """
+    Computes the run length of a graph that was segmented.
+
+    Parameters
+    ----------
+    graph : LabeledGraph
+        Graph to be evaluated.
+    results : pandas.DataFrame
+        Data frame containing skeleton metrics
+
+    Returns
+    -------
+    float
+        Run length of a graph that was segmented.
+    """
+    omit_run_length = graph.run_length * results["% Omit"] / 100
+    split_run_length = graph.run_length * results["% Split"] / 100
+    return graph.run_length - omit_run_length - split_run_length
+
+
 def get_segment_id(filename):
     """
     Gets the segment ID correspionding to the given filename, assuming that

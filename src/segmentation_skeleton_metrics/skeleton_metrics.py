@@ -713,7 +713,8 @@ class SplitRateMetric(SkeletonMetric):
         for name, graph in gt_graphs.items():
             # Compute result
             if results["# Splits"][name] > 0:
-                rate = graph.labeled_run_length / results["# Splits"][name]
+                rl = util.compute_segmented_run_length(graph, results)
+                rate = rl / results["# Splits"][name]
             else:
                 rate = np.nan
             new_results[name] = round(rate, 2)
@@ -766,7 +767,8 @@ class MergeRateMetric(SkeletonMetric):
         for name, graph in gt_graphs.items():
             # Compute result
             if results["# Merges"][name] > 0:
-                rate = graph.labeled_run_length / results["# Merges"][name]
+                rl = util.compute_segmented_run_length(graph, results)
+                rate = rl / results["# Merges"][name]
             else:
                 rate = np.nan
             new_results[name] = round(rate, 2)
