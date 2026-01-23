@@ -11,7 +11,6 @@ predicted neuron segmentation to a set of ground truth graphs.
 
 from abc import ABC, abstractmethod
 from collections import deque
-from copy import deepcopy
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -442,12 +441,6 @@ class MergeCountMetric(SkeletonMetric):
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
         """
-        # Remove nodes that are too far
-        xyz_arr = fragment_graph.voxels * fragment_graph.anisotropy
-        dists, _ = gt_graph.kdtree.query(xyz_arr)
-        #fragment_graph.remove_nodes_from(np.where(dists > 200)[0])
-
-        # Search remaining graph
         visited = set()
         for leaf in util.get_leafs(fragment_graph):
             # Check whether to visit
@@ -480,10 +473,9 @@ class MergeCountMetric(SkeletonMetric):
             Node IDs from "fragment_graphs" that have already been visited,
             used to avoid redundant exploration.
         """
-        # Traverse until close to ground truth
         queue = deque([source])
         visited.add(source)
-        while len(queue) > 0 :
+        while len(queue) > 0:
             # Visit node
             i = queue.pop()
             xyz_i = fragment_graph.get_xyz(i)
@@ -497,19 +489,6 @@ class MergeCountMetric(SkeletonMetric):
                 if j not in visited:
                     queue.append(j)
                     visited.add(j)
-        """
-        for _, node in nx.dfs_edges(fragment_graph, source=source):
-            # Check whether to visit
-            if node in visited or visited.add(node):
-                continue
-
-            # Check if close to ground truth
-            xyz = fragment_graph.get_xyz(node)
-            dist, gt_node = gt_graph.kdtree.query(xyz)
-            if dist < 6:
-                self.verify_site(gt_graph, fragment_graph, gt_node, node)
-                break
-        """
 
     def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
         """
