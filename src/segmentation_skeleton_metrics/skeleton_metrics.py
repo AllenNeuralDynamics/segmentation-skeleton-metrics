@@ -10,7 +10,7 @@ predicted neuron segmentation to a set of ground truth graphs.
 """
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
+from collections import deque
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -410,7 +410,7 @@ class MergeCountMetric(SkeletonMetric):
             labels = gt_graph.get_node_labels()
             for fragment_graph in fragment_graphs.values():
                 if fragment_graph.label in labels:
-                    self.search_for_merges(gt_graph, deepcopy(fragment_graph))
+                    self.search_for_merges(gt_graph, fragment_graph)
 
             # Update progress bar
             if self.verbose:
@@ -441,12 +441,6 @@ class MergeCountMetric(SkeletonMetric):
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
         """
-        # Remove nodes that are too far
-        xyz_arr = fragment_graph.voxels * fragment_graph.anisotropy
-        dists, _ = gt_graph.kdtree.query(xyz_arr)
-        fragment_graph.remove_nodes_from(np.where(dists > 200)[0])
-
-        # Search remaining graph
         visited = set()
         for leaf in util.get_leafs(fragment_graph):
             # Check whether to visit
@@ -479,18 +473,22 @@ class MergeCountMetric(SkeletonMetric):
             Node IDs from "fragment_graphs" that have already been visited,
             used to avoid redundant exploration.
         """
-        # Traverse until close to ground truth
-        for _, node in nx.dfs_edges(fragment_graph, source=source):
-            # Check whether to visit
-            if node in visited or visited.add(node):
-                continue
-
-            # Check if close to ground truth
-            xyz = fragment_graph.get_xyz(node)
-            dist, gt_node = gt_graph.kdtree.query(xyz)
-            if dist < 6:
-                self.verify_site(gt_graph, fragment_graph, gt_node, node)
+        queue = deque([source])
+        visited.add(source)
+        while len(queue) > 0:
+            # Visit node
+            i = queue.pop()
+            xyz_i = fragment_graph.get_xyz(i)
+            dist_i, gt_node = gt_graph.kdtree.query(xyz_i)
+            if dist_i < 6:
+                self.verify_site(gt_graph, fragment_graph, gt_node, i)
                 break
+
+            # Update queue
+            for j in fragment_graph.neighbors(i):
+                if j not in visited:
+                    queue.append(j)
+                    visited.add(j)
 
     def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
         """
