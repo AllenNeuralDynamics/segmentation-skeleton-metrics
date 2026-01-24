@@ -199,6 +199,12 @@ class SkeletonGraph(nx.Graph):
         """
         pass
 
+    def run_length_from(self):
+        """
+        Placeholder method to be implemented by subclasses.
+        """
+        pass
+
     # --- Writers ---
     def to_zipped_swc(self, zip_writer):
         """
@@ -487,3 +493,33 @@ class FragmentGraph(SkeletonGraph):
                 elif self.degree(j) > 2:
                     self.remove_nodes_from(branch)
                     break
+
+    def run_length_from(self, root):
+        """
+        Computes the physical path length of the connected component that
+        contains "root".
+
+        Parameters
+        ----------
+        root : int
+            Node contained in connected component to compute run length of.
+
+        Returns
+        -------
+        run_length : float
+            Physical path length.
+        """
+        run_length = 0
+        queue = [(root, root)]
+        visited = set([root])
+        while queue:
+            # Visit node
+            i, j = queue.pop()
+            run_length += self.physical_dist(i, j)
+
+            # Update queue
+            for k in self.neighbors(j):
+                if k not in visited:
+                    queue.append((j, k))
+                    visited.add(k)
+        return run_length

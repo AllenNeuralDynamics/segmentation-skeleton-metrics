@@ -10,6 +10,7 @@ predicted neuron segmentation to a set of ground truth graphs.
 """
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from collections import deque
 from scipy.spatial import KDTree
 from tqdm import tqdm
@@ -363,6 +364,7 @@ class MergeCountMetric(SkeletonMetric):
     """
     A skeleton metric subclass that counts the number merges.
     """
+    merge_dist_threshold = 50
 
     def __init__(self, verbose=True):
         """
@@ -452,7 +454,7 @@ class MergeCountMetric(SkeletonMetric):
             dist, _ = gt_graph.kdtree.query(xyz)
 
             # Check if distance to ground truth flags a merge mistake
-            if dist > 50:
+            if dist > MergeCountMetric.merge_dist_threshold:
                 self.find_merge_site(gt_graph, fragment_graph, leaf, visited)
 
     def find_merge_site(self, gt_graph, fragment_graph, source, visited):
@@ -523,10 +525,11 @@ class MergeCountMetric(SkeletonMetric):
         self.fragments_with_merge.add(fragment_graph.name)
         self.merge_sites.append(
             {
-                "Segment_ID": fragment_graph.segment_id,
+                "Segment_ID": fragment_graph.name,
                 "GroundTruth_ID": gt_graph.name,
                 "Voxel": tuple(map(int, voxel)),
                 "World": tuple([float(round(t, 2)) for t in xyz]),
+                "Added Cable Length (μm)": 0.0
             }
         )
 
@@ -877,3 +880,100 @@ class NormalizedERLMetric(SkeletonMetric):
             if self.verbose:
                 pbar.update(1)
         return self.reformat(new_results)
+
+
+class AddedCableLengthMetric(SkeletonMetric):
+    """
+    A skeleton metric subclass that computes added cable length.
+    """
+
+    def __init__(self, verbose=True):
+        """
+        Instantiates an AddedCableLengthMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
+        # Call parent class
+        super().__init__(verbose=verbose)
+
+        # Instance attributes
+        self.name = "Added Cable Length (μm)"
+
+    def __call__(self, gt_graphs, fragment_graphs, merge_sites):
+        """
+        Computes the normalized ERL of the given graphs.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+        fragment_graphs : Dict[str, FragmentGraph]
+            Graphs corresponding to the predicted segmentation.
+        merge_sites : pandas.DataFrame
+            Data frame containing detected merge sites.
+
+        Returns
+        -------
+        results : pandas.DataFrame
+            DataFrame where the indices are the dictionary keys and values are
+            stored under a column called "self.name".
+        """
+        pbar = self.get_pbar(len(merge_sites.index))
+        pair_to_length = dict()
+        for i in merge_sites.index:
+            # Extract site info
+            segment_id = merge_sites["Segment_ID"][i]
+            gt_id = merge_sites["GroundTruth_ID"][i]
+            pair_id = (segment_id, gt_id)
+
+            # Check wheter to visit
+            if pair_id in pair_to_length:
+                merge_sites.loc[i, self.name] = pair_to_length[pair_id]
+            else:
+                # Get graphs
+                gt_graph = gt_graphs[gt_id]
+                fragment_graph = deepcopy(fragment_graphs[segment_id])
+
+                # Compute metric
+                pair_to_length[pair_id] = self.compute_added_length(
+                    gt_graph, fragment_graph
+                )
+                merge_sites.loc[i, self.name] = pair_to_length[pair_id]
+
+            # Update progress bar
+            if self.verbose:
+                pbar.update(1)
+
+    def compute_added_length(self, gt_graph, fragment_graph):
+        """
+        Computes the total cable length of fragment components that are not
+        sufficiently close to the ground-truth graph.
+
+        Parameters
+        ----------
+        gt_graph : LabeledGraph
+            Graph containing merge mistake.
+        fragment_graph : FragmentGraph
+            Fragment that is merged to the given ground truth graph.
+
+        Returns
+        -------
+        cable_length : float
+            Total cable length of fragment components that remain after pruning
+            nodes near the ground-truth graph.
+        """
+        # Remove nodes close to ground truth
+        xyz_arr = fragment_graph.voxels * fragment_graph.anisotropy
+        dists, _ = gt_graph.kdtree.query(xyz_arr)
+        max_dist = MergeCountMetric.merge_dist_threshold
+        fragment_graph.remove_nodes_from(np.where(dists < max_dist)[0])
+
+        # Compute cable length
+        cable_length = 0
+        for nodes in nx.connected_components(fragment_graph):
+            node = util.sample_once(nodes)
+            cable_length += fragment_graph.run_length_from(node)
+        return round(float(cable_length), 2)

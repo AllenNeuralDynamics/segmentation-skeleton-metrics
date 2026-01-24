@@ -16,6 +16,7 @@ import os
 import pandas as pd
 
 from segmentation_skeleton_metrics.skeleton_metrics import (
+    AddedCableLengthMetric,
     MergeCountMetric,
     MergeRateMetric,
     MergedEdgePercentMetric,
@@ -101,7 +102,7 @@ def evaluate(
 
     # Run evaluation
     evaluator = Evaluator(output_dir, results_filename, verbose)
-    evaluator.run(gt_graphs, fragment_graphs)
+    evaluator(gt_graphs, fragment_graphs)
 
     # Optional saves
     if save_merges:
@@ -179,7 +180,7 @@ class Evaluator:
         }
 
     # --- Core Routines ---
-    def run(self, gt_graphs, fragment_graphs=None):
+    def __call__(self, gt_graphs, fragment_graphs=None):
         """
         Computes evaluation metrics for neuron reconstructions and saves a CSV
         report.
@@ -211,6 +212,17 @@ class Evaluator:
                 results[name] = metric(gt_graphs, results)
             elif name != "Merge Rate":
                 results[name] = metric(gt_graphs, results)
+
+        # Compute special metrics
+        metric = AddedCableLengthMetric(verbose=self.verbose)
+        metric(
+            gt_graphs, fragment_graphs, self.metrics["# Merges"].merge_sites
+        )
+
+        # Save merge sites
+        filename = f"{self.results_filename}-merge_sites.csv"
+        path = os.path.join(self.output_dir, filename)
+        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
         # Save report
         path = f"{self.output_dir}/{self.results_filename}.csv"
@@ -337,7 +349,8 @@ class Evaluator:
             Directory that results are written to.
         """
         # Initialize a writer
-        zip_path = os.path.join(output_dir, "merged_fragments.zip")
+        filename = f"{self.results_filename}-merged_fragments.zip"
+        zip_path = os.path.join(output_dir, filename)
         util.rm_file(zip_path)
         zip_writer = ZipFile(zip_path, "a")
 
@@ -345,10 +358,6 @@ class Evaluator:
         self.save_merge_sites(zip_writer)
         self.save_skeletons_with_merge(gt_graphs, fragment_graphs, zip_writer)
         zip_writer.close()
-
-        # Save CSV file
-        path = os.path.join(output_dir, "merge_sites.csv")
-        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
     def save_merge_sites(self, zip_writer):
         """

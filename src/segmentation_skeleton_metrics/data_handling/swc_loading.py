@@ -323,6 +323,10 @@ class Reader:
             # Assign threads
             threads = list()
             for path in swc_paths:
+
+                if "003" not in path:  # TEMP
+                    continue  # TEMP
+
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
