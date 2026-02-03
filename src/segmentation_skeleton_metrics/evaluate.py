@@ -35,12 +35,12 @@ from segmentation_skeleton_metrics.utils import util
 
 
 def evaluate(
-    gt_pointer,
+    gt_path,
     segmentation,
     output_dir,
     anisotropy=(1.0, 1.0, 1.0),
     connections_path=None,
-    fragments_pointer=None,
+    fragments_path=None,
     results_filename="results",
     save_merges=False,
     save_fragments=False,
@@ -54,10 +54,9 @@ def evaluate(
 
     Parameters
     ----------
-    gt_pointer : str
-        Pointer to ground truth SWC files, see "swc_util.Reader" for
-        documentation. These SWC files are assumed to be stored in voxel
-        coordinates.
+    gt_path : str
+        Path to ground truth SWC files, see swc_util.Reader for documentation
+        These SWC files are assumed to be stored in voxel coordinates.
     segmentation : ImageReader
         Predicted segmentation.
     anisotropy : Tuple[float], optional
@@ -66,11 +65,11 @@ def evaluate(
     connections_path : str, optional
         Path to a txt file containing pairs of segment IDs that represents
         fragments that were merged. Default is None.
-    fragments_pointer : str, optional
-        Pointer to SWC files corresponding to "segmentation", see
-        "swc_util.Reader" for documentation. Notes: (1) "anisotropy" is
-        applied to these SWC files and (2) these SWC files are required
-        for counting merges. Default is None.
+    fragments_path : str, optional
+        Path to SWC files corresponding to "segmentation", see swc_util.Reader
+        for documentation. Notes: (1) "anisotropy" is applied to these SWC
+        files and (2) these SWC files are required for counting merges.
+        Default is None.
     results_filename : str, optional
         Name of file that skeleton metric results are written to. Default is
         "results".
@@ -97,10 +96,11 @@ def evaluate(
         use_anisotropy=use_anisotropy,
         verbose=verbose
     )
-    gt_graphs = dataloader.load_groundtruth(gt_pointer, segmentation)
-    fragment_graphs = dataloader.load_fragments(fragments_pointer, gt_graphs)
+    gt_graphs = dataloader.load_groundtruth(gt_path, segmentation)
+    fragment_graphs = dataloader.load_fragments(fragments_path, gt_graphs)
 
     # Run evaluation
+    util.mkdir(output_dir)
     evaluator = Evaluator(output_dir, results_filename, verbose)
     evaluator(gt_graphs, fragment_graphs)
 

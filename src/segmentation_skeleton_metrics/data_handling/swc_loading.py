@@ -201,8 +201,8 @@ class Reader:
         with ProcessPoolExecutor() as executor:
             # Assign threads
             processes = list()
-            for f in zip_names:
-                zip_path = os.path.join(zip_dir, f)
+            for name in zip_names:
+                zip_path = os.path.join(zip_dir, name)
                 processes.append(executor.submit(self.read_from_zip, zip_path))
 
             # Store results
@@ -323,10 +323,6 @@ class Reader:
             # Assign threads
             threads = list()
             for path in swc_paths:
-
-                if "003" not in path:  # TEMP
-                    continue  # TEMP
-
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
