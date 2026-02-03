@@ -38,8 +38,8 @@ def mkdir(path, delete=False):
     """
     if delete:
         rmdir(path)
-    if not os.path.exists(path):
-        os.mkdir(path)
+
+    os.makedirs(path, exist_ok=True)
 
 
 def rmdir(path):
@@ -268,7 +268,7 @@ def is_gcs_path(path):
     return path.startswith("gs://")
 
 
-def list_gcs_filenames(bucket_name, prefix, extension):
+def list_gcs_filenames(bucket_name, prefix, extension=""):
     """
     Lists all files in a GCS bucket with the given extension.
 
@@ -278,8 +278,8 @@ def list_gcs_filenames(bucket_name, prefix, extension):
         Name of bucket to be searched.
     prefix : str
         Path to location within bucket to be searched.
-    extension : str
-        File extension of filenames to be listed.
+    extension : str, optional
+        File extension of filenames to be listed. Default is an empty string.
 
     Returns
     -------

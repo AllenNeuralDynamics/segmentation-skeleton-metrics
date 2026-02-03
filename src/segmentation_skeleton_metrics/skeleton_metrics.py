@@ -570,6 +570,7 @@ class MergeCountMetric(SkeletonMetric):
         for i, _ in enumerate(self.merge_sites.index, 1):
             row_names.append(f"merge-{i}.swc")
         self.merge_sites.index = row_names
+        self.merge_sites.index.name = "Merge_ID"
 
     def remove_repeat_merge_sites(self):
         """
