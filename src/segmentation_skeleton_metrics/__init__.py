@@ -2,4 +2,4 @@
 Package to evaluate a predicted segmentation.
 """
 
-__version__ = "5.6.16"
+__version__ = "5.6.17"
