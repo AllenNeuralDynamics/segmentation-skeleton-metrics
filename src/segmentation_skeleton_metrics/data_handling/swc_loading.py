@@ -452,7 +452,7 @@ class Reader:
         # Parse SWC files
         swc_dicts = deque()
         for path in swc_paths:
-            content = util.read_txt_from_s3(bucket_name, path).splitlines()
+            content = util.read_txt(bucket_name, path).splitlines()
             filename = os.path.basename(path)
             result = self.parse(content, filename)
             if result:

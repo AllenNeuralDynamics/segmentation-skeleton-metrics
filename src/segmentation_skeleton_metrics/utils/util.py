@@ -165,8 +165,13 @@ def read_txt(path):
     List[str]
         Lines from the txt file.
     """
-    with open(path, "r") as f:
-        return f.read().splitlines()
+    if is_s3_path(path):
+        return read_txt_from_s3(path)
+    elif is_gcs_path(path):
+        return read_txt_from_gcs(path)
+    else:
+        with open(path, "r") as f:
+            return f.read().splitlines()
 
 
 def update_txt(path, text, verbose=True):
@@ -427,7 +432,7 @@ def list_s3_paths(bucket_name, prefix, extension=""):
     return filenames
 
 
-def read_txt_from_s3(bucket_name, path):
+def read_txt_from_s3(path):
     """
     Reads a txt file stored in an S3 bucket.
 
@@ -443,6 +448,7 @@ def read_txt_from_s3(bucket_name, path):
     str
         Contents of txt file.
     """
+    bucket_name, path = parse_cloud_path(path)
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     obj = s3.get_object(Bucket=bucket_name, Key=path)
     return obj['Body'].read().decode('utf-8')
@@ -558,7 +564,7 @@ def load_valid_labels(path):
         Segment IDs that can be assigned to nodes.
     """
     valid_labels = set()
-    for label_str in read_txt(path):
+    for label_str in read_txt(path).splitlines():
         valid_labels.add(int(label_str.split(".")[0]))
     return valid_labels
 
