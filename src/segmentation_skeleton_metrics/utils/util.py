@@ -398,7 +398,7 @@ def is_s3_path(path):
     return path.startswith("s3://")
 
 
-def list_s3_paths(bucket_name, prefix, extension=""):
+def list_s3_filenames(bucket_name, prefix, extension=""):
     """
     Lists all object keys in a public S3 bucket under a given prefix,
     optionally filters by file extension.

@@ -18,6 +18,8 @@ Note: Each uncommented line in an SWC file corresponds to a node and contains
       these attributes in the same order.
 """
 
+from botocore import UNSIGNED
+from botocore.client import Config
 from collections import deque
 from concurrent.futures import (
     as_completed,
@@ -29,6 +31,7 @@ from io import BytesIO
 from tqdm import tqdm
 from zipfile import ZipFile
 
+import boto3
 import numpy as np
 import os
 
@@ -436,6 +439,33 @@ class Reader:
         Parameters
         ----------
         s3_path : str
+            Path to a directory in an S3 bucket containing SWC files or ZIPs
+            of SWC files to be read.
+
+        Returns
+        -------
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        # List filenames
+        bucket_name, prefix = util.parse_cloud_path(s3_path)
+        swc_paths = util.list_s3_filenames(bucket_name, prefix, ".swc")
+        zip_paths = util.list_s3_filenames(bucket_name, prefix, ".zip")
+
+        # Call reader
+        if len(swc_paths) > 0:
+            return self.read_from_s3_swcs(bucket_name, swc_paths)
+        if len(zip_paths) > 0:
+            return self.read_from_s3_zips(bucket_name, zip_paths)
+
+    def read_from_s3_swcs(self, bucket_name, swc_paths):
+        """
+        Reads and parses SWC files from an S3 directory.
+
+        Parameters
+        ----------
+        s3_path : str
             Path to a directory in an S3 bucket containing SWC files to be
             read.
 
@@ -457,6 +487,86 @@ class Reader:
             result = self.parse(content, filename)
             if result:
                 swc_dicts.append(result)
+        return swc_dicts
+
+    def read_from_s3_zips(self, bucket_name, zip_paths):
+        """
+        Reads SWC files stored in a list of ZIP archives stored in an S3
+        bucket.
+
+        Parameters
+        ----------
+        bucket_name : str
+            Name of bucket containing SWC files.
+        zip_paths : str
+            Path to ZIP archive containing SWC files to be read.
+
+        Returns
+        -------
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        with ProcessPoolExecutor() as executor:
+            # Submit processes
+            processes = list()
+            for zip_path in zip_paths:
+                processes.append(
+                    executor.submit(
+                        self.read_from_s3_zip, bucket_name, zip_path
+                    )
+                )
+
+            # Store results
+            pbar = tqdm(total=len(processes), desc="Read SWCs")
+            swc_dicts = deque()
+            for process in as_completed(processes):
+                result = process.result()
+                if result:
+                    swc_dicts.extend(result)
+        return swc_dicts
+
+    def read_from_s3_zip(self, bucket_name, path):
+        """
+        Reads SWC files stored in a ZIP archive downloaded from an S3
+        bucket.
+
+        Parameters
+        ----------
+        bucket_name : str
+            Name of bucket containing SWC files.
+        path : str
+            Path to ZIP archive containing SWC files to be read.
+
+        Returns
+        -------
+        swc_dicts : Dequeue[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        # Initialize cloud reader
+        s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+        zip_obj = s3.get_object(Bucket=bucket_name, Key=path)
+        zip_content = zip_obj["Body"].read()
+
+        # Parse ZIP
+        swc_dicts = deque()
+        with ZipFile(BytesIO(zip_content), "r") as zip_file:
+            with ThreadPoolExecutor() as executor:
+                # Assign threads for reading files
+                threads = [
+                    executor.submit(
+                        self.read_from_zipped_file, zip_file, filename
+                    )
+                    for filename in zip_file.namelist()
+                    if self.confirm_read(filename)
+                ]
+
+                # Collect results
+                for thread in as_completed(threads):
+                    result = thread.result()
+                    if result:
+                        swc_dicts.append(result)
         return swc_dicts
 
     def confirm_read(self, filename):

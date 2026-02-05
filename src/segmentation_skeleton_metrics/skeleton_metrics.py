@@ -922,7 +922,12 @@ class AddedCableLengthMetric(SkeletonMetric):
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
-        pbar = self.get_pbar(len(merge_sites.index))
+        # Check if merge sites is non-empty
+        if len(merge_sites) == 0:
+            return _
+
+        # Compute metric
+        pbar = self.get_pbar(len(merge_sites))
         pair_to_length = dict()
         for i in merge_sites.index:
             # Extract site info
