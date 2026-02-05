@@ -588,7 +588,6 @@ class LabelHandler:
         labels_graph.add_nodes_from(self.valid_labels)
 
         # Main
-        print(util.read_txt(connections_path))
         for line in util.read_txt(connections_path):
             ids = line.split(",")
             id_1 = util.get_segment_id(ids[0])
