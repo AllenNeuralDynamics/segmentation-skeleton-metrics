@@ -170,7 +170,7 @@ def read_txt(path):
         return read_txt_from_gcs(path)
     else:
         with open(path, "r") as f:
-            return f.read().splitlines()
+            return f.read()
 
 
 def read_zip(zip_file, path):
