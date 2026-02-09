@@ -133,22 +133,21 @@ def list_paths(directory, extension=None):
 
 
 # --- IO Utils ---
-def read_zip(zip_file, path):
+def read_json(path):
     """
-    Reads a txt file contained in the given ZIP archive.
+    Reads JSON file located at the given path.
 
     Parameters
     ----------
-    zip_file : ZipFile
-        ZIP archive containing TXT file.
+    path : str
+        Path to JSON file to be read.
 
     Returns
     -------
-    str
-        Contents of a TXT file.
+    dict
+        Contents of JSON file.
     """
-    with zip_file.open(path) as f:
-        return f.read().decode("utf-8")
+    return pd.read_json(path, storage_options={"anon": True}, typ="series")
 
 
 def read_txt(path):
@@ -172,6 +171,24 @@ def read_txt(path):
     else:
         with open(path, "r") as f:
             return f.read().splitlines()
+
+
+def read_zip(zip_file, path):
+    """
+    Reads txt file contained in the given ZIP archive.
+
+    Parameters
+    ----------
+    zip_file : ZipFile
+        ZIP archive containing TXT file.
+
+    Returns
+    -------
+    str
+        Contents of a TXT file.
+    """
+    with zip_file.open(path) as f:
+        return f.read().decode("utf-8")
 
 
 def update_txt(path, text, verbose=True):
