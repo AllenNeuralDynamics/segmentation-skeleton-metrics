@@ -525,7 +525,7 @@ class MergeCountMetric(SkeletonMetric):
         self.fragments_with_merge.add(fragment_graph.name)
         self.merge_sites.append(
             {
-                "Segment_ID": fragment_graph.name,
+                "Segment_ID": fragment_graph.segment_id,
                 "GroundTruth_ID": gt_graph.name,
                 "Voxel": tuple(map(int, voxel)),
                 "World": tuple([float(round(t, 2)) for t in xyz]),
@@ -924,7 +924,7 @@ class AddedCableLengthMetric(SkeletonMetric):
         """
         # Check if merge sites is non-empty
         if len(merge_sites) == 0:
-            return _
+            return None
 
         # Compute metric
         pbar = self.get_pbar(len(merge_sites))

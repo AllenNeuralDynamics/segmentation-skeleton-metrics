@@ -329,6 +329,7 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
+                break  # TEMP
 
             # Store results
             swc_dicts = deque()
@@ -475,11 +476,6 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # List filenames
-        bucket_name, prefix = util.parse_cloud_path(s3_path)
-        swc_paths = util.list_s3_paths(bucket_name, prefix, extension=".swc")
-
-        # Parse SWC files
         swc_dicts = deque()
         for path in swc_paths:
             content = util.read_txt(bucket_name, path).splitlines()
@@ -518,7 +514,6 @@ class Reader:
                 )
 
             # Store results
-            pbar = tqdm(total=len(processes), desc="Read SWCs")
             swc_dicts = deque()
             for process in as_completed(processes):
                 result = process.result()
