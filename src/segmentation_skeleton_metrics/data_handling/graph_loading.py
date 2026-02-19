@@ -89,7 +89,7 @@ class DataLoader:
             use_anisotropy=False,
             verbose=self.verbose
         )
-        return graph_loader.run(swc_pointer)
+        return graph_loader(swc_pointer)
 
     def load_fragments(self, swc_pointer, gt_graphs):
         """
@@ -124,7 +124,7 @@ class DataLoader:
             use_anisotropy=self.use_anisotropy,
             verbose=self.verbose
         )
-        return graph_loader.run(swc_pointer)
+        return graph_loader(swc_pointer)
 
     # --- Helpers ---
     def get_all_node_labels(self, graphs):
@@ -198,7 +198,7 @@ class GraphLoader:
             anisotropy, selected_ids=selected_ids
         )
 
-    def run(self, swc_pointer):
+    def __call__(self, swc_pointer):
         """
         Builds a graphs by reading SWC files to extract content to load into a
         SkeletonGraph object. Nodes are labeled if a label_mask is provided.
