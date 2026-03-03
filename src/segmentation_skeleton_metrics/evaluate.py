@@ -219,11 +219,6 @@ class Evaluator:
             gt_graphs, fragment_graphs, self.metrics["# Merges"].merge_sites
         )
 
-        # Save merge sites
-        filename = f"{self.results_filename}-merge_sites.csv"
-        path = os.path.join(self.output_dir, filename)
-        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
-
         # Save report
         path = f"{self.output_dir}/{self.results_filename}.csv"
         results.to_csv(path, index=True)
@@ -358,6 +353,11 @@ class Evaluator:
         self.save_merge_sites(zip_writer)
         self.save_skeletons_with_merge(gt_graphs, fragment_graphs, zip_writer)
         zip_writer.close()
+
+        # Save CSV report
+        filename = f"{self.results_filename}-merge_sites.csv"
+        path = os.path.join(self.output_dir, filename)
+        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
     def save_merge_sites(self, zip_writer):
         """
