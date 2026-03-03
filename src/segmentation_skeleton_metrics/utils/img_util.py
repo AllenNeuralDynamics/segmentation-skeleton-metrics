@@ -21,14 +21,14 @@ import zipfile
 from segmentation_skeleton_metrics.utils import util
 
 
-class ImageReader(ABC):
+class Image(ABC):
     """
     Abstract base class for creating image reader subclasses.
     """
 
     def __init__(self, img_path):
         """
-        Instantiates an ImageReader object.
+        Instantiates an Image object.
 
         Parameters
         ----------
@@ -105,7 +105,7 @@ class ImageReader(ABC):
         return self.img.shape
 
 
-class TensorStoreReader(ImageReader):
+class TensorStoreImage(Image):
     """
     Class that reads an image with the TensorStore library.
     """
@@ -187,7 +187,7 @@ class TensorStoreReader(ImageReader):
         return img_patch.read().result()
 
 
-class TiffReader(ImageReader):
+class TiffImage(Image):
     """
     Class that reads an image with the Tifffile library.
     """

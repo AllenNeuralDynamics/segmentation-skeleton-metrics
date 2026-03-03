@@ -9,7 +9,7 @@ Code that runs of demo of using this library to compute skeleton metrics.
 """
 
 from segmentation_skeleton_metrics.evaluate import evaluate
-from segmentation_skeleton_metrics.utils.img_util import TiffReader
+from segmentation_skeleton_metrics.utils.img_util import TiffImage
 
 
 def main():
@@ -19,21 +19,21 @@ def main():
     metrics.
     """
     # Initializations
-    pred_labels = TiffReader(pred_labels_path, swap_axes=False)
+    segmentation = TiffImage(segmentation_path, swap_axes=False)
     evaluate(
-        groundtruth_pointer,
-        pred_labels,
+        groundtruth_path,
+        segmentation,
         output_dir,
-        fragments_pointer=fragments_pointer,
+        fragments_path=fragments_path,
     )
 
 
 if __name__ == "__main__":
     # Initializations
     output_dir = "./"
-    pred_labels_path = "./data/pred_labels.tif"
-    fragments_pointer = "./data/pred_swcs.zip"
-    groundtruth_pointer = "./data/target_swcs.zip"
+    segmentation_path = "./data/pred_segmentation.tif"
+    fragments_path = "./data/pred_swcs.zip"
+    groundtruth_path = "./data/target_swcs.zip"
 
     # Run
     main()
