@@ -44,7 +44,9 @@ class Reader:
     archive, and (3) local directory of ZIP archives.
     """
 
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None):
+    def __init__(
+        self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None, verbose=True
+    ):
         """
         Initializes a Reader object that reads SWC files.
 
@@ -56,9 +58,12 @@ class Reader:
         selected_ids : Set[int], optional
             Only SWC files with an swc_id contained in this set are read.
             Default is None.
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
         """
         self.anisotropy = anisotropy
         self.selected_ids = selected_ids or set()
+        self.verbose = verbose
 
     # --- Read Data ---
     def __call__(self, swc_pointer):
@@ -166,7 +171,6 @@ class Reader:
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
-            pbar = tqdm(total=len(paths), desc="Read SWCs")
             for path in paths:
                 filename = os.path.basename(path)
                 if self.confirm_read(filename):
@@ -174,11 +178,13 @@ class Reader:
 
             # Store results
             swc_dicts = deque()
+            pbar = self.manual_progress_bar(len(paths))
             for thread in as_completed(threads):
                 result = thread.result()
                 if result:
                     swc_dicts.append(result)
-                pbar.update(1)
+                if self.verbose:
+                    pbar.update(1)
         return swc_dicts
 
     def read_from_zips(self, zip_dir):
@@ -196,23 +202,21 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # Initializations
-        zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
-        pbar = tqdm(total=len(zip_names), desc="Read SWCs")
-
-        # Main
         with ProcessPoolExecutor() as executor:
             # Assign threads
             processes = list()
+            zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
             for name in zip_names:
                 zip_path = os.path.join(zip_dir, name)
                 processes.append(executor.submit(self.read_from_zip, zip_path))
 
             # Store results
             swc_dicts = deque()
+            pbar = self.manual_progress_bar(len(zip_names))
             for process in as_completed(processes):
                 swc_dicts.extend(process.result())
-                pbar.update(1)
+                if self.verbose:
+                    pbar.update(1)
         return swc_dicts
 
     def read_from_zip(self, zip_path):
@@ -321,7 +325,6 @@ class Reader:
             Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
-        pbar = tqdm(total=len(swc_paths), desc="Read SWCs")
         with ThreadPoolExecutor() as executor:
             # Assign threads
             threads = list()
@@ -329,15 +332,18 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
+                print(path)
                 break  # TEMP
 
             # Store results
             swc_dicts = deque()
+            pbar = self.manual_progress_bar(len(threads))
             for thread in as_completed(threads):
                 result = thread.result()
                 if result:
                     swc_dicts.append(result)
-                pbar.update(1)
+                if self.verbose:
+                    pbar.update(1)
         return swc_dicts
 
     def read_from_gcs_swc(self, bucket_name, path):
@@ -385,7 +391,7 @@ class Reader:
             values from an SWC file.
         """
         swc_dicts = deque()
-        for zip_path in tqdm(zip_paths, desc="Read SWCs"):
+        for zip_path in self.iterator(zip_paths):
             swc_dicts.extend(self.read_from_gcs_zip(bucket_name, zip_path))
         return swc_dicts
 
@@ -477,7 +483,7 @@ class Reader:
             values from an SWC file.
         """
         swc_dicts = deque()
-        for path in swc_paths:
+        for path in self.iterator(swc_paths):
             content = util.read_txt(bucket_name, path).splitlines()
             filename = os.path.basename(path)
             result = self.parse(content, filename)
@@ -515,10 +521,13 @@ class Reader:
 
             # Store results
             swc_dicts = deque()
+            pbar = self.manual_progress_bar(len(processes))
             for process in as_completed(processes):
                 result = process.result()
                 if result:
                     swc_dicts.extend(result)
+                if self.verbose:
+                    pbar.update(1)
         return swc_dicts
 
     def read_from_s3_zip(self, bucket_name, path):
@@ -545,7 +554,6 @@ class Reader:
         zip_content = zip_obj["Body"].read()
 
         # Parse ZIP
-        swc_dicts = deque()
         with ZipFile(BytesIO(zip_content), "r") as zip_file:
             with ThreadPoolExecutor() as executor:
                 # Assign threads for reading files
@@ -558,10 +566,14 @@ class Reader:
                 ]
 
                 # Collect results
+                swc_dicts = deque()
+                pbar = self.manual_progress_bar(len(threads))
                 for thread in as_completed(threads):
                     result = thread.result()
                     if result:
                         swc_dicts.append(result)
+                    if self.verbose:
+                        pbar.update(1)
         return swc_dicts
 
     def confirm_read(self, filename):
@@ -586,6 +598,38 @@ class Reader:
             return True
 
     # -- Process Text ---
+    def iterator(self, iterator):
+        """
+        Gets an iterator that optionally displays a progress bar.
+
+        Parameters
+        ----------
+        iterator : iterable
+            Object to be iterated over.
+
+        Returns
+        -------
+        tqdm.tqdm
+            Iterator that is optionally wrapped in a progress bar.
+        """
+        return tqdm(iterator, desc="Read SWCs") if self.verbose else iterator
+
+    def manual_progress_bar(self, total):
+        """
+        Gets progress bar that needs to be updated manually.
+
+        Parameters
+        ----------
+        total : int
+            Size of progress bar.
+
+        Returns
+        -------
+        tqdm.tqdm
+            Iterator that is optionally wrapped in a progress bar.
+        """
+        return tqdm(total=total, desc="Read SWCs") if self.verbose else None
+
     def parse(self, content, filename):
         """
         Parses an SWC file to extract the content which is stored in a dict.

@@ -183,8 +183,7 @@ class TensorStoreImage(Image):
         numpy.ndarray
             Image patch.
         """
-        img_patch = super().read(voxel, shape)
-        return img_patch.read().result()
+        return super().read(voxel, shape).read().result()
 
 
 class TiffImage(Image):

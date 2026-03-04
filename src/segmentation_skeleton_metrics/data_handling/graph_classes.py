@@ -206,7 +206,7 @@ class SkeletonGraph(nx.Graph):
         pass
 
     # --- Writers ---
-    def to_zipped_swc(self, zip_writer):
+    def to_zipped_swcs(self, zip_writer):
         """
         Writes the graph to an SWC file format, which is then stored in a ZIP
         archive.
@@ -215,6 +215,35 @@ class SkeletonGraph(nx.Graph):
         ----------
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
+        """
+        for cnt, nodes in enumerate(nx.connected_componets(self)):
+            filename = f"{self.name}.{cnt}.swc"
+            zip_writer.writestr(filename, self._generate_swc_text(nodes[0]))
+
+    def to_swcs(self, output_dir):
+        """
+        Writes the graph to an SWC file format, which is then stored in the
+        given local directory.
+        archive.
+
+        Parameters
+        ----------
+        output_dir : str
+            Path to directory that SWC files will be written to.
+        """
+        for cnt, nodes in enumerate(nx.connected_componets(self)):
+            path = os.path.join(output_dir, f"{self.name}.{cnt}.swc")
+            with open(path, "w") as file_writer:
+                file_writer.write(self._generate_swc_text(nodes[0]))
+
+    def _generate_swc_text(self, root):
+        """
+        Generates the text to store that graph as an SWC file.
+
+        Parameters
+        ----------
+        root : int
+            Node ID used as root of SWC file.
         """
         # Subroutines
         def write_entry(node, parent):
@@ -226,7 +255,7 @@ class SkeletonGraph(nx.Graph):
             node : int
                 Node ID.
             parent : int
-                Node ID of the parent of "node".
+                Node ID of the parent.
             """
             x, y, z = tuple(self.voxels[i] * self.anisotropy)
             r = self.get_radius()
@@ -235,26 +264,23 @@ class SkeletonGraph(nx.Graph):
             node_to_idx[node] = node_id
             text_buffer.write(f"\n{node_id} 2 {x} {y} {z} {r} {parent_id}")
 
-        # Main
-        with StringIO() as text_buffer:
-            # Preamble
-            text_buffer.write(self.get_color())
-            text_buffer.write("\n# id, type, z, y, x, r, pid")
+        # Create writer
+        text_buffer = StringIO()
+        text_buffer.write(self.get_color())
+        text_buffer.write("\n# id, type, z, y, x, r, pid")
 
-            # Write entries
-            cnt = 1
-            node_to_idx = defaultdict(lambda: -1)
-            for i, j in nx.dfs_edges(self):
-                # Special Case: Root
-                if len(node_to_idx) == 0:
-                    write_entry(i, -1)
+        # Write entries
+        cnt = 1
+        node_to_idx = defaultdict(lambda: -1)
+        for i, j in nx.dfs_edges(self, source=root):
+            # Special Case: Root
+            if len(node_to_idx) == 0:
+                write_entry(i, -1)
 
-                # General Case: Non-Root
-                cnt += 1
-                write_entry(j, i)
-
-            # Finish
-            zip_writer.writestr(self.filename, text_buffer.getvalue())
+            # General Case: Non-Root
+            cnt += 1
+            write_entry(j, i)
+        return text_buffer
 
 
 class LabeledGraph(SkeletonGraph):
