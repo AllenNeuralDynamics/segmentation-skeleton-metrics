@@ -313,14 +313,14 @@ class LabeledGraph(SkeletonGraph):
 
     def init_node_labels(self):
         """
-        Initializes the "node_labels" attribute for the graph.
+        Initializes the "node_label" attribute for the graph.
         """
         error_msg = "Graph must have nodes to initialize node labels!"
         assert self.number_of_nodes() > 0, error_msg
-        self.node_labels = np.zeros((self.number_of_nodes()), dtype=int)
+        self.node_label = np.zeros((self.number_of_nodes()), dtype=int)
 
     # --- Core Routines ---
-    def get_node_labels(self):
+    def node_labels(self):
         """
         Gets the unique non-zero label values in the "labels" attribute.
 
@@ -329,25 +329,25 @@ class LabeledGraph(SkeletonGraph):
         node_labels : Set[int]
             Unique non-zero label values assigned to nodes in the graph.
         """
-        node_labels = set(np.unique(self.node_labels))
+        node_labels = set(np.unique(self.node_label))
         node_labels.discard(0)
         return node_labels
 
-    def get_nodes_with_label(self, label):
+    def nodes_with_label(self, label):
         """
         Gets the IDs of nodes that have the specified label value.
 
         Parameters
         ----------
         label : int
-            Label value to search for in the "node_labels" attribute.
+            Label value to search for in the "node_label" attribute.
 
         Returns
         -------
         numpy.ndarray
             Node IDs that have the specified label.
         """
-        return np.where(self.node_labels == label)[0]
+        return np.where(self.node_label == label)[0]
 
     def remove_nodes_with_label(self, label):
         """
@@ -377,7 +377,7 @@ class LabeledGraph(SkeletonGraph):
             Physical path length.
         """
         # Initializations
-        root_label = self.node_labels[root]
+        root_label = self.node_label[root]
         run_length = 0
 
         # Main
@@ -390,7 +390,7 @@ class LabeledGraph(SkeletonGraph):
 
             # Update queue
             for k in self.neighbors(j):
-                if k not in visited and self.node_labels[k] == root_label:
+                if k not in visited and self.node_label[k] == root_label:
                     queue.append((j, k))
                     visited.add(k)
         return run_length
@@ -407,7 +407,7 @@ class LabeledGraph(SkeletonGraph):
             New label of nodes.
         """
         for i in nodes:
-            self.node_labels[i] = label
+            self.node_label[i] = label
 
     # --- Helpers ---
     def get_bbox(self, nodes):

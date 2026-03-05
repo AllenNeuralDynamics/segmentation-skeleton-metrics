@@ -144,8 +144,8 @@ class SplitEdgePercentMetric(SkeletonMetric):
         """
         num_split_edges = 0
         for i, j in nx.dfs_edges(graph):
-            is_different = graph.node_labels[i] != graph.node_labels[j]
-            is_nonzero = graph.node_labels[i] and graph.node_labels[j]
+            is_different = graph.node_label[i] != graph.node_label[j]
+            is_nonzero = graph.node_label[i] and graph.node_label[j]
             if is_different and is_nonzero:
                 num_split_edges += 1
         return num_split_edges
@@ -210,7 +210,7 @@ class OmitEdgePercentMetric(SkeletonMetric):
         """
         num_omit_edges = 0
         for i, j in nx.dfs_edges(graph):
-            if graph.node_labels[i] == 0 and graph.node_labels[j] == 0:
+            if graph.node_label[i] == 0 and graph.node_label[j] == 0:
                 num_omit_edges += 1
         return num_omit_edges
 
@@ -260,7 +260,7 @@ class MergedEdgePercentMetric(SkeletonMetric):
             # Count number of edges associated with a merge
             num_merged_edges = 0
             for label in graph.labels_with_merge:
-                num_merged_edges += len(graph.get_nodes_with_label(label)) - 1
+                num_merged_edges += len(graph.nodes_with_label(label)) - 1
 
             # Compute result
             percent = 100 * num_merged_edges / graph.number_of_edges()
@@ -284,12 +284,12 @@ class MergedEdgePercentMetric(SkeletonMetric):
                 names = frozenset((name1, name2))
                 if name1 != name2 and names not in visited:
                     visited.add(names)
-                    labels1 = set(graph1.get_node_labels())
-                    labels2 = set(graph2.get_node_labels())
+                    labels1 = set(graph1.node_labels())
+                    labels2 = set(graph2.node_labels())
                     for label in labels1.intersection(labels2):
                         # Check if intersection is meaningful
-                        num_nodes1 = len(graph1.get_nodes_with_label(label))
-                        num_nodes2 = len(graph2.get_nodes_with_label(label))
+                        num_nodes1 = len(graph1.nodes_with_label(label))
+                        num_nodes2 = len(graph2.nodes_with_label(label))
                         if num_nodes1 > 50 and num_nodes2 > 50:
                             graph1.labels_with_merge.add(label)
                             graph2.labels_with_merge.add(label)
@@ -332,7 +332,7 @@ class SplitCountMetric(SkeletonMetric):
         """
         results = dict()
         for name, graph in self.get_iterator(gt_graphs.items()):
-            num_splits = max(len(graph.get_node_labels()) - 1, 0)
+            num_splits = max(len(graph.node_labels()) - 1, 0)
             results[name] = int(num_splits)
         return self.reformat(results)
 
@@ -386,7 +386,7 @@ class MergeCountMetric(SkeletonMetric):
             gt_graph.set_kdtree()
 
             # Search intersecting fragments
-            labels = gt_graph.get_node_labels()
+            labels = gt_graph.node_labels()
             for fragment_graph in fragment_graphs.values():
                 if fragment_graph.label in labels:
                     self.search_for_merges(gt_graph, fragment_graph)
@@ -528,7 +528,7 @@ class MergeCountMetric(SkeletonMetric):
             True is the node is a likely non-merge detection; otherwise, the
             site is considered to be a merge mistake.
         """
-        nodes = gt_graph.get_nodes_with_label(fragment_graph.label)
+        nodes = gt_graph.nodes_with_label(fragment_graph.label)
         subgraph = gt_graph.subgraph(nodes)
         for nodes_cc in nx.connected_components(subgraph):
             if gt_node in nodes_cc:
@@ -625,9 +625,9 @@ class ERLMetric(SkeletonMetric):
         """
         wgts = list()
         run_lengths = list()
-        for label in graph.get_node_labels():
+        for label in graph.node_labels():
             # Compute run length for label
-            nodes = graph.get_nodes_with_label(label)
+            nodes = graph.nodes_with_label(label)
             run_length = graph.run_length_from(nodes[0])
             graph.labeled_run_length += run_length
 
