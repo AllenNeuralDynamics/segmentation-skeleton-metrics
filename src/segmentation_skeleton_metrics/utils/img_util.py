@@ -64,16 +64,7 @@ class Image(ABC):
         numpy.ndarray
             Image patch.
         """
-        v1 = voxel
-        v2 = [v1[i] + shape[i] for i in range(3)]
-        if len(self.shape()) == 3:
-            return self.img[v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2]]
-        elif len(self.shape()) == 4:
-            return self.img[v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2], 0]
-        elif len(self.shape()) == 5:
-            return self.img[0, 0, v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2]]
-        else:
-            raise ValueError(f"Unsupported image shape: {self.shape()}")
+        return self.img[(0, 0, *get_slices(voxel, shape))]
 
     def read_with_bbox(self, bbox):
         """
@@ -121,7 +112,7 @@ class TensorStoreImage(Image):
         """
         # Instance attributes
         self.driver = self.get_driver(img_path)
-        self.swap_axes = swap_axes  # MUST IMPLEMENT
+        self.swap_axes = swap_axes
 
         # Call parent class
         super().__init__(img_path)
@@ -169,6 +160,14 @@ class TensorStoreImage(Image):
                 "recheck_cached_data": "open",
             }
         ).result()
+
+        # Check for Google segmentation
+        if "from_google" in self.img_path:
+            self.img = self.img[ts.d[:].transpose[3, 2, 1, 0]]
+
+        # Check dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[ts.newaxis, ...]
 
     def read(self, voxel, shape):
         """
@@ -220,16 +219,20 @@ class TiffImage(Image):
         """
         Loads image using the Tifffile library.
         """
-        #  Read image
+        # Read image
         if self.img_path.lower().endswith(".zip"):
             assert self.inner_tiff is not None, "Must provide TIFF filename!"
             self._load_zipped_image()
         else:
             self.img = imread(self.img_path)
 
+        # Check image dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[np.newaxis, ...]
+
         # Swap axes (if applicable)
         if self.swap_axes:
-            self.img = np.swapaxes(self.img, 0, 2)
+            self.img = np.swapaxes(self.img, 2, 4)
 
     def _load_zipped_image(self):
         """
@@ -238,7 +241,8 @@ class TiffImage(Image):
         with zipfile.ZipFile(self.img_path, "r") as z:
             # Collect only valid TIFF files, ignoring __MACOSX junk
             tiff_files = [
-                f for f in z.namelist()
+                f
+                for f in z.namelist()
                 if f.lower().endswith((".tif", ".tiff"))
                 and not os.path.basename(f).startswith("._")
             ]
@@ -255,6 +259,25 @@ class TiffImage(Image):
 
 
 # --- Helpers ---
+def get_slices(voxel, shape):
+    """
+    Gets the start and end indices of the chunk to be read.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Start voxel of image patch to be read.
+    shape : Tuple[int]
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    return tuple(slice(v, v + d) for v, d in zip(voxel, shape))
+
+
 def get_storage_driver(img_path):
     """
     Gets the storage driver needed to read the image.

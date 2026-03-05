@@ -11,7 +11,9 @@ management.
 
 from collections import deque
 from concurrent.futures import (
-    as_completed, ProcessPoolExecutor, ThreadPoolExecutor
+    as_completed,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
 )
 from tqdm import tqdm
 
@@ -21,7 +23,7 @@ import numpy as np
 from segmentation_skeleton_metrics.data_handling import swc_loading
 from segmentation_skeleton_metrics.data_handling.graph_classes import (
     FragmentGraph,
-    LabeledGraph
+    LabeledGraph,
 )
 from segmentation_skeleton_metrics.utils import util
 
@@ -37,7 +39,7 @@ class DataLoader:
         label_handler,
         anisotropy=(1.0, 1.0, 1.0),
         use_anisotropy=False,
-        verbose=True
+        verbose=True,
     ):
         """
         Instantiates a DataLoader object.
@@ -88,7 +90,7 @@ class DataLoader:
             label_handler=self.label_handler,
             label_mask=label_mask,
             use_anisotropy=False,
-            verbose=self.verbose
+            verbose=self.verbose,
         )
         return graph_loader(swc_pointer)
 
@@ -123,7 +125,7 @@ class DataLoader:
             label_handler=self.label_handler,
             selected_ids=selected_ids,
             use_anisotropy=self.use_anisotropy,
-            verbose=self.verbose
+            verbose=self.verbose,
         )
         return graph_loader(swc_pointer)
 
@@ -162,7 +164,7 @@ class GraphLoader:
         label_mask=None,
         selected_ids=None,
         use_anisotropy=True,
-        verbose=True
+        verbose=True,
     ):
         """
         Instantiates a GraphLoader object.
@@ -250,7 +252,7 @@ class GraphLoader:
 
         # Main
         graphs = dict()
-        if len(swc_dicts) > 10 ** 4:
+        if len(swc_dicts) > 10**4:
             while len(swc_dicts) > 0:
                 swc_dict = swc_dicts.pop()
                 graphs.update(self.to_graph(swc_dict))
@@ -334,7 +336,7 @@ class GraphLoader:
                 anisotropy=self.anisotropy,
                 name=swc_dict["swc_name"],
                 label=label,
-                segment_id=segment_id
+                segment_id=segment_id,
             )
 
         # Set class attributes
@@ -435,7 +437,7 @@ class GraphLoader:
                 # Check whether to visit edge
                 if frozenset({i, j}) in visited:
                     continue
-    
+
                 # Visit edge
                 if int(graph.node_labels[j]) == 0:
                     GraphLoader.check_misalignment(graph, visited, i, j)

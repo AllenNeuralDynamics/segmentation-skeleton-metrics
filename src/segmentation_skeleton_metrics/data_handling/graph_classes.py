@@ -246,6 +246,7 @@ class SkeletonGraph(nx.Graph):
         root : int
             Node ID used as root of SWC file.
         """
+
         # Subroutines
         def write_entry(node, parent):
             """
@@ -508,7 +509,7 @@ class FragmentGraph(SkeletonGraph):
         for leaf in util.get_leafs(self):
             branch = [leaf]
             length = 0
-            for (i, j) in nx.dfs_edges(self, source=leaf):
+            for i, j in nx.dfs_edges(self, source=leaf):
                 # Visit edge
                 length += self.physical_dist(i, j)
                 if length > depth:
