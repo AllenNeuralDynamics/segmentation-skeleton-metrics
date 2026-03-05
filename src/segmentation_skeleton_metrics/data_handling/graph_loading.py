@@ -216,7 +216,11 @@ class GraphLoader:
         """
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
-            for name in graphs:
+            if self.verbose:
+                iterator = tqdm(graphs, desc="Label Graphs")
+            else:
+                iterator = graphs
+            for name in iterator:
                 self._label_graph(graphs[name])
         return graphs
 
@@ -343,7 +347,6 @@ class GraphLoader:
             Graph to be labeled.
         """
         total = graph.number_of_nodes()
-        pbar = self.manual_progress_bar(total, "Label Graph")
         with ThreadPoolExecutor() as executor:
             # Assign threads
             batch = set()
@@ -383,8 +386,6 @@ class GraphLoader:
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
                     graph.node_labels[i] = label
-                    if self.verbose:
-                        pbar.update(1)
 
         GraphLoader.fix_label_misalignments(graph)
 
