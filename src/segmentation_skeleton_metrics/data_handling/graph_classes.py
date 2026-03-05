@@ -170,9 +170,9 @@ class SkeletonGraph(nx.Graph):
         numpy.ndarray
             Physical coordinate of the given node.
         """
-        return self.node_voxel[i] * self.anisotropy
+        return self.node_voxel[i][::-1] * self.anisotropy
 
-    def get_color(self):
+    def color(self):
         """
         Gets the display color of the skeleton to be written to an SWC file.
 
@@ -183,7 +183,7 @@ class SkeletonGraph(nx.Graph):
         """
         return util.sample_once(SkeletonGraph.colors)
 
-    def get_radius(self):
+    def radius(self):
         """
         Gets the radius of the skeleton to be written to an SWC file.
 
@@ -207,7 +207,7 @@ class SkeletonGraph(nx.Graph):
         pass
 
     # --- Writers ---
-    def to_zipped_swcs(self, zip_writer):
+    def to_zipped_swcs(self, zip_writer, use_color=True):
         """
         Writes the graph to an SWC file format, which is then stored in a ZIP
         archive.
@@ -216,12 +216,14 @@ class SkeletonGraph(nx.Graph):
         ----------
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
+        use_color : bool, optional
+            Indication of whether to use the class color. Default is True.
         """
         for cnt, nodes in enumerate(map(list, nx.connected_componets(self))):
             filename = f"{self.name}.{cnt}.swc"
             zip_writer.writestr(filename, self._generate_swc_text(nodes[0]))
 
-    def to_swcs(self, output_dir):
+    def to_swcs(self, output_dir, use_color=True):
         """
         Writes the graph to an SWC file format, which is then stored in the
         given local directory.
@@ -231,13 +233,15 @@ class SkeletonGraph(nx.Graph):
         ----------
         output_dir : str
             Path to directory that SWC files will be written to.
+        use_color : bool, optional
+            Indication of whether to use the class color. Default is True.
         """
         for cnt, nodes in enumerate(map(list, nx.connected_components(self))):
             path = os.path.join(output_dir, f"{self.name}.{cnt}.swc")
-            with open(path, "w") as file_writer:
-                file_writer.write(self._generate_swc_text(nodes[0]))
+            with open(path, "w") as file:
+                file.write(self._generate_swc_text(nodes[0], use_color))
 
-    def _generate_swc_text(self, root):
+    def _generate_swc_text(self, root, use_color=True):
         """
         Generates the text to store that graph as an SWC file.
 
@@ -245,6 +249,8 @@ class SkeletonGraph(nx.Graph):
         ----------
         root : int
             Node ID used as root of SWC file.
+        use_color : bool, optional
+            Indication of whether to use the class color. Default is True.
         """
 
         # Subroutines
@@ -259,8 +265,8 @@ class SkeletonGraph(nx.Graph):
             parent : int
                 Node ID of the parent.
             """
-            x, y, z = tuple(self.node_voxel[i] * self.anisotropy)
-            r = self.get_radius()
+            x, y, z = self.node_xyz(i)
+            r = self.radius()
             node_id = cnt
             parent_id = node_to_idx[parent]
             node_to_idx[node] = node_id
@@ -268,7 +274,7 @@ class SkeletonGraph(nx.Graph):
 
         # Create writer
         text_buffer = StringIO()
-        text_buffer.write(self.get_color())
+        text_buffer.write(self.color()) if self.use_color else None
         text_buffer.write("\n# id, type, z, y, x, r, pid")
 
         # Write entries
@@ -435,7 +441,7 @@ class LabeledGraph(SkeletonGraph):
             bbox_max = np.maximum(bbox_max, self.node_voxel[i] + 1)
         return {"min": bbox_min.astype(int), "max": bbox_max.astype(int)}
 
-    def get_color(self):
+    def color(self):
         """
         Gets the display color of the skeleton to be written to an SWC file.
 
@@ -446,7 +452,7 @@ class LabeledGraph(SkeletonGraph):
         """
         return "# COLOR 1.0 1.0 1.0"
 
-    def get_radius(self):
+    def radius(self):
         """
         Gets the radius of the skeleton to be written to an SWC file.
 
