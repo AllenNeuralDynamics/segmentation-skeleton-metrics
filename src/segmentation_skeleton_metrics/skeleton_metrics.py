@@ -383,7 +383,7 @@ class MergeCountMetric(SkeletonMetric):
         # Main
         for gt_graph in self.iterator(gt_graphs.values()):
             # Build ground truth kd-tree
-            gt_graph.init_kdtree()
+            gt_graph.set_kdtree()
 
             # Search intersecting fragments
             labels = gt_graph.get_node_labels()
@@ -423,7 +423,7 @@ class MergeCountMetric(SkeletonMetric):
                 continue
 
             # Find closet node in ground truth
-            xyz = fragment_graph.get_xyz(leaf)
+            xyz = fragment_graph.node_xyz(leaf)
             dist, _ = gt_graph.kdtree.query(xyz)
 
             # Check if distance to ground truth flags a merge mistake
@@ -453,7 +453,7 @@ class MergeCountMetric(SkeletonMetric):
         while len(queue) > 0:
             # Visit node
             i = queue.pop()
-            xyz_i = fragment_graph.get_xyz(i)
+            xyz_i = fragment_graph.node_xyz(i)
             dist_i, gt_node = gt_graph.kdtree.query(xyz_i)
             if dist_i < 6:
                 self.verify_site(gt_graph, fragment_graph, gt_node, i)
@@ -492,8 +492,8 @@ class MergeCountMetric(SkeletonMetric):
         )
 
         # Record site as merge mistake
-        voxel = fragment_graph.voxels[fragment_node]
-        xyz = fragment_graph.get_xyz(fragment_node)
+        voxel = fragment_graph.node_voxel[fragment_node]
+        xyz = fragment_graph.node_xyz(fragment_node)
 
         self.fragments_with_merge.add(fragment_graph.name)
         self.merge_sites.append(
@@ -911,7 +911,7 @@ class AddedCableLengthMetric(SkeletonMetric):
             nodes near the ground-truth graph.
         """
         # Remove nodes close to ground truth
-        xyz_arr = fragment_graph.voxels * fragment_graph.anisotropy
+        xyz_arr = fragment_graph.node_voxel * fragment_graph.anisotropy
         dists, _ = gt_graph.kdtree.query(xyz_arr)
         max_dist = MergeCountMetric.merge_dist_threshold
         fragment_graph.remove_nodes_from(np.where(dists < max_dist)[0])
