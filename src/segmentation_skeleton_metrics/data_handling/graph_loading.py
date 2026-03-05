@@ -186,16 +186,16 @@ class GraphLoader:
             Indication of whether to display a progress bar. Default is True.
         """
         # Instance attributes
-        self.anisotropy = anisotropy
+        self.anisotropy = np.array(anisotropy)
         self.is_groundtruth = is_groundtruth
         self.label_handler = label_handler
         self.label_mask = label_mask
+        self.use_anisotropy = use_anisotropy
         self.verbose = verbose
 
         # Reader
-        anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
         self.swc_reader = swc_loading.Reader(
-            anisotropy, selected_ids=selected_ids, verbose=verbose
+            selected_ids=selected_ids, verbose=verbose
         )
 
     def __call__(self, swc_pointer):
@@ -216,7 +216,12 @@ class GraphLoader:
         """
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
-            for name in graphs:
+            if self.verbose:
+                iterator = tqdm(graphs, desc="Label Graphs")
+            else:
+                iterator = graphs
+            for name in iterator:
+                print(name)
                 self._label_graph(graphs[name])
         return graphs
 
@@ -292,6 +297,11 @@ class GraphLoader:
                 graph.add_edge(i, parent)
                 graph.run_length += graph.dist(i, parent)
         graph.prune_branches()
+
+        # Apply voxel coordinate conversion (if applicable)
+        if self.use_anisotropy:
+            graph.voxels = (graph.voxels / self.anisotropy).astype(int)
+            graph.voxels[:, [0, 2]] = graph.voxels[:, [2, 0]]
         return {graph.name: graph}
 
     def _init_graph(self, swc_dict):
@@ -342,8 +352,6 @@ class GraphLoader:
         graph : LabeledGraph
             Graph to be labeled.
         """
-        total = graph.number_of_nodes()
-        pbar = self.manual_progress_bar(total, "Label Graph")
         with ThreadPoolExecutor() as executor:
             # Assign threads
             batch = set()
@@ -383,8 +391,6 @@ class GraphLoader:
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
                     graph.node_labels[i] = label
-                    if self.verbose:
-                        pbar.update(1)
 
         GraphLoader.fix_label_misalignments(graph)
 

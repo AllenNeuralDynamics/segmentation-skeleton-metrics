@@ -110,7 +110,7 @@ class TensorStoreImage(Image):
     Class that reads an image with the TensorStore library.
     """
 
-    def __init__(self, img_path):
+    def __init__(self, img_path, swap_axes=True):
         """
         Instantiates a TensorStore image reader.
 
@@ -119,7 +119,11 @@ class TensorStoreImage(Image):
         img_path : str
             Path to image.
         """
+        # Instance attributes
         self.driver = self.get_driver(img_path)
+        self.swap_axes = swap_axes  # MUST IMPLEMENT
+
+        # Call parent class
         super().__init__(img_path)
 
     def get_driver(self, img_path):
@@ -305,44 +309,3 @@ def is_precomputed(img_path):
         return False
     except Exception:
         return False
-
-
-def to_physical(voxel, anisotropy):
-    """
-    Converts a voxel coordinate to a physical coordinate by applying the
-    anisotropy scaling factors.
-
-    Parameters
-    ----------
-    voxel : ArrayLike
-        Voxel coordinate to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-
-    Returns
-    -------
-    Tuple[float]
-        Physical coordinate.
-    """
-    return tuple([voxel[i] * anisotropy[i] for i in range(3)])
-
-
-def to_voxels(xyz, anisotropy):
-    """
-    Converts coordinate from a physical to voxel space.
-
-    Parameters
-    ----------
-    xyz : ArrayLike
-        Physical coordiante to be converted.
-    anisotropy : ArrayLike
-        Image to physical coordinates scaling factors to account for the
-        anisotropy of the microscope.
-
-    Returns
-    -------
-    Tuple[int]
-        Voxel coordinate.
-    """
-    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)][::-1])
