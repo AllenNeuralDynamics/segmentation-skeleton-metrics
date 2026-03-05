@@ -435,7 +435,7 @@ class GraphLoader:
                 # Check whether to visit edge
                 if frozenset({i, j}) in visited:
                     continue
-    
+
                 # Visit edge
                 if int(graph.node_labels[j]) == 0:
                     GraphLoader.check_misalignment(graph, visited, i, j)

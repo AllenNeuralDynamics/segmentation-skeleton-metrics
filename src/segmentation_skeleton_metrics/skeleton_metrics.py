@@ -46,21 +46,22 @@ class SkeletonMetric(ABC):
         """
         pass
 
-    def get_pbar(self, total):
+    def get_iterator(self, iterator):
         """
-        Gets a progress bar to be displayed.
+        Gets the iterator wrapped in a progress bar if "verbose" is True,
+        otherwise returns the iterator unchanged.
 
         Parameters
         ----------
-        total : int
-            Size of progress bar.
+        iterator : iterable
+            Object to be iterated over.
 
         Returns
         -------
-        tqdm.tqdm or None
-            Progress bar to be displayed if verose; otherwise, None.
+        iterable
+            Object to be iterated over.
         """
-        return tqdm(total=total, desc=self.name) if self.verbose else None
+        return tqdm(iterator, desc=self.name) if self.verbose else iterator
 
     def reformat(self, results):
         """
@@ -121,16 +122,9 @@ class SplitEdgePercentMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             num_split_edges = self.count_split_edges(graph)
-            percent = 100 * num_split_edges / graph.number_of_edges()
-            results[name] = percent
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
+            results[name] = 100 * num_split_edges / graph.number_of_edges()
         return self.reformat(results)
 
     @staticmethod
@@ -193,16 +187,10 @@ class OmitEdgePercentMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             num_omit_edges = self.count_omit_edges(graph)
             omit_edge_percent = 100 * num_omit_edges / graph.number_of_edges()
             results[name] = omit_edge_percent
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
         return self.reformat(results)
 
     @staticmethod
@@ -290,8 +278,7 @@ class MergedEdgePercentMetric(SkeletonMetric):
             Graphs to be searched for intersecting labels.
         """
         visited = set()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name1, graph1 in gt_graphs.items():
+        for name1, graph1 in self.get_iterator(gt_graphs.items()):
             # Search other graphs for label intersections
             for name2, graph2 in gt_graphs.items():
                 names = frozenset((name1, name2))
@@ -306,10 +293,6 @@ class MergedEdgePercentMetric(SkeletonMetric):
                         if num_nodes1 > 50 and num_nodes2 > 50:
                             graph1.labels_with_merge.add(label)
                             graph2.labels_with_merge.add(label)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
 
 
 class SplitCountMetric(SkeletonMetric):
@@ -348,15 +331,9 @@ class SplitCountMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             num_splits = max(len(graph.get_node_labels()) - 1, 0)
             results[name] = int(num_splits)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
         return self.reformat(results)
 
 
@@ -403,8 +380,7 @@ class MergeCountMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         # Main
-        pbar = self.get_pbar(len(gt_graphs))
-        for gt_graph in gt_graphs.values():
+        for gt_graph in self.iterator(gt_graphs.values()):
             # Build ground truth kd-tree
             gt_graph.init_kdtree()
 
@@ -413,10 +389,6 @@ class MergeCountMetric(SkeletonMetric):
             for fragment_graph in fragment_graphs.values():
                 if fragment_graph.label in labels:
                     self.search_for_merges(gt_graph, fragment_graph)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
 
         # Postprocess merge sites
         self.remove_repeat_merge_sites()
@@ -631,15 +603,8 @@ class ERLMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
-            erl = self.compute_graph_erl(graph)
-            results[name] = round(erl, 2)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
+        for name, graph in self.get_iterator(gt_graphs.items()):
+            results[name] = round(self.compute_graph_erl(graph), 2)
         return self.reformat(results)
 
     @staticmethod
@@ -712,18 +677,12 @@ class SplitRateMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         new_results = dict()
-        pbar = self.get_pbar(len(results.index))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             if results["# Splits"][name] > 0:
                 rl = util.compute_segmented_run_length(graph, results, name)
                 new_results[name] = round(rl / results["# Splits"][name], 2)
             else:
                 new_results[name] = np.nan
-
-        # Update progress bar
-        if self.verbose:
-            pbar.update(1)
         return self.reformat(new_results)
 
 
@@ -765,18 +724,12 @@ class MergeRateMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         new_results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             if results["# Merges"][name] > 0:
                 rl = util.compute_segmented_run_length(graph, results, name)
                 new_results[name] = round(rl / results["# Merges"][name], 2)
             else:
                 new_results[name] = np.nan
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
         return self.reformat(new_results)
 
 
@@ -818,18 +771,12 @@ class EdgeAccuracyMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         new_results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for idx in results.index:
-            # Compute result
+        for idx in self.get_iterator(results.index):
             edge_accuracy = 100 - (
                 results["% Split Edges"].loc[idx] +
                 results["% Omit Edges"].loc[idx] +
                 results["% Merged Edges"].loc[idx])
             new_results[idx] = round(edge_accuracy, 2)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
         return self.reformat(new_results)
 
 
@@ -872,15 +819,9 @@ class NormalizedERLMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         new_results = dict()
-        pbar = self.get_pbar(len(gt_graphs))
-        for name, graph in gt_graphs.items():
-            # Compute result
+        for name, graph in self.get_iterator(gt_graphs.items()):
             normalized_erl = results["ERL"][name] / graph.run_length
             new_results[name] = round(normalized_erl, 4)
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
         return self.reformat(new_results)
 
 
@@ -928,9 +869,8 @@ class AddedCableLengthMetric(SkeletonMetric):
             return None
 
         # Compute metric
-        pbar = self.get_pbar(len(merge_sites))
         pair_to_length = dict()
-        for i in merge_sites.index:
+        for i in self.get_iterator(merge_sites.index):
             # Extract site info
             fragment_name = str(merge_sites["Fragment_Name"][i])
             gt_id = merge_sites["GroundTruth_ID"][i]
@@ -949,10 +889,6 @@ class AddedCableLengthMetric(SkeletonMetric):
                     gt_graph, fragment_graph
                 )
                 merge_sites.loc[i, self.name] = pair_to_length[pair_id]
-
-            # Update progress bar
-            if self.verbose:
-                pbar.update(1)
 
     def compute_added_length(self, gt_graph, fragment_graph):
         """
@@ -980,7 +916,6 @@ class AddedCableLengthMetric(SkeletonMetric):
 
         # Compute cable length
         cable_length = 0
-        for nodes in nx.connected_components(fragment_graph):
-            node = util.sample_once(nodes)
-            cable_length += fragment_graph.run_length_from(node)
+        for nodes in map(list, nx.connected_components(fragment_graph)):
+            cable_length += fragment_graph.run_length_from(nodes[0])
         return round(float(cable_length), 2)

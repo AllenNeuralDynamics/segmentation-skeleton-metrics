@@ -64,16 +64,8 @@ class Image(ABC):
         numpy.ndarray
             Image patch.
         """
-        v1 = voxel
-        v2 = [v1[i] + shape[i] for i in range(3)]
-        if len(self.shape()) == 3:
-            return self.img[v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2]]
-        elif len(self.shape()) == 4:
-            return self.img[v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2], 0]
-        elif len(self.shape()) == 5:
-            return self.img[0, 0, v1[0]: v2[0], v1[1]: v2[1], v1[2]: v2[2]]
-        else:
-            raise ValueError(f"Unsupported image shape: {self.shape()}")
+        s = get_slices(voxel, shape)
+        return self.img[s] if self.img.ndim == 3 else self.img[(0, 0, *s)]
 
     def read_with_bbox(self, bbox):
         """
@@ -121,7 +113,7 @@ class TensorStoreImage(Image):
         """
         # Instance attributes
         self.driver = self.get_driver(img_path)
-        self.swap_axes = swap_axes  # MUST IMPLEMENT
+        self.swap_axes = swap_axes
 
         # Call parent class
         super().__init__(img_path)
@@ -169,6 +161,15 @@ class TensorStoreImage(Image):
                 "recheck_cached_data": "open",
             }
         ).result()
+
+        # Check dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[ts.newaxis, ...]
+
+        # Swap axes (if applicable)
+        if self.swap_axes:
+            self.img = self.img[ts.d[0].transpose[2]]
+            self.img = self.img[ts.d[0].transpose[1]]
 
     def read(self, voxel, shape):
         """
@@ -230,6 +231,7 @@ class TiffImage(Image):
         # Swap axes (if applicable)
         if self.swap_axes:
             self.img = np.swapaxes(self.img, 0, 2)
+        assert self.img.ndim in [3, 5]
 
     def _load_zipped_image(self):
         """
@@ -255,6 +257,25 @@ class TiffImage(Image):
 
 
 # --- Helpers ---
+def get_slices(voxel, shape):
+    """
+    Gets the start and end indices of the chunk to be read.
+
+    Parameters
+    ----------
+    voxel : Tuple[int]
+        Start voxel of image patch to be read.
+    shape : Tuple[int]
+        Shape of image patch to be read.
+
+    Return
+    ------
+    Tuple[slice]
+        Slice objects used to index into the image.
+    """
+    return tuple(slice(s, s + d) for s, d in zip(voxel, shape))
+
+
 def get_storage_driver(img_path):
     """
     Gets the storage driver needed to read the image.
