@@ -195,7 +195,7 @@ class GraphLoader:
         # Reader
         anisotropy = anisotropy if use_anisotropy else (1.0, 1.0, 1.0)
         self.swc_reader = swc_loading.Reader(
-            anisotropy, selected_ids=selected_ids
+            anisotropy, selected_ids=selected_ids, verbose=verbose
         )
 
     def __call__(self, swc_pointer):
@@ -239,8 +239,7 @@ class GraphLoader:
         """
         # Initializations
         swc_dicts = self.swc_reader(swc_pointer)
-        if self.verbose:
-            pbar = tqdm(total=len(swc_dicts), desc="Build Graphs")
+        pbar = self.manual_progress_bar(len(swc_dicts), desc="Build Graphs")
 
         # Main
         graphs = dict()
@@ -343,6 +342,8 @@ class GraphLoader:
         graph : LabeledGraph
             Graph to be labeled.
         """
+        total = graph.number_of_nodes()
+        pbar = self.manual_progress_bar(total, "Label Graph")
         with ThreadPoolExecutor() as executor:
             # Assign threads
             batch = set()
@@ -382,6 +383,8 @@ class GraphLoader:
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
                     graph.node_labels[i] = label
+                    if self.verbose:
+                        pbar.update(1)
 
         GraphLoader.fix_label_misalignments(graph)
 
@@ -411,29 +414,6 @@ class GraphLoader:
             node_to_label[i] = label
         return node_to_label
 
-    def to_local_voxels(self, graph, i, offset):
-        """
-        Converts a global voxel coordinate to a local voxel coordinate.
-
-        Parameters
-        ----------
-        graph : SkeletonGraph
-            Graph object containing node voxel coordinates.
-        i : int
-            Node ID of voxel coordinate to be converted.
-        offset : ArrayLike
-            Offset to subtract from the global voxel coordinate to get the
-            local coordinate.
-
-        Returns
-        -------
-        Tuple[int]
-            Local voxel coordinate after subtracting the offset.
-        """
-        voxel = np.array(graph.voxels[i])
-        offset = np.array(offset)
-        return tuple(voxel - offset)
-
     @staticmethod
     def fix_label_misalignments(graph):
         """
@@ -454,6 +434,48 @@ class GraphLoader:
             if int(graph.node_labels[j]) == 0:
                 GraphLoader.check_misalignment(graph, visited_edges, i, j)
             visited_edges.add(frozenset({i, j}))
+
+    # --- Helpers ---
+    def manual_progress_bar(self, total, desc=""):
+        """
+        Gets progress bar that needs to be updated manually.
+
+        Parameters
+        ----------
+        total : int
+            Size of progress bar.
+        desc : str, optional
+            Text to be displayed on progress bar. Default is an empty string.
+
+        Returns
+        -------
+        tqdm.tqdm
+            Iterator that is optionally wrapped in a progress bar.
+        """
+        return tqdm(total=total, desc=desc) if self.verbose else None
+
+    def to_local_voxels(self, graph, i, offset):
+        """
+        Converts from global to local voxel coordinates.
+
+        Parameters
+        ----------
+        graph : SkeletonGraph
+            Graph object containing node voxel coordinates.
+        i : int
+            Node ID of voxel coordinate to be converted.
+        offset : ArrayLike
+            Offset to subtract from the global voxel coordinate to get the
+            local coordinate.
+
+        Returns
+        -------
+        Tuple[int]
+            Local voxel coordinate after subtracting the offset.
+        """
+        voxel = np.array(graph.voxels[i])
+        offset = np.array(offset)
+        return tuple(voxel - offset)
 
     @staticmethod
     def check_misalignment(graph, visited_edges, nb, root):

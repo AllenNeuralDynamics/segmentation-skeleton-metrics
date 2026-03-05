@@ -183,8 +183,7 @@ class TensorStoreImage(Image):
         numpy.ndarray
             Image patch.
         """
-        img_patch = super().read(voxel, shape)
-        return img_patch.read().result()
+        return super().read(voxel, shape).read().result()
 
 
 class TiffImage(Image):
@@ -346,4 +345,4 @@ def to_voxels(xyz, anisotropy):
     Tuple[int]
         Voxel coordinate.
     """
-    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)])
+    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)][::-1])
