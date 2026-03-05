@@ -146,7 +146,7 @@ class DataLoader:
         """
         node_labels = set()
         for graph in graphs.values():
-            node_labels |= self.label_handler.get_node_labels(graph)
+            node_labels |= self.label_handler.node_labels(graph)
         return node_labels
 
 
@@ -304,8 +304,8 @@ class GraphLoader:
 
         # Apply voxel coordinate conversion (if applicable)
         if self.use_anisotropy:
-            graph.voxels = (graph.voxels / self.anisotropy).astype(int)
-            graph.voxels[:, [0, 2]] = graph.voxels[:, [2, 0]]
+            graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
+            graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]
         return {graph.name: graph}
 
     def _init_graph(self, swc_dict):
@@ -340,7 +340,7 @@ class GraphLoader:
             )
 
         # Set class attributes
-        graph.init_voxels(swc_dict["voxel"])
+        graph.set_voxels(swc_dict["voxel"])
         graph.set_filename(swc_dict["swc_name"] + ".swc")
         graph.set_nodes(len(swc_dict["id"]))
         return graph
@@ -394,7 +394,7 @@ class GraphLoader:
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
-                    graph.node_labels[i] = label
+                    graph.node_label[i] = label
 
     def get_patch_labels(self, graph, nodes):
         """
@@ -417,9 +417,8 @@ class GraphLoader:
         label_patch = self.label_mask.read_with_bbox(bbox)
         node_to_label = dict()
         for i in nodes:
-            voxel = self.to_local_voxels(graph, i, bbox["min"])
-            label = self.label_handler.get(label_patch[voxel])
-            node_to_label[i] = label
+            voxel = tuple(graph.node_voxel[i] - bbox["min"])
+            node_to_label[i] = self.label_handler.get(label_patch[voxel])
         return node_to_label
 
     def _fix_label_misalignments(self, graph):
@@ -439,7 +438,7 @@ class GraphLoader:
                     continue
 
                 # Visit edge
-                if int(graph.node_labels[j]) == 0:
+                if int(graph.node_label[j]) == 0:
                     GraphLoader.check_misalignment(graph, visited, i, j)
                 visited.add(frozenset({i, j}))
 
@@ -480,29 +479,6 @@ class GraphLoader:
         """
         return tqdm(total=total, desc=desc) if self.verbose else None
 
-    def to_local_voxels(self, graph, i, offset):
-        """
-        Converts from global to local voxel coordinates.
-
-        Parameters
-        ----------
-        graph : SkeletonGraph
-            Graph object containing node voxel coordinates.
-        i : int
-            Node ID of voxel coordinate to be converted.
-        offset : ArrayLike
-            Offset to subtract from the global voxel coordinate to get the
-            local coordinate.
-
-        Returns
-        -------
-        Tuple[int]
-            Local voxel coordinate after subtracting the offset.
-        """
-        voxel = np.array(graph.voxels[i])
-        offset = np.array(offset)
-        return tuple(voxel - offset)
-
     @staticmethod
     def check_misalignment(graph, visited_edges, nb, root):
         """
@@ -527,7 +503,7 @@ class GraphLoader:
         while len(queue) > 0:
             # Visit node
             j = queue.popleft()
-            label_j = int(graph.node_labels[j])
+            label_j = int(graph.node_label[j])
             if label_j != 0:
                 label_collisions.add(label_j)
             visited.add(j)
@@ -692,7 +668,7 @@ class LabelHandler:
         return True if len(self.mapping) > 0 else False
 
     # --- Helpers ---
-    def get_node_labels(self, graph):
+    def node_labels(self, graph):
         """
         Gets the set of unique node labels from the given graph.
 
@@ -706,7 +682,7 @@ class LabelHandler:
         labels : Set[int]
             Labels corresponding to nodes in the graph identified by "key".
         """
-        labels = graph.get_node_labels()
+        labels = graph.node_labels()
         if self.use_mapping():
             labels = set().union(*(self.inverse_mapping[u] for u in labels))
         return labels

@@ -72,25 +72,25 @@ class SkeletonGraph(nx.Graph):
         self.filename = None
         self.kdtree = None
         self.name = name
+        self.node_voxel = None
         self.run_length = 0
-        self.voxels = None
 
-    def init_kdtree(self):
+    def set_kdtree(self):
         """
         Builds a KD-Tree from the node physical coordinates.
         """
-        self.kdtree = KDTree(self.voxels * self.anisotropy)
+        self.kdtree = KDTree(self.node_voxel * self.anisotropy)
 
-    def init_voxels(self, voxels):
+    def set_voxels(self, voxels):
         """
-        Initializes the "voxels" attribute for the graph.
+        Sets the "node_voxel" attribute for the graph.
 
         Parameters
         ----------
         voxels : ArrayLike
             Voxel coordinates for each node in the graph.
         """
-        self.voxels = np.array(voxels, dtype=np.int32)
+        self.node_voxel = np.array(voxels, dtype=np.int32)
 
     def set_filename(self, filename):
         """
@@ -134,7 +134,7 @@ class SkeletonGraph(nx.Graph):
         float
             Distance between voxel coordinates of the given nodes.
         """
-        return distance.euclidean(self.voxels[i], self.voxels[j])
+        return distance.euclidean(self.node_voxel[i], self.node_voxel[j])
 
     def physical_dist(self, i, j):
         """
@@ -154,9 +154,9 @@ class SkeletonGraph(nx.Graph):
             Euclidean distance between physical coordinates of the given
             nodes.
         """
-        return distance.euclidean(self.get_xyz(i), self.get_xyz(j))
+        return distance.euclidean(self.node_xyz(i), self.node_xyz(j))
 
-    def get_xyz(self, i):
+    def node_xyz(self, i):
         """
         Gets the physical coordinate of the given node.
 
@@ -170,7 +170,7 @@ class SkeletonGraph(nx.Graph):
         numpy.ndarray
             Physical coordinate of the given node.
         """
-        return self.voxels[i] * self.anisotropy
+        return self.node_voxel[i] * self.anisotropy
 
     def get_color(self):
         """
@@ -259,7 +259,7 @@ class SkeletonGraph(nx.Graph):
             parent : int
                 Node ID of the parent.
             """
-            x, y, z = tuple(self.voxels[i] * self.anisotropy)
+            x, y, z = tuple(self.node_voxel[i] * self.anisotropy)
             r = self.get_radius()
             node_id = cnt
             parent_id = node_to_idx[parent]
@@ -313,14 +313,14 @@ class LabeledGraph(SkeletonGraph):
 
     def init_node_labels(self):
         """
-        Initializes the "node_labels" attribute for the graph.
+        Initializes the "node_label" attribute for the graph.
         """
         error_msg = "Graph must have nodes to initialize node labels!"
         assert self.number_of_nodes() > 0, error_msg
-        self.node_labels = np.zeros((self.number_of_nodes()), dtype=int)
+        self.node_label = np.zeros((self.number_of_nodes()), dtype=int)
 
     # --- Core Routines ---
-    def get_node_labels(self):
+    def node_labels(self):
         """
         Gets the unique non-zero label values in the "labels" attribute.
 
@@ -329,25 +329,25 @@ class LabeledGraph(SkeletonGraph):
         node_labels : Set[int]
             Unique non-zero label values assigned to nodes in the graph.
         """
-        node_labels = set(np.unique(self.node_labels))
+        node_labels = set(np.unique(self.node_label))
         node_labels.discard(0)
         return node_labels
 
-    def get_nodes_with_label(self, label):
+    def nodes_with_label(self, label):
         """
         Gets the IDs of nodes that have the specified label value.
 
         Parameters
         ----------
         label : int
-            Label value to search for in the "node_labels" attribute.
+            Label value to search for in the "node_label" attribute.
 
         Returns
         -------
         numpy.ndarray
             Node IDs that have the specified label.
         """
-        return np.where(self.node_labels == label)[0]
+        return np.where(self.node_label == label)[0]
 
     def remove_nodes_with_label(self, label):
         """
@@ -377,7 +377,7 @@ class LabeledGraph(SkeletonGraph):
             Physical path length.
         """
         # Initializations
-        root_label = self.node_labels[root]
+        root_label = self.node_label[root]
         run_length = 0
 
         # Main
@@ -390,7 +390,7 @@ class LabeledGraph(SkeletonGraph):
 
             # Update queue
             for k in self.neighbors(j):
-                if k not in visited and self.node_labels[k] == root_label:
+                if k not in visited and self.node_label[k] == root_label:
                     queue.append((j, k))
                     visited.add(k)
         return run_length
@@ -407,7 +407,7 @@ class LabeledGraph(SkeletonGraph):
             New label of nodes.
         """
         for i in nodes:
-            self.node_labels[i] = label
+            self.node_label[i] = label
 
     # --- Helpers ---
     def get_bbox(self, nodes):
@@ -431,8 +431,8 @@ class LabeledGraph(SkeletonGraph):
         bbox_min = np.inf * np.ones(3)
         bbox_max = np.zeros(3)
         for i in nodes:
-            bbox_min = np.minimum(bbox_min, self.voxels[i])
-            bbox_max = np.maximum(bbox_max, self.voxels[i] + 1)
+            bbox_min = np.minimum(bbox_min, self.node_voxel[i])
+            bbox_max = np.maximum(bbox_max, self.node_voxel[i] + 1)
         return {"min": bbox_min.astype(int), "max": bbox_max.astype(int)}
 
     def get_color(self):
