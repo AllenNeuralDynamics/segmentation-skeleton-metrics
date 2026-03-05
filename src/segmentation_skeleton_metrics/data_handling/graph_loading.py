@@ -304,7 +304,7 @@ class GraphLoader:
 
         # Apply voxel coordinate conversion (if applicable)
         if self.use_anisotropy:
-            graph.node_voxel = (graph.nodevoxel / self.anisotropy).astype(int)
+            graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]
         return {graph.name: graph}
 
