@@ -341,6 +341,7 @@ class MergeCountMetric(SkeletonMetric):
     """
     A skeleton metric subclass that counts the number merges.
     """
+
     merge_dist_threshold = 50
 
     def __init__(self, verbose=True):
@@ -502,7 +503,7 @@ class MergeCountMetric(SkeletonMetric):
                 "GroundTruth_ID": gt_graph.name,
                 "Voxel": tuple(map(int, voxel)),
                 "World": tuple([float(round(t, 2)) for t in xyz]),
-                "Added Cable Length (μm)": 0.0
+                "Added Cable Length (μm)": 0.0,
             }
         )
 
@@ -773,9 +774,10 @@ class EdgeAccuracyMetric(SkeletonMetric):
         new_results = dict()
         for idx in self.get_iterator(results.index):
             edge_accuracy = 100 - (
-                results["% Split Edges"].loc[idx] +
-                results["% Omit Edges"].loc[idx] +
-                results["% Merged Edges"].loc[idx])
+                results["% Split Edges"].loc[idx]
+                + results["% Omit Edges"].loc[idx]
+                + results["% Merged Edges"].loc[idx]
+            )
             new_results[idx] = round(edge_accuracy, 2)
         return self.reformat(new_results)
 

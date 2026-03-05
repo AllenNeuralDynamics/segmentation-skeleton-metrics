@@ -64,8 +64,7 @@ class Image(ABC):
         numpy.ndarray
             Image patch.
         """
-        s = get_slices(voxel, shape)
-        return self.img[s] if self.img.ndim == 3 else self.img[(0, 0, *s)]
+        return self.img[(0, 0, *get_slices(voxel, shape))]
 
     def read_with_bbox(self, bbox):
         """
@@ -162,14 +161,13 @@ class TensorStoreImage(Image):
             }
         ).result()
 
+        # Check for Google segmentation
+        if "from_google" in self.img_path:
+            self.img = self.img[ts.d[:].transpose[3, 2, 1, 0]]
+
         # Check dimensions
         while self.img.ndim < 5:
             self.img = self.img[ts.newaxis, ...]
-
-        # Swap axes (if applicable)
-        if self.swap_axes:
-            self.img = self.img[ts.d[0].transpose[2]]
-            self.img = self.img[ts.d[0].transpose[1]]
 
     def read(self, voxel, shape):
         """
@@ -221,17 +219,20 @@ class TiffImage(Image):
         """
         Loads image using the Tifffile library.
         """
-        #  Read image
+        # Read image
         if self.img_path.lower().endswith(".zip"):
             assert self.inner_tiff is not None, "Must provide TIFF filename!"
             self._load_zipped_image()
         else:
             self.img = imread(self.img_path)
 
+        # Check image dimensions
+        while self.img.ndim < 5:
+            self.img = self.img[np.newaxis, ...]
+
         # Swap axes (if applicable)
         if self.swap_axes:
-            self.img = np.swapaxes(self.img, 0, 2)
-        assert self.img.ndim in [3, 5]
+            self.img = np.swapaxes(self.img, 2, 4)
 
     def _load_zipped_image(self):
         """
@@ -240,7 +241,8 @@ class TiffImage(Image):
         with zipfile.ZipFile(self.img_path, "r") as z:
             # Collect only valid TIFF files, ignoring __MACOSX junk
             tiff_files = [
-                f for f in z.namelist()
+                f
+                for f in z.namelist()
                 if f.lower().endswith((".tif", ".tiff"))
                 and not os.path.basename(f).startswith("._")
             ]
@@ -273,7 +275,7 @@ def get_slices(voxel, shape):
     Tuple[slice]
         Slice objects used to index into the image.
     """
-    return tuple(slice(s, s + d) for s, d in zip(voxel, shape))
+    return tuple(slice(v, v + d) for v, d in zip(voxel, shape))
 
 
 def get_storage_driver(img_path):

@@ -26,10 +26,11 @@ from segmentation_skeleton_metrics.skeleton_metrics import (
     SplitRateMetric,
     EdgeAccuracyMetric,
     ERLMetric,
-    NormalizedERLMetric
+    NormalizedERLMetric,
 )
 from segmentation_skeleton_metrics.data_handling.graph_loading import (
-    DataLoader, LabelHandler
+    DataLoader,
+    LabelHandler,
 )
 from segmentation_skeleton_metrics.utils import util
 
@@ -46,7 +47,7 @@ def evaluate(
     save_fragments=False,
     use_anisotropy=False,
     valid_labels=None,
-    verbose=True
+    verbose=True,
 ):
     """
     Loads data, calls an evaluator object that computes skeleton-based
@@ -94,7 +95,7 @@ def evaluate(
         label_handler,
         anisotropy=anisotropy,
         use_anisotropy=use_anisotropy,
-        verbose=verbose
+        verbose=verbose,
     )
     gt_graphs = dataloader.load_groundtruth(gt_path, segmentation)
     fragment_graphs = dataloader.load_fragments(fragments_path, gt_graphs)
@@ -168,7 +169,7 @@ class Evaluator:
             "% Split Edges": SplitEdgePercentMetric(verbose=verbose),
             "% Omit Edges": OmitEdgePercentMetric(verbose=verbose),
             "% Merged Edges": MergedEdgePercentMetric(verbose=verbose),
-            "ERL": ERLMetric(verbose=verbose)
+            "ERL": ERLMetric(verbose=verbose),
         }
 
         # Set derived metrics
@@ -241,9 +242,9 @@ class Evaluator:
         """
         # Create dataframe
         cols = (
-            ["SWC Run Length"] +
-            list(self.metrics.keys()) +
-            list(self.derived_metrics.keys())
+            ["SWC Run Length"]
+            + list(self.metrics.keys())
+            + list(self.derived_metrics.keys())
         )
         index = list(gt_graphs.keys())
         index.sort()
