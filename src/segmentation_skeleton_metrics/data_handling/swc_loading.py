@@ -35,7 +35,7 @@ import boto3
 import numpy as np
 import os
 
-from segmentation_skeleton_metrics.utils import img_util, util
+from segmentation_skeleton_metrics.utils import util
 
 
 class Reader:
@@ -44,24 +44,18 @@ class Reader:
     archive, and (3) local directory of ZIP archives.
     """
 
-    def __init__(
-        self, anisotropy=(1.0, 1.0, 1.0), selected_ids=None, verbose=True
-    ):
+    def __init__(self, selected_ids=None, verbose=True):
         """
         Initializes a Reader object that reads SWC files.
 
         Parameters
         ----------
-        anisotropy : Tuple[float], optional
-            Image to physical coordinates scaling factors to account for the
-            anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         selected_ids : Set[int], optional
             Only SWC files with an swc_id contained in this set are read.
             Default is None.
         verbose : bool, optional
             Indication of whether to display a progress bar. Default is True.
         """
-        self.anisotropy = anisotropy
         self.selected_ids = selected_ids or set()
         self.verbose = verbose
 
@@ -659,7 +653,7 @@ class Reader:
                 parts = line.split()
                 swc_dict["id"][i] = parts[0]
                 swc_dict["pid"][i] = parts[-1]
-                swc_dict["voxel"][i] = self.read_voxel(parts[2:5], offset)
+                swc_dict["voxel"][i] = self.read_coordinate(parts[2:5], offset)
             return swc_dict
         else:
             return None
@@ -686,11 +680,11 @@ class Reader:
         for i, line in enumerate(content):
             if line.startswith("# OFFSET"):
                 parts = line.split()
-                offset = self.read_voxel(parts[2:5])
+                offset = self.read_coordinate(parts[2:5])
             if not line.startswith("#") and len(line.strip()) > 0:
                 return content[i:], offset
 
-    def read_voxel(self, xyz_str, offset=(0, 0, 0)):
+    def read_coordinate(self, xyz_str, offset=(0, 0, 0)):
         """
         Reads a coordinate from a string and converts it to voxel coordinates.
 
@@ -706,5 +700,4 @@ class Reader:
         Tuple[int]
             xyz coordinates of an entry from an SWC file.
         """
-        xyz = [float(xyz_str[i]) + offset[i] for i in range(3)]
-        return img_util.to_voxels(xyz, self.anisotropy)
+        return [float(xyz_str[i]) + offset[i] for i in range(3)]
