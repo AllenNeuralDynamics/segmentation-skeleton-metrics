@@ -110,7 +110,7 @@ class TensorStoreImage(Image):
     Class that reads an image with the TensorStore library.
     """
 
-    def __init__(self, img_path):
+    def __init__(self, img_path, swap_axes=True):
         """
         Instantiates a TensorStore image reader.
 
@@ -119,7 +119,11 @@ class TensorStoreImage(Image):
         img_path : str
             Path to image.
         """
+        # Instance attributes
         self.driver = self.get_driver(img_path)
+        self.swap_axes = swap_axes  # MUST IMPLEMENT
+
+        # Call parent class
         super().__init__(img_path)
 
     def get_driver(self, img_path):

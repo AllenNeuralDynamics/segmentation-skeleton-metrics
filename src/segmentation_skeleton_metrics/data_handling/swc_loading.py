@@ -332,8 +332,6 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                print(path)
-                break  # TEMP
 
             # Store results
             swc_dicts = deque()
@@ -692,7 +690,7 @@ class Reader:
             if not line.startswith("#") and len(line.strip()) > 0:
                 return content[i:], offset
 
-    def read_voxel(self, xyz_str, offset):
+    def read_voxel(self, xyz_str, offset=(0, 0, 0)):
         """
         Reads a coordinate from a string and converts it to voxel coordinates.
 
@@ -700,8 +698,8 @@ class Reader:
         ----------
         xyz_str : str
             Coordinate stored as a string.
-        offset : list[int]
-            Offset of coordinates in SWC file.
+        offset : Tuple[int]
+            Offset of coordinates in SWC file. Default is (0, 0, 0).
 
         Returns
         -------
