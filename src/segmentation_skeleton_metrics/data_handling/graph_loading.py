@@ -20,7 +20,8 @@ import numpy as np
 
 from segmentation_skeleton_metrics.data_handling import swc_loading
 from segmentation_skeleton_metrics.data_handling.graph_classes import (
-    FragmentGraph, LabeledGraph
+    FragmentGraph,
+    LabeledGraph
 )
 from segmentation_skeleton_metrics.utils import util
 
@@ -155,6 +156,7 @@ class GraphLoader:
     def __init__(
         self,
         anisotropy=(1.0, 1.0, 1.0),
+        fix_label_misalignments=True,
         is_groundtruth=False,
         label_handler=None,
         label_mask=None,
@@ -170,6 +172,9 @@ class GraphLoader:
         anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
+        fix_label_misalignments : bool, optional
+            Indication of whether to fix misalignments between skeletons and
+            segmentation mask. Default is True.
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
             tracing. Default is False.
@@ -187,6 +192,7 @@ class GraphLoader:
         """
         # Instance attributes
         self.anisotropy = np.array(anisotropy)
+        self.fix_label_misalignments = fix_label_misalignments
         self.is_groundtruth = is_groundtruth
         self.label_handler = label_handler
         self.label_mask = label_mask
@@ -216,13 +222,9 @@ class GraphLoader:
         """
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
-            if self.verbose:
-                iterator = tqdm(graphs, desc="Label Graphs")
-            else:
-                iterator = graphs
-            for name in iterator:
-                print(name)
+            for name in self.iterator(graphs, desc="Label Graphs"):
                 self._label_graph(graphs[name])
+                self._fix_label_misalignments(graphs[name])
         return graphs
 
     # --- Build Graphs ---
@@ -392,8 +394,6 @@ class GraphLoader:
                 for i, label in node_to_label.items():
                     graph.node_labels[i] = label
 
-        GraphLoader.fix_label_misalignments(graph)
-
     def get_patch_labels(self, graph, nodes):
         """
         Gets the segment labels for a given set of nodes within a specified
@@ -420,8 +420,7 @@ class GraphLoader:
             node_to_label[i] = label
         return node_to_label
 
-    @staticmethod
-    def fix_label_misalignments(graph):
+    def _fix_label_misalignments(self, graph):
         """
         Adjusts misalignments between the labeled graph and segmentation.
 
@@ -430,18 +429,37 @@ class GraphLoader:
         graph : LabeledGraph
             Graph to be searched.
         """
-        visited_edges = set()
-        for i, j in deque(nx.dfs_edges(graph)):
-            # Check whether to visit edge
-            if frozenset({i, j}) in visited_edges:
-                continue
-
-            # Visit edge
-            if int(graph.node_labels[j]) == 0:
-                GraphLoader.check_misalignment(graph, visited_edges, i, j)
-            visited_edges.add(frozenset({i, j}))
+        if self.fix_label_misalignments:
+            visited = set()
+            for i, j in deque(nx.dfs_edges(graph)):
+                # Check whether to visit edge
+                if frozenset({i, j}) in visited:
+                    continue
+    
+                # Visit edge
+                if int(graph.node_labels[j]) == 0:
+                    GraphLoader.check_misalignment(graph, visited, i, j)
+                visited.add(frozenset({i, j}))
 
     # --- Helpers ---
+    def iterator(self, iterator, desc=""):
+        """
+        Gets an iterator that optionally displays a progress bar.
+
+        Parameters
+        ----------
+        iterator : iterable
+            Object to be iterated over.
+        desc : str, optional
+            Text to display on progress bar. Default is an empty string.
+
+        Returns
+        -------
+        tqdm.tqdm
+            Iterator that is optionally wrapped in a progress bar.
+        """
+        return tqdm(iterator, desc=desc) if self.verbose else iterator
+
     def manual_progress_bar(self, total, desc=""):
         """
         Gets progress bar that needs to be updated manually.
