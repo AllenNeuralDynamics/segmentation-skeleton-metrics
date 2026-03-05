@@ -14,6 +14,7 @@ from scipy.spatial import distance, KDTree
 
 import networkx as nx
 import numpy as np
+import os
 
 from segmentation_skeleton_metrics.utils import util
 
@@ -216,7 +217,7 @@ class SkeletonGraph(nx.Graph):
         zip_writer : zipfile.ZipFile
             A ZipFile object that will store the generated SWC file.
         """
-        for cnt, nodes in enumerate(nx.connected_componets(self)):
+        for cnt, nodes in enumerate(map(list, nx.connected_componets(self))):
             filename = f"{self.name}.{cnt}.swc"
             zip_writer.writestr(filename, self._generate_swc_text(nodes[0]))
 
@@ -231,7 +232,7 @@ class SkeletonGraph(nx.Graph):
         output_dir : str
             Path to directory that SWC files will be written to.
         """
-        for cnt, nodes in enumerate(nx.connected_componets(self)):
+        for cnt, nodes in enumerate(map(list, nx.connected_components(self))):
             path = os.path.join(output_dir, f"{self.name}.{cnt}.swc")
             with open(path, "w") as file_writer:
                 file_writer.write(self._generate_swc_text(nodes[0]))
@@ -280,7 +281,7 @@ class SkeletonGraph(nx.Graph):
             # General Case: Non-Root
             cnt += 1
             write_entry(j, i)
-        return text_buffer
+        return text_buffer.getvalue()
 
 
 class LabeledGraph(SkeletonGraph):

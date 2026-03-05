@@ -345,4 +345,4 @@ def to_voxels(xyz, anisotropy):
     Tuple[int]
         Voxel coordinate.
     """
-    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)])
+    return tuple([int(xyz[i] / anisotropy[i]) for i in range(3)][::-1])
