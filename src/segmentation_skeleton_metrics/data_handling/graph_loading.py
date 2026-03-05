@@ -305,7 +305,7 @@ class GraphLoader:
         # Apply voxel coordinate conversion (if applicable)
         if self.use_anisotropy:
             graph.voxels = (graph.voxels / self.anisotropy).astype(int)
-            graph.voxels[:, [2, 4]] = graph.voxels[:, [4, 2]]
+            graph.voxels[:, [0, 2]] = graph.voxels[:, [2, 0]]
         return {graph.name: graph}
 
     def _init_graph(self, swc_dict):
