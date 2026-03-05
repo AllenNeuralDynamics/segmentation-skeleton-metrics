@@ -219,7 +219,7 @@ class SkeletonGraph(nx.Graph):
         use_color : bool, optional
             Indication of whether to use the class color. Default is True.
         """
-        for cnt, nodes in enumerate(map(list, nx.connected_componets(self))):
+        for cnt, nodes in enumerate(map(list, nx.connected_components(self))):
             filename = f"{self.name}.{cnt}.swc"
             zip_writer.writestr(filename, self._generate_swc_text(nodes[0]))
 
