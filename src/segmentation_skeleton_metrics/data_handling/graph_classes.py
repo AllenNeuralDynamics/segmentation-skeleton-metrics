@@ -274,7 +274,7 @@ class SkeletonGraph(nx.Graph):
 
         # Create writer
         text_buffer = StringIO()
-        text_buffer.write(self.color()) if self.use_color else None
+        text_buffer.write(self.color()) if use_color else None
         text_buffer.write("\n# id, type, z, y, x, r, pid")
 
         # Write entries
