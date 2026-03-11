@@ -169,6 +169,10 @@ class TensorStoreImage(Image):
         while self.img.ndim < 5:
             self.img = self.img[ts.newaxis, ...]
 
+        # Check whether to swap axes
+        if self.swap_axes:
+            self.img = self.img[ts.d[:].transpose[0, 1, 4, 3, 2]]
+
     def read(self, voxel, shape):
         """
         Reads a patch from an image given a voxel coordinate and patch shape.

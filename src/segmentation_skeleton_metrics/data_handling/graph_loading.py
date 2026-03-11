@@ -73,7 +73,7 @@ class DataLoader:
         ----------
         swc_pointer : str
             Pointer to ground truth SWC files.
-        label_mask : ImageReader
+        label_mask : Image
             Predicted segmentation.
 
         Returns
@@ -94,7 +94,7 @@ class DataLoader:
         )
         return graph_loader(swc_pointer)
 
-    def load_fragments(self, swc_pointer, gt_graphs):
+    def load_fragments(self, swc_pointer, selected_ids=None):
         """
         Loads fragment graphs (predicted skeletons).
 
@@ -102,8 +102,9 @@ class DataLoader:
         ----------
         swc_pointer : str
             Path or pointer to predicted SWC files.
-        gt_graphs : Dict[str, SkeletonGraph]
-            Ground truth graphs to extract node labels from.
+        selected_ids : Set[int], optional
+            Only SWC files with an swc_id contained in this set are read.
+            Default is None.
 
         Returns
         -------
@@ -118,7 +119,6 @@ class DataLoader:
             return None
 
         # Load fragments
-        selected_ids = self.get_all_node_labels(gt_graphs)
         graph_loader = GraphLoader(
             anisotropy=self.anisotropy,
             is_groundtruth=False,
@@ -180,7 +180,7 @@ class GraphLoader:
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
             tracing. Default is False.
-        label_mask : ImageReader, optional
+        label_mask : Image, optional
             Predicted segmentation mask.
         selected_ids : Set[int], optional
             Only SWC files with a name contained in this set are read. Default
@@ -213,7 +213,7 @@ class GraphLoader:
 
         Parameters
         ----------
-        swc_pointer : Any
+        swc_pointer : str
             Object that points to SWC files to be read.
 
         Returns
@@ -225,6 +225,7 @@ class GraphLoader:
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
             for name in self.iterator(graphs, desc="Label Graphs"):
+                print(name)
                 self._label_graph(graphs[name])
                 self._fix_label_misalignments(graphs[name])
         return graphs
@@ -303,6 +304,7 @@ class GraphLoader:
         graph.prune_branches()
 
         # Apply voxel coordinate conversion (if applicable)
+        print(np.max(graph.node_voxel))
         if self.use_anisotropy:
             graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]

@@ -16,9 +16,6 @@ import networkx as nx
 import numpy as np
 import os
 
-from segmentation_skeleton_metrics.data_handling.graph_loading import (
-    LabelHandler
-)
 from segmentation_skeleton_metrics.utils import util
 
 
@@ -358,17 +355,16 @@ class LabeledGraph(SkeletonGraph):
         """
         return np.where(self.node_label == label)[0]
 
-    def relabel_nodes(self, connections_path):
+    def relabel_nodes(self, label_handler):
         """
         Relabels graph nodes according to a set of label connections defined
         in the specified file.
 
         Parameters
         ----------
-        connections_path : str
-            Path to file containing pairs of segment IDs that were merged.
+        label_handler : LabelHander
+            Object that retrieves sets node labels.
         """
-        label_handler = LabelHandler(connections_path=connections_path)
         for i in self.nodes:
             self.node_label[i] = label_handler.get(self.node_label[i])
 

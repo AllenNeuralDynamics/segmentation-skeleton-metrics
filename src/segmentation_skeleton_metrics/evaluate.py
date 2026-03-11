@@ -58,7 +58,7 @@ def evaluate(
     gt_path : str
         Path to ground truth SWC files, see swc_util.Reader for documentation
         These SWC files are assumed to be stored in voxel coordinates.
-    segmentation : ImageReader
+    segmentation : Image
         Predicted segmentation.
     anisotropy : Tuple[float], optional
         Image to physical coordinates scaling factors to account for the
@@ -98,7 +98,9 @@ def evaluate(
         verbose=verbose,
     )
     gt_graphs = dataloader.load_groundtruth(gt_path, segmentation)
-    fragment_graphs = dataloader.load_fragments(fragments_path, gt_graphs)
+    fragment_graphs = dataloader.load_fragments(
+        fragments_path, selected_ids=gt_graphs.get_all_node_labels(gt_graphs)
+    )
 
     # Run evaluation
     util.mkdir(output_dir)
