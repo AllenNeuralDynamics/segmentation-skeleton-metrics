@@ -16,9 +16,6 @@ import networkx as nx
 import numpy as np
 import os
 
-from segmentation_skeleton_metrics.data_handling.graph_loading import (
-    LabelHandler
-)
 from segmentation_skeleton_metrics.utils import util
 
 
