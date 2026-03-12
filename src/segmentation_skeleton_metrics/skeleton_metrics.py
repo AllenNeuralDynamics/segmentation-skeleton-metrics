@@ -381,7 +381,7 @@ class MergeCountMetric(SkeletonMetric):
             stored under a column called "self.name".
         """
         # Main
-        for gt_graph in self.iterator(gt_graphs.values()):
+        for gt_graph in self.get_iterator(gt_graphs.values()):
             # Build ground truth kd-tree
             gt_graph.set_kdtree()
 
