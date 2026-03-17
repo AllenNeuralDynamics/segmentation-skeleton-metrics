@@ -225,7 +225,6 @@ class GraphLoader:
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
             for name in self.iterator(graphs, desc="Label Graphs"):
-                print(name)
                 self._label_graph(graphs[name])
                 self._fix_label_misalignments(graphs[name])
         return graphs
