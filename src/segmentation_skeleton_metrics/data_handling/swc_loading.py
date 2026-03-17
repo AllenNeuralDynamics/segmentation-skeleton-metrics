@@ -327,7 +327,6 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                break  # TEMP
 
             # Store results
             swc_dicts = deque()
