@@ -225,6 +225,7 @@ class GraphLoader:
         graphs = self._build_graphs_from_swcs(swc_pointer)
         if self.label_mask:
             for name in self.iterator(graphs, desc="Label Graphs"):
+                print(name)
                 self._label_graph(graphs[name])
                 self._fix_label_misalignments(graphs[name])
         return graphs
@@ -303,6 +304,7 @@ class GraphLoader:
         graph.prune_branches()
 
         # Apply voxel coordinate conversion (if applicable)
+        print(np.max(graph.node_voxel))
         if self.use_anisotropy:
             graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]
