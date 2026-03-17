@@ -260,7 +260,7 @@ class GraphLoader:
                 if self.verbose:
                     pbar.update(1)
         else:
-            with ProcessPoolExecutor(max_workers=1) as executor:
+            with ProcessPoolExecutor() as executor:
                 # Assign processes
                 processes = list()
                 while len(swc_dicts) > 0:

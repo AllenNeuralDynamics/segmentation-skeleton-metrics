@@ -417,7 +417,7 @@ class MergeCountMetric(SkeletonMetric):
             Graph corresponding to a segment in the predicted segmentation.
         """
         visited = set()
-        for leaf in util.get_leafs(fragment_graph):
+        for leaf in fragment_graph.leafs():
             # Check whether to visit
             if leaf in visited or visited.add(leaf):
                 continue
@@ -450,7 +450,7 @@ class MergeCountMetric(SkeletonMetric):
         """
         queue = deque([source])
         visited.add(source)
-        while len(queue) > 0:
+        while queue:
             # Visit node
             i = queue.pop()
             xyz_i = fragment_graph.node_xyz(i)

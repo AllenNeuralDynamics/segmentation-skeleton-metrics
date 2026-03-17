@@ -214,23 +214,6 @@ def update_txt(path, text, verbose=True):
 
 
 # --- Graph Utils ---
-def get_leafs(graph):
-    """
-    Gets all leafs nodes in the given graph.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-
-    Returns
-    -------
-    List[int]
-        Leaf nodes in the given graph.
-    """
-    return [node for node in graph.nodes if graph.degree[node] == 1]
-
-
 def search_branching_node(graph, kdtree, root, radius=40):
     """
     Searches for a branching node within distance "radius" from the given
@@ -257,7 +240,7 @@ def search_branching_node(graph, kdtree, root, radius=40):
     while queue:
         # Visit node
         i, d_i = queue.popleft()
-        xyz_i = graph.get_xyz(i)
+        xyz_i = graph.node_xyz(i)
         if graph.degree[i] > 2:
             dist, _ = kdtree.query(xyz_i)
             if dist < 16:
@@ -584,26 +567,6 @@ def load_valid_labels(path):
     for label_str in read_txt(path).splitlines():
         valid_labels.add(int(label_str.split(".")[0]))
     return valid_labels
-
-
-def kdtree_query(kdtree, xyz):
-    """
-    Gets the nearest neighbor of the given xyz coordinate from "kdtree".
-
-    Parameters
-    ----------
-    kdtree : scipy.spatial.KDTree
-        KD-Tree to be searched.
-    xyz : ArrayLike
-        Coordinate to be queried.
-
-    Returns
-    -------
-    Tuple[float]
-        Coordinate of the nearest neighbor in the given KD-Tree.
-    """
-    _, idx = kdtree.query(xyz)
-    return tuple(kdtree.data[idx])
 
 
 def parse_cloud_path(path):

@@ -26,6 +26,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
+from google.auth.exceptions import RefreshError
 from google.cloud import storage
 from io import BytesIO
 from tqdm import tqdm
@@ -383,9 +384,27 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        swc_dicts = deque()
-        for zip_path in self.iterator(zip_paths):
-            swc_dicts.extend(self.read_from_gcs_zip(bucket_name, zip_path))
+        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            processes = list()
+            for zip_path in zip_paths:
+                processes.append(
+                    executor.submit(
+                        self.read_from_gcs_zip,
+                        bucket_name,
+                        zip_path
+                    )
+                )
+
+            # Store results
+            swc_dicts = deque()
+            for process in as_completed(processes):
+                try:
+                    swc_dicts.extend(process.result())
+                except RefreshError:
+                    pass
+                pbar.update(1)
         return swc_dicts
 
     def read_from_gcs_zip(self, bucket_name, path):
