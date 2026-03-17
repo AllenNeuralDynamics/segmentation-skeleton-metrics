@@ -156,6 +156,17 @@ class SkeletonGraph(nx.Graph):
         """
         return distance.euclidean(self.node_xyz(i), self.node_xyz(j))
 
+    def leafs(self):
+        """
+        Gets all leafs nodes.
+
+        Returns
+        -------
+        List[int]
+            Leaf nodes in the given graph.
+        """
+        return [node for node in self.nodes if self.degree[node] == 1]
+
     def node_xyz(self, i):
         """
         Gets the physical coordinate of the given node.
@@ -525,7 +536,7 @@ class FragmentGraph(SkeletonGraph):
         depth : float
             Length of branches that are pruned.
         """
-        for leaf in util.get_leafs(self):
+        for leaf in self.leafs():
             branch = [leaf]
             length = 0
             for i, j in nx.dfs_edges(self, source=leaf):

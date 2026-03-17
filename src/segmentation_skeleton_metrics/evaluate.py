@@ -99,7 +99,7 @@ def evaluate(
     )
     gt_graphs = dataloader.load_groundtruth(gt_path, segmentation)
     fragment_graphs = dataloader.load_fragments(
-        fragments_path, selected_ids=gt_graphs.get_all_node_labels(gt_graphs)
+        fragments_path, selected_ids=dataloader.get_all_node_labels(gt_graphs)
     )
 
     # Run evaluation
