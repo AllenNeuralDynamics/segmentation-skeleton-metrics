@@ -64,7 +64,11 @@ class Image(ABC):
         numpy.ndarray
             Image patch.
         """
-        return self.img[(0, 0, *get_slices(voxel, shape))]
+        try:
+            return self.img[(0, 0, *get_slices(voxel, shape))]
+        except:
+            print(f"Error reading patch at {voxel} with shape {shape}, but image has shape {self.shape()}")
+            stop
 
     def read_with_bbox(self, bbox):
         """
@@ -101,7 +105,7 @@ class TensorStoreImage(Image):
     Class that reads an image with the TensorStore library.
     """
 
-    def __init__(self, img_path, swap_axes=True):
+    def __init__(self, img_path, swap_axes=False):
         """
         Instantiates a TensorStore image reader.
 

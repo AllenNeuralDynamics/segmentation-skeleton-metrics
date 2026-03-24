@@ -53,8 +53,9 @@ class DataLoader:
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         use_anisotropy : bool, optional
-            Indication of whether to apply the anisotropy to the coordinates
-            from the fragment SWC files. Default is False.
+            Indication of whether coordinates in SWC files should be converted
+            from physical to image coordinates using the given anisotropy.
+            Default is False.
         verbose : bool, optional
             Indication of whether to display a progress bar. Default is True.
         """
@@ -89,7 +90,7 @@ class DataLoader:
             is_groundtruth=True,
             label_handler=self.label_handler,
             label_mask=label_mask,
-            use_anisotropy=False,
+            use_anisotropy=self.use_anisotropy,
             verbose=self.verbose,
         )
         return graph_loader(swc_pointer)
@@ -163,7 +164,7 @@ class GraphLoader:
         label_handler=None,
         label_mask=None,
         selected_ids=None,
-        use_anisotropy=True,
+        use_anisotropy=False,
         verbose=True,
     ):
         """
@@ -188,7 +189,7 @@ class GraphLoader:
         use_anisotropy : bool, optional
             Indication of whether coordinates in SWC files should be converted
             from physical to image coordinates using the given anisotropy.
-            Default is True.
+            Default is False.
         verbose : bool, optional
             Indication of whether to display a progress bar. Default is True.
         """
@@ -303,7 +304,6 @@ class GraphLoader:
         graph.prune_branches()
 
         # Apply voxel coordinate conversion (if applicable)
-        print(np.max(graph.node_voxel))
         if self.use_anisotropy:
             graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]

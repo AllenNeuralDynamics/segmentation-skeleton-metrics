@@ -79,7 +79,7 @@ class SkeletonGraph(nx.Graph):
         """
         Builds a KD-Tree from the node physical coordinates.
         """
-        self.kdtree = KDTree(self.node_voxel * self.anisotropy)
+        self.kdtree = KDTree(self.node_voxel[:, [2, 1, 0]] * self.anisotropy)
 
     def set_voxels(self, voxels):
         """
