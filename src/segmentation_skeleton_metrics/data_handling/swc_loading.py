@@ -29,7 +29,6 @@ from concurrent.futures import (
 from google.auth.exceptions import RefreshError
 from google.cloud import storage
 from io import BytesIO
-from random import sample
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -328,7 +327,6 @@ class Reader:
                 threads.append(
                     executor.submit(self.read_from_gcs_swc, bucket_name, path)
                 )
-                break
 
             # Store results
             swc_dicts = deque()
@@ -385,8 +383,6 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        zip_paths = sample(zip_paths, 1000)  # TEMP
-
         pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
         with ProcessPoolExecutor() as executor:
             # Assign processes
