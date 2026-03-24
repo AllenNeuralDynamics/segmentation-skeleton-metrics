@@ -578,13 +578,10 @@ class Reader:
 
                 # Collect results
                 swc_dicts = deque()
-                pbar = self.manual_progress_bar(len(threads))
                 for thread in as_completed(threads):
                     result = thread.result()
                     if result:
                         swc_dicts.append(result)
-                    if self.verbose:
-                        pbar.update(1)
         return swc_dicts
 
     def confirm_read(self, filename):
