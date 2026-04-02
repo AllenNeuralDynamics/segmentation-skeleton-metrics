@@ -9,7 +9,6 @@ management.
 
 """
 
-from collections import deque
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
@@ -227,7 +226,8 @@ class GraphLoader:
         if self.label_mask:
             for name in self.iterator(graphs, desc="Label Graphs"):
                 self._label_graph(graphs[name])
-                self._fix_label_misalignments(graphs[name])
+                if self.fix_label_misalignments:
+                    graphs[name].fix_label_misalignments()
         return graphs
 
     # --- Build Graphs ---
@@ -422,27 +422,6 @@ class GraphLoader:
             node_to_label[i] = self.label_handler.get(label_patch[voxel])
         return node_to_label
 
-    def _fix_label_misalignments(self, graph):
-        """
-        Adjusts misalignments between the labeled graph and segmentation.
-
-        Parameters
-        ----------
-        graph : LabeledGraph
-            Graph to be searched.
-        """
-        if self.fix_label_misalignments:
-            visited = set()
-            for i, j in deque(nx.dfs_edges(graph)):
-                # Check whether to visit edge
-                if frozenset({i, j}) in visited:
-                    continue
-
-                # Visit edge
-                if int(graph.node_label[j]) == 0:
-                    GraphLoader.check_misalignment(graph, visited, i, j)
-                visited.add(frozenset({i, j}))
-
     # --- Helpers ---
     def iterator(self, iterator, desc=""):
         """
@@ -479,48 +458,6 @@ class GraphLoader:
             Iterator that is optionally wrapped in a progress bar.
         """
         return tqdm(total=total, desc=desc) if self.verbose else None
-
-    @staticmethod
-    def check_misalignment(graph, visited_edges, nb, root):
-        """
-        Determines whether zero-valued label corresponds to a misalignment
-        between the graph and segmentation mask.
-
-        Parameters
-        ----------
-        graph : LabeledGraph
-            Graph that represents a ground truth neuron.
-        visited_edges : List[Frozenset[int]]
-            List of edges in "graph" that have been visited.
-        nb : int
-            Neighbor of "root".
-        root : int
-            Node where possible misalignment starts (i.e. zero-valued label).
-        """
-        # Search graph
-        label_collisions = set()
-        queue = deque([root])
-        visited = set()
-        while len(queue) > 0:
-            # Visit node
-            j = queue.popleft()
-            label_j = int(graph.node_label[j])
-            if label_j != 0:
-                label_collisions.add(label_j)
-            visited.add(j)
-
-            # Update queue
-            if label_j == 0:
-                for k in graph.neighbors(j):
-                    if k not in visited:
-                        if frozenset({j, k}) not in visited_edges or k == nb:
-                            queue.append(k)
-                            visited_edges.add(frozenset({j, k}))
-
-        # Upd zero nodes
-        if len(label_collisions) == 1:
-            label = label_collisions.pop()
-            graph.update_node_labels(visited, label)
 
 
 class LabelHandler:

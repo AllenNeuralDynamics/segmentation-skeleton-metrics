@@ -64,11 +64,7 @@ class Image(ABC):
         numpy.ndarray
             Image patch.
         """
-        try:
-            return self.img[(0, 0, *get_slices(voxel, shape))]
-        except:
-            print(f"Error reading patch at {voxel} with shape {shape}, but image has shape {self.shape()}")
-            stop
+        return self.img[(0, 0, *get_slices(voxel, shape))]
 
     def read_with_bbox(self, bbox):
         """
