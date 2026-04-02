@@ -285,7 +285,7 @@ class Reader:
 
         Returns
         -------
-        Dequeue[dict]
+        Deque[dict]
             Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -316,7 +316,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute
             names and values from an SWC file.
         """
@@ -379,7 +379,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -420,7 +420,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -462,7 +462,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -489,7 +489,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -516,7 +516,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
@@ -555,7 +555,7 @@ class Reader:
 
         Returns
         -------
-        swc_dicts : Dequeue[dict]
+        swc_dicts : Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """

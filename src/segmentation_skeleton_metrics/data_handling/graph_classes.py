@@ -8,7 +8,7 @@ Implementation of a custom subclass of NetworkX.Graph called SkeletonGraph.
 
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from io import StringIO
 from scipy.spatial import distance, KDTree
 
@@ -378,6 +378,7 @@ class LabeledGraph(SkeletonGraph):
         """
         for i in self.nodes:
             self.node_label[i] = label_handler.get(self.node_label[i])
+        self.fix_label_misalignments()
 
     def remove_nodes_with_label(self, label):
         """
@@ -438,6 +439,60 @@ class LabeledGraph(SkeletonGraph):
         """
         for i in nodes:
             self.node_label[i] = label
+
+    def fix_label_misalignments(self):
+        """
+        Fixes misalignments between the labeled graph and segmentation.
+        """
+        visited = set()
+        for i, j in deque(nx.dfs_edges(self)):
+            # Check whether to visit edge
+            if frozenset({i, j}) in visited:
+                continue
+
+            # Visit edge
+            if int(self.node_label[j]) == 0:
+                self.check_misalignment(visited, i, j)
+            visited.add(frozenset({i, j}))
+
+    def check_misalignment(self, visited_edges, nb, root):
+        """
+        Determines whether zero-valued label corresponds to a misalignment
+        between the graph and segmentation mask.
+
+        Parameters
+        ----------
+        visited_edges : List[Frozenset[int]]
+            List of edges in "graph" that have been visited.
+        nb : int
+            Neighbor of "root".
+        root : int
+            Node where possible misalignment starts (i.e. zero-valued label).
+        """
+        # Search graph
+        label_collisions = set()
+        queue = deque([root])
+        visited = set()
+        while len(queue) > 0:
+            # Visit node
+            j = queue.popleft()
+            label_j = int(self.node_label[j])
+            if label_j != 0:
+                label_collisions.add(label_j)
+            visited.add(j)
+
+            # Update queue
+            if label_j == 0:
+                for k in self.neighbors(j):
+                    if k not in visited:
+                        if frozenset({j, k}) not in visited_edges or k == nb:
+                            queue.append(k)
+                            visited_edges.add(frozenset({j, k}))
+
+        # Update zero nodes
+        if len(label_collisions) == 1:
+            label = label_collisions.pop()
+            self.update_node_labels(visited, label)
 
     # --- Helpers ---
     def get_bbox(self, nodes):
