@@ -296,10 +296,9 @@ class Reader:
         if swc_paths:
             read_fn = self.read_s3_swc if use_s3 else self.read_gcs_swc
             return self.read_cloud_swcs(bucket_name, swc_paths, read_fn)
-        if zip_paths and not use_s3:
-            return self.read_gcs_zips(bucket_name, zip_paths)
-        if zip_paths and use_s3:
-            return self.read_s3_zips(bucket_name, zip_paths)        
+        if zip_paths:
+            read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
+            return self.read_cloud_zips(bucket_name, zip_paths, read_fn)
 
         raise Exception(f"SWC Pointer is invalid {path}")
 
@@ -338,6 +337,79 @@ class Reader:
                     pbar.update(1)
         return swc_dicts
 
+    def read_cloud_zips(self, bucket_name, zip_paths, read_fn):
+        """
+        Reads SWC files stored in ZIP archives stored in a GCS or S3 bucket.
+
+        Parameters
+        ----------
+        bucket_name : str
+            Name of bucket containing SWC files.
+        zip_paths : List[str]
+            Paths to ZIP archives containing SWC files to be read.
+
+        Returns
+        -------
+        swc_dicts : Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
+        with ProcessPoolExecutor() as executor:
+            # Assign processes
+            futures = set()
+            for zip_path in zip_paths:
+                futures.add(executor.submit(read_fn, bucket_name, zip_path))
+
+            # Store results
+            swc_dicts = deque()
+            for process in as_completed(futures):
+                try:
+                    swc_dicts.extend(process.result())
+                except RefreshError:
+                    pass
+
+                if self.verbose:
+                    pbar.update(1)
+        return swc_dicts
+
+    def read_s3_zips(self, bucket_name, zip_paths):
+        """
+        Reads SWC files stored in a list of ZIP archives stored in an S3
+        bucket.
+
+        Parameters
+        ----------
+        bucket_name : str
+            Name of bucket containing SWC files.
+        zip_paths : str
+            Path to ZIP archive containing SWC files to be read.
+
+        Returns
+        -------
+        swc_dicts : Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        with ProcessPoolExecutor() as executor:
+            # Submit processes
+            processes = list()
+            for zip_path in zip_paths:
+                processes.append(
+                    executor.submit(self.read_s3_zip, bucket_name, zip_path)
+                )
+
+            # Store results
+            swc_dicts = deque()
+            pbar = self.manual_progress_bar(len(processes))
+            for process in as_completed(processes):
+                result = process.result()
+                if result:
+                    swc_dicts.extend(result)
+                if self.verbose:
+                    pbar.update(1)
+        return swc_dicts
+
     def read_gcs_swc(self, bucket_name, path):
         """
         Reads a single SWC file stored in a GCS bucket.
@@ -364,42 +436,6 @@ class Reader:
         content = blob.download_as_text().splitlines()
         filename = os.path.basename(path)
         return self.parse(content, filename)
-
-    def read_gcs_zips(self, bucket_name, zip_paths):
-        """
-        Reads SWC files stored in a ZIP archives stored in a GCS bucket.
-
-        Parameters
-        ----------
-        bucket_name : str
-            Name of bucket containing SWC files.
-        zip_paths : List[str]
-            List of paths to ZIP archives containing SWC files to be read.
-
-        Returns
-        -------
-        swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute names and
-            values from an SWC file.
-        """
-        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
-        with ProcessPoolExecutor() as executor:
-            # Assign processes
-            processes = list()
-            for zip_path in zip_paths:
-                processes.append(
-                    executor.submit(self.read_gcs_zip, bucket_name, zip_path)
-                )
-
-            # Store results
-            swc_dicts = deque()
-            for process in as_completed(processes):
-                try:
-                    swc_dicts.extend(process.result())
-                except RefreshError:
-                    pass
-                pbar.update(1)
-        return swc_dicts
 
     def read_gcs_zip(self, bucket_name, path):
         """
@@ -443,43 +479,6 @@ class Reader:
                     result = thread.result()
                     if result:
                         swc_dicts.append(result)
-        return swc_dicts
-
-    def read_s3_zips(self, bucket_name, zip_paths):
-        """
-        Reads SWC files stored in a list of ZIP archives stored in an S3
-        bucket.
-
-        Parameters
-        ----------
-        bucket_name : str
-            Name of bucket containing SWC files.
-        zip_paths : str
-            Path to ZIP archive containing SWC files to be read.
-
-        Returns
-        -------
-        swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute names and
-            values from an SWC file.
-        """
-        with ProcessPoolExecutor() as executor:
-            # Submit processes
-            processes = list()
-            for zip_path in zip_paths:
-                processes.append(
-                    executor.submit(self.read_s3_zip, bucket_name, zip_path)
-                )
-
-            # Store results
-            swc_dicts = deque()
-            pbar = self.manual_progress_bar(len(processes))
-            for process in as_completed(processes):
-                result = process.result()
-                if result:
-                    swc_dicts.extend(result)
-                if self.verbose:
-                    pbar.update(1)
         return swc_dicts
 
     def read_s3_zip(self, bucket_name, path):
