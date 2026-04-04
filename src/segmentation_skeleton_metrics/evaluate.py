@@ -42,7 +42,7 @@ def evaluate(
     anisotropy=(1.0, 1.0, 1.0),
     connections_path=None,
     fragments_path=None,
-    results_filename="results",
+    results_prefix="",
     save_merges=False,
     save_fragments=False,
     use_anisotropy=False,
@@ -69,11 +69,9 @@ def evaluate(
     fragments_path : str, optional
         Path to SWC files corresponding to "segmentation", see swc_util.Reader
         for documentation. Notes: (1) "anisotropy" is applied to these SWC
-        files and (2) these SWC files are required for counting merges.
-        Default is None.
-    results_filename : str, optional
-        Name of file that skeleton metric results are written to. Default is
-        "results".
+        files and (2) required for counting merges. Default is None.
+    results_prefix : str, optional
+        Prefix appended to result filenames. Default is an empty string.
     save_merges : bool, optional
         Indication of whether to save merge sites and fragments with a merge
         mistake. Default is False.
@@ -104,7 +102,7 @@ def evaluate(
 
     # Run evaluation
     util.mkdir(output_dir)
-    evaluator = Evaluator(output_dir, results_filename, verbose)
+    evaluator = Evaluator(output_dir, results_prefix, verbose)
     evaluator(gt_graphs, fragment_graphs)
 
     # Optional saves
@@ -125,8 +123,8 @@ class Evaluator:
     ----------
     output_dir : str
         Directory where evaluation results will be saved.
-    results_filename : str
-        Filename (without extension) for the CSV report.
+    results_prefix : str
+        Prefix appended to result filenames.
     verbose : bool
         Indication of whether to display progress bars and printout results.
     metrics : dict
@@ -145,7 +143,7 @@ class Evaluator:
         - "Merge Rate": MergeRateMetric
     """
 
-    def __init__(self, output_dir, results_filename, verbose=True):
+    def __init__(self, output_dir, results_prefix, verbose=True):
         """
         Instantiates an Evaluator object.
 
@@ -153,15 +151,15 @@ class Evaluator:
         ----------
         output_dir : str
             Directory where evaluation results will be saved.
-        results_filename : str
-            Filename (without extension) for the CSV report.
+        results_prefix : str
+            Prefix appended to result filenames.
         verbose : bool, optional
             Indication of whether to display progress bars and printout
             results. Default is True.
         """
         # Instance attributes
         self.output_dir = output_dir
-        self.results_filename = results_filename
+        self.prefix = results_prefix + "_"
         self.verbose = verbose
 
         # Set core metrics
@@ -223,7 +221,7 @@ class Evaluator:
         )
 
         # Save report
-        path = f"{self.output_dir}/{self.results_filename}.csv"
+        path = f"{self.output_dir}/{self.prefix}results.csv"
         results.to_csv(path, index=True)
         self.report_summary(results)
 
@@ -267,7 +265,7 @@ class Evaluator:
             DataFrame containing evaluation results for individual SWCs.
         """
         # Averaged results
-        filename = f"{self.results_filename}-overview.txt"
+        filename = f"results_{self.prefix}results_overview.txt"
         path = os.path.join(self.output_dir, filename)
         util.update_txt(path, "\nAverage Results...", self.verbose)
         for column in results.columns:
@@ -297,7 +295,7 @@ class Evaluator:
             Graphs built from skeletons obtained from a segmentation.
         """
         # Initializations
-        fragments_dir = os.path.join(self.output_dir, "fragments")
+        fragments_dir = os.path.join(self.output_dir, f"{prefix}fragments")
         util.mkdir(fragments_dir, delete=True)
 
         # Main
@@ -347,7 +345,7 @@ class Evaluator:
             Directory that results are written to.
         """
         # Initialize a writer
-        filename = f"{self.results_filename}-merged_fragments.zip"
+        filename = f"{self.prefix}fragments_with_merges.zip"
         zip_path = os.path.join(output_dir, filename)
         util.rm_file(zip_path)
         zip_writer = ZipFile(zip_path, "a")
@@ -358,8 +356,7 @@ class Evaluator:
         zip_writer.close()
 
         # Save CSV report
-        filename = f"{self.results_filename}-merge_sites.csv"
-        path = os.path.join(self.output_dir, filename)
+        path = os.path.join(self.output_dir, f"{self.prefix}merge_sites.csv")
         self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
     def save_merge_sites(self, zip_writer):

@@ -95,38 +95,34 @@ class Reader:
             # Local ZIP archives with SWC files
             paths = util.list_paths(swc_pointer, extension=".zip")
             if len(paths) > 0:
-                return self.read_from_zips(swc_pointer)
+                return self.read_zips(swc_pointer)
 
             # Local SWC files
             paths = util.read_paths(swc_pointer, extension=".swc")
             if len(paths) > 0:
-                return self.read_from_paths(paths)
+                return self.read_swcs(paths)
 
             raise Exception("Directory is Invalid!")
 
         # Path to...
         if isinstance(swc_pointer, str):
-            # Cloud GCS storage
-            if util.is_gcs_path(swc_pointer):
-                return self.read_from_gcs(swc_pointer)
-
-            # Cloud S3 storage
-            if util.is_s3_path(swc_pointer):
-                return self.read_from_s3(swc_pointer)
+            # Cloud GCS/S3 storage
+            if util.is_gcs_path(swc_pointer) or util.is_s3_path(swc_pointer):
+                return self.read_from_cloud(swc_pointer)
 
             # Local ZIP archive with SWC files
             if swc_pointer.endswith(".zip"):
-                return self.read_from_zip(swc_pointer)
+                return self.read_zip(swc_pointer)
 
             # Local path to single SWC file
             if swc_pointer.endswith(".swc"):
-                return self.read_from_path(swc_pointer)
+                return self.read_swc(swc_pointer)
 
             raise Exception("Path is Invalid!")
 
         raise Exception("SWC Pointer is Invalid!")
 
-    def read_from_path(self, path):
+    def read_swc(self, path):
         """
         Reads a single SWC file.
 
@@ -148,7 +144,7 @@ class Reader:
         else:
             return None
 
-    def read_from_paths(self, paths):
+    def read_swcs(self, paths):
         """
         Reads SWC files given a list of paths.
 
@@ -169,7 +165,7 @@ class Reader:
             for path in paths:
                 filename = os.path.basename(path)
                 if self.confirm_read(filename):
-                    threads.append(executor.submit(self.read_from_path, path))
+                    threads.append(executor.submit(self.read_swc, path))
 
             # Store results
             swc_dicts = deque()
@@ -182,7 +178,7 @@ class Reader:
                     pbar.update(1)
         return swc_dicts
 
-    def read_from_zips(self, zip_dir):
+    def read_zips(self, zip_dir):
         """
         Processes a directory containing ZIP archives with SWC files.
 
@@ -203,7 +199,7 @@ class Reader:
             zip_names = [f for f in os.listdir(zip_dir) if f.endswith(".zip")]
             for name in zip_names:
                 zip_path = os.path.join(zip_dir, name)
-                processes.append(executor.submit(self.read_from_zip, zip_path))
+                processes.append(executor.submit(self.read_zip, zip_path))
 
             # Store results
             swc_dicts = deque()
@@ -214,7 +210,7 @@ class Reader:
                     pbar.update(1)
         return swc_dicts
 
-    def read_from_zip(self, zip_path):
+    def read_zip(self, zip_path):
         """
         Reads SWC files from a ZIP archive.
 
@@ -238,7 +234,7 @@ class Reader:
                 if self.confirm_read(filename):
                     threads.append(
                         executor.submit(
-                            self.read_from_zipped_file, zipfile, filename
+                            self.read_zipped_file, zipfile, filename
                         )
                     )
 
@@ -250,7 +246,7 @@ class Reader:
                     swc_dicts.append(result)
         return swc_dicts
 
-    def read_from_zipped_file(self, zipfile, path):
+    def read_zipped_file(self, zipfile, path):
         """
         Reads an SWC file stored in a ZIP archive.
 
@@ -271,41 +267,45 @@ class Reader:
         filename = os.path.basename(path)
         return self.parse(content, filename)
 
-    def read_from_gcs(self, gcs_path):
+    def read_from_cloud(self, path):
         """
-        Reads SWC files stored in a GCS bucket.
+        Reads SWC files stored in a GCS or S3 bucket.
 
         Parameters
         ----------
-        gcs_path : str
-            Path to location in a GCS bucket that the SWC files are stored.
-            The path must be in the format "gs://{bucket_name}/{prefix}",
-            where "prefix" is a path to a directory containing SWC files or
-            ZIP archives containing SWC files
+        path : str
+            Path to location in a GCS or S3 bucket containing SWC files,
+            must be in the format "{scheme}://{bucket_name}/{prefix}".
 
         Returns
         -------
         Deque[dict]
-            Dictionaries whose keys and values are the attribute
-            names and values from an SWC file.
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
         """
+        # Extact info
+        assert util.is_s3_path(path) or util.is_gcs_path(path)
+        bucket_name, prefix = util.parse_cloud_path(path)
+        use_s3 = util.is_s3_path(path)
+
         # List filenames
-        bucket_name, prefix = util.parse_cloud_path(gcs_path)
-        swc_paths = util.list_gcs_filenames(bucket_name, prefix, ".swc")
-        zip_paths = util.list_gcs_filenames(bucket_name, prefix, ".zip")
+        swc_paths = util.list_cloud_filenames(path, ".swc")
+        zip_paths = util.list_cloud_filenames(path, ".zip")
 
         # Call reader
-        if len(swc_paths) > 0:
-            return self.read_from_gcs_swcs(bucket_name, swc_paths)
-        if len(zip_paths) > 0:
-            return self.read_from_gcs_zips(bucket_name, zip_paths)
+        if swc_paths:
+            read_fn = self.read_s3_swc if use_s3 else self.read_gcs_swc
+            return self.read_cloud_swcs(bucket_name, swc_paths, read_fn)
+        if zip_paths and not use_s3:
+            return self.read_gcs_zips(bucket_name, zip_paths)
+        if zip_paths and use_s3:
+            return self.read_s3_zips(bucket_name, zip_paths)        
 
-        # Error
-        raise Exception(f"GCS Pointer is invalid {gcs_path}")
+        raise Exception(f"SWC Pointer is invalid {path}")
 
-    def read_from_gcs_swcs(self, bucket_name, swc_paths):
+    def read_cloud_swcs(self, bucket_name, swc_paths, read_fn):
         """
-        Reads SWC files stored in a GCS bucket.
+        Reads SWC files stored in a GCS or S3 bucket.
 
         Parameters
         ----------
@@ -317,16 +317,15 @@ class Reader:
         Returns
         -------
         swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute
-            names and values from an SWC file.
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = list()
+            threads = set()
             for path in swc_paths:
-                threads.append(
-                    executor.submit(self.read_from_gcs_swc, bucket_name, path)
-                )
+                threads.add(executor.submit(read_fn, bucket_name, path))
+                break
 
             # Store results
             swc_dicts = deque()
@@ -339,7 +338,7 @@ class Reader:
                     pbar.update(1)
         return swc_dicts
 
-    def read_from_gcs_swc(self, bucket_name, path):
+    def read_gcs_swc(self, bucket_name, path):
         """
         Reads a single SWC file stored in a GCS bucket.
 
@@ -366,7 +365,7 @@ class Reader:
         filename = os.path.basename(path)
         return self.parse(content, filename)
 
-    def read_from_gcs_zips(self, bucket_name, zip_paths):
+    def read_gcs_zips(self, bucket_name, zip_paths):
         """
         Reads SWC files stored in a ZIP archives stored in a GCS bucket.
 
@@ -389,9 +388,7 @@ class Reader:
             processes = list()
             for zip_path in zip_paths:
                 processes.append(
-                    executor.submit(
-                        self.read_from_gcs_zip, bucket_name, zip_path
-                    )
+                    executor.submit(self.read_gcs_zip, bucket_name, zip_path)
                 )
 
             # Store results
@@ -404,7 +401,7 @@ class Reader:
                 pbar.update(1)
         return swc_dicts
 
-    def read_from_gcs_zip(self, bucket_name, path):
+    def read_gcs_zip(self, bucket_name, path):
         """
         Reads SWC files stored in a ZIP archive downloaded from a GCS
         bucket.
@@ -437,7 +434,7 @@ class Reader:
                     if self.confirm_read(filename):
                         threads.append(
                             executor.submit(
-                                self.read_from_zipped_file, zip_file, filename
+                                self.read_zipped_file, zip_file, filename
                             )
                         )
 
@@ -448,59 +445,7 @@ class Reader:
                         swc_dicts.append(result)
         return swc_dicts
 
-    def read_from_s3(self, s3_path):
-        """
-        Reads and parses SWC files from an S3 directory.
-
-        Parameters
-        ----------
-        s3_path : str
-            Path to a directory in an S3 bucket containing SWC files or ZIPs
-            of SWC files to be read.
-
-        Returns
-        -------
-        swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute names and
-            values from an SWC file.
-        """
-        # List filenames
-        bucket_name, prefix = util.parse_cloud_path(s3_path)
-        swc_paths = util.list_s3_filenames(bucket_name, prefix, ".swc")
-        zip_paths = util.list_s3_filenames(bucket_name, prefix, ".zip")
-
-        # Call reader
-        if len(swc_paths) > 0:
-            return self.read_from_s3_swcs(bucket_name, swc_paths)
-        if len(zip_paths) > 0:
-            return self.read_from_s3_zips(bucket_name, zip_paths)
-
-    def read_from_s3_swcs(self, bucket_name, swc_paths):
-        """
-        Reads and parses SWC files from an S3 directory.
-
-        Parameters
-        ----------
-        s3_path : str
-            Path to a directory in an S3 bucket containing SWC files to be
-            read.
-
-        Returns
-        -------
-        swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute names and
-            values from an SWC file.
-        """
-        swc_dicts = deque()
-        for path in self.iterator(swc_paths):
-            content = util.read_txt(bucket_name, path).splitlines()
-            filename = os.path.basename(path)
-            result = self.parse(content, filename)
-            if result:
-                swc_dicts.append(result)
-        return swc_dicts
-
-    def read_from_s3_zips(self, bucket_name, zip_paths):
+    def read_s3_zips(self, bucket_name, zip_paths):
         """
         Reads SWC files stored in a list of ZIP archives stored in an S3
         bucket.
@@ -523,9 +468,7 @@ class Reader:
             processes = list()
             for zip_path in zip_paths:
                 processes.append(
-                    executor.submit(
-                        self.read_from_s3_zip, bucket_name, zip_path
-                    )
+                    executor.submit(self.read_s3_zip, bucket_name, zip_path)
                 )
 
             # Store results
@@ -539,7 +482,7 @@ class Reader:
                     pbar.update(1)
         return swc_dicts
 
-    def read_from_s3_zip(self, bucket_name, path):
+    def read_s3_zip(self, bucket_name, path):
         """
         Reads SWC files stored in a ZIP archive downloaded from an S3
         bucket.
@@ -568,7 +511,7 @@ class Reader:
                 # Assign threads for reading files
                 threads = [
                     executor.submit(
-                        self.read_from_zipped_file, zip_file, filename
+                        self.read_zipped_file, zip_file, filename
                     )
                     for filename in zip_file.namelist()
                     if self.confirm_read(filename)
