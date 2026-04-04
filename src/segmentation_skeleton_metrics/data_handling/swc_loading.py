@@ -390,9 +390,7 @@ class Reader:
             for zip_path in zip_paths:
                 processes.append(
                     executor.submit(
-                        self.read_from_gcs_zip,
-                        bucket_name,
-                        zip_path
+                        self.read_from_gcs_zip, bucket_name, zip_path
                     )
                 )
 
