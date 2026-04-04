@@ -438,8 +438,6 @@ def read_txt_from_s3(path):
 
     Parameters
     ----------
-    bucket_name : str
-        Name of bucket to be read from.
     path : str
         Path to txt file to be read.
 
@@ -452,6 +450,26 @@ def read_txt_from_s3(path):
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     obj = s3.get_object(Bucket=bucket_name, Key=path)
     return obj["Body"].read().decode("utf-8")
+
+
+def read_csv_from_s3(path):
+    """
+    Reads a CSV file stored in an S3 bucket.
+
+    Parameters
+    ----------
+    path : str
+        Path to CSV file to be read.
+
+    Returns
+    -------
+    str
+        Contents of CSV file.
+    """
+    bucket, key = parse_cloud_path(path)
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+    obj = s3.get_object(Bucket=bucket, Key=key)
+    return pd.read_csv(obj["Body"])
 
 
 # --- Miscellaneous ---
@@ -525,7 +543,11 @@ def get_segment_id(filename):
     int
         Segment ID.
     """
-    return int(filename.split(".")[0])
+    try:
+        segment_id = int(filename.split(".")[0])
+    except ValueError:
+        segment_id = filename
+    return segment_id
 
 
 def load_merged_labels(path):
