@@ -235,8 +235,7 @@ class Reader:
             for name in [f for f in zf.namelist() if f.endswith(".swc")]:
                 if self.confirm_read(name):
                     threads.append(
-                        executor.submit(self.read_zipped_swc, zf, name
-                        )
+                        executor.submit(self.read_zipped_swc, zf, name)
                     )
 
             # Store results
@@ -399,7 +398,7 @@ class Reader:
                 for name in zf.namelist():
                     if self.confirm_read(name):
                         threads.add(
-                            executor.submit(self.read_zipped_swc, zf, filename
+                            executor.submit(self.read_zipped_swc, zf, name)
                         )
 
                 # Store results
