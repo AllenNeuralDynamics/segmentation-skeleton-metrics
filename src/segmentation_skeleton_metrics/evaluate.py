@@ -159,7 +159,7 @@ class Evaluator:
         """
         # Instance attributes
         self.output_dir = output_dir
-        self.prefix = results_prefix + "_"
+        self.prefix = results_prefix + ("_" if results_prefix else "")
         self.verbose = verbose
 
         # Set core metrics
