@@ -314,8 +314,8 @@ class Reader:
 
         Returns
         -------
-        dict
-            Dictionary whose keys and values are the attribute names and
+        swc_dicts : Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
         # Initialize cloud reader
