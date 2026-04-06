@@ -295,13 +295,13 @@ class Evaluator:
             Graphs built from skeletons obtained from a segmentation.
         """
         # Initializations
-        fragments_dir = os.path.join(self.output_dir, f"{prefix}fragments")
-        util.mkdir(fragments_dir, delete=True)
+        output_dir = os.path.join(self.output_dir, f"{self.prefix}fragments")
+        util.mkdir(output_dir, delete=True)
 
         # Main
         for key, graph in gt_graphs.items():
             # Create zip writer
-            zip_path = os.path.join(fragments_dir, f"{graph.name}.zip")
+            zip_path = os.path.join(output_dir, f"{graph.name}.zip")
             zip_writer = ZipFile(zip_path, "a")
 
             # Save skeletons

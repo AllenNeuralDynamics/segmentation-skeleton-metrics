@@ -479,7 +479,7 @@ def list_s3_paths(bucket_name, prefix, extension=""):
         for obj in response["Contents"]:
             filename = obj["Key"]
             if filename.endswith(extension):
-                path = os.path.join(f"s3://{bucket_name}", filename) 
+                path = os.path.join(f"s3://{bucket_name}", filename)
                 paths.append(path)
     return paths
 
