@@ -265,7 +265,7 @@ class Evaluator:
             DataFrame containing evaluation results for individual SWCs.
         """
         # Averaged results
-        filename = f"results_{self.prefix}results_overview.txt"
+        filename = f"{self.prefix}results_overview.txt"
         path = os.path.join(self.output_dir, filename)
         util.update_txt(path, "\nAverage Results...", self.verbose)
         for column in results.columns:
