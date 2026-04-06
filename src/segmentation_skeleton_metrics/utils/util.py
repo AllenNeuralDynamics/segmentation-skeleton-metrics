@@ -68,7 +68,7 @@ def rm_file(path):
         os.remove(path)
 
 
-def list_dir(directory, extension=None):
+def list_dir(directory, extension=""):
     """
     Lists filenames in the given directory. If "extension" is provided,
     filenames ending with the given extension are returned.
@@ -78,17 +78,14 @@ def list_dir(directory, extension=None):
     directory : str
         Path to directory to be searched.
     extension : str, optional
-       Extension of filenames to be returned. Default is None.
+       Extension of filenames to be returned. Default is an empty string.
 
     Returns
     -------
     List[str]
         Filenames in the given directory.
     """
-    if extension is None:
-        return [f for f in os.listdir(directory)]
-    else:
-        return [f for f in os.listdir(directory) if f.endswith(extension)]
+    return [f for f in os.listdir(directory) if f.endswith(extension)]
 
 
 def list_files_in_zip(zip_content):
@@ -273,22 +270,17 @@ def parse_cloud_path(path):
     prefix : str
         Cloud prefix.
     """
-    # Remove s3:// if present
-    if is_s3_path(path):
-        path = path[len("s3://"):]
-
-    # Remove gs:// if present
-    if is_gcs_path(path):
-        path = path[len("gs://"):]
+    # Split path
+    path = path[len("s3://"):] if is_s3_path else path[len("gs://"):]
+    parts = path.split("/", 1)
 
     # Extract bucket and prefix
-    parts = path.split("/", 1)
     bucket_name = parts[0]
     prefix = parts[1] if len(parts) > 1 else ""
     return bucket_name, prefix
 
 
-def list_cloud_filenames(path, extension=""):
+def list_cloud_paths(path, extension=""):
     """
     Lists all files in a GCS/S3 bucket with the given extension.
 
@@ -307,7 +299,7 @@ def list_cloud_filenames(path, extension=""):
     """
     assert is_gcs_path(path) or is_s3_path(path)
     bucket_name, prefix = parse_cloud_path(path)
-    list_fn = list_gcs_filenames if is_gcs_path(path) else list_s3_filenames
+    list_fn = list_gcs_paths if is_gcs_path(path) else list_s3_paths
     return list_fn(bucket_name, prefix, extension=extension)
 
 
@@ -329,9 +321,9 @@ def is_gcs_path(path):
     return path.startswith("gs://")
 
 
-def list_gcs_filenames(bucket_name, prefix, extension=""):
+def list_gcs_paths(bucket_name, prefix, extension=""):
     """
-    Lists filenames at a GCS prefix with the given extension.
+    Lists paths at a GCS prefix with the given extension.
 
     Parameters
     ----------
@@ -345,11 +337,14 @@ def list_gcs_filenames(bucket_name, prefix, extension=""):
     Returns
     -------
     List[str]
-        Filenames stored at the GCS path with the given extension.
+        Paths stored in the GCS prefix with the given extension.
     """
     bucket = storage.Client().bucket(bucket_name)
-    blobs = bucket.list_blobs(prefix=prefix)
-    return [blob.name for blob in blobs if extension in blob.name]
+    paths = list()
+    for name in [b.name for b in bucket.list_blobs(prefix=prefix)]:
+        if extension in name:
+            paths.append(os.path.join(f"gs://{bucket_name}", name))
+    return paths
 
 
 def list_gcs_subdirectories(bucket_name, prefix):
@@ -454,7 +449,7 @@ def is_s3_path(path):
     return path.startswith("s3://")
 
 
-def list_s3_filenames(bucket_name, prefix, extension=""):
+def list_s3_paths(bucket_name, prefix, extension=""):
     """
     Lists all object keys in a public S3 bucket under a given prefix,
     optionally filters by file extension.
@@ -471,7 +466,7 @@ def list_s3_filenames(bucket_name, prefix, extension=""):
 
     Returns
     -------
-    filenames : List[str]
+    paths : List[str]
         List of S3 object keys that match the prefix and extension filter.
     """
     # Create an anonymous client for public buckets
@@ -479,13 +474,14 @@ def list_s3_filenames(bucket_name, prefix, extension=""):
     response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
 
     # List all objects under the prefix
-    filenames = list()
+    paths = list()
     if "Contents" in response:
         for obj in response["Contents"]:
             filename = obj["Key"]
             if filename.endswith(extension):
-                filenames.append(filename)
-    return filenames
+                path = os.path.join(f"s3://{bucket_name}", filename) 
+                paths.append(path)
+    return paths
 
 
 def read_txt_from_s3(path):
@@ -643,7 +639,10 @@ def load_valid_labels(path):
     """
     valid_labels = set()
     for label_str in read_txt(path).splitlines():
-        valid_labels.add(int(label_str.split(".")[0]))
+        try:
+            valid_labels.add(int(label_str.split(".")[0]))
+        except ValueError:
+            valid_labels.add(label_str)
     return valid_labels
 
 
