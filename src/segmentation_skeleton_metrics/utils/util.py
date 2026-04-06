@@ -255,6 +255,62 @@ def search_branching_node(graph, kdtree, root, radius=40):
     return root
 
 
+# --- Cloud Utils ---
+def parse_cloud_path(path):
+    """
+    Parses a cloud storage path into its bucket name and key/prefix. Supports
+    paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
+
+    Parameters
+    ----------
+    path : str
+        Path to be parsed.
+
+    Returns
+    -------
+    bucket_name : str
+        Name of the bucket.
+    prefix : str
+        Cloud prefix.
+    """
+    # Remove s3:// if present
+    if is_s3_path(path):
+        path = path[len("s3://"):]
+
+    # Remove gs:// if present
+    if is_gcs_path(path):
+        path = path[len("gs://"):]
+
+    # Extract bucket and prefix
+    parts = path.split("/", 1)
+    bucket_name = parts[0]
+    prefix = parts[1] if len(parts) > 1 else ""
+    return bucket_name, prefix
+
+
+def list_cloud_filenames(path, extension=""):
+    """
+    Lists all files in a GCS/S3 bucket with the given extension.
+
+    Parameters
+    ----------
+    path : str
+        Path to cloud prefix to be searched, must be in the format:
+        f"{scheme}://{bucket_name}/{prefix}".
+    extension : str, optional
+        File extension of filenames to be listed. Default is an empty string.
+
+    Returns
+    -------
+    List[str]
+        Filenames stored at the GCS path with the given extension.
+    """
+    assert is_gcs_path(path) or is_s3_path(path)
+    bucket_name, prefix = parse_cloud_path(path)
+    list_fn = list_gcs_filenames if is_gcs_path(path) else list_s3_filenames
+    return list_fn(bucket_name, prefix, extension=extension)
+
+
 # -- GCS Utils --
 def is_gcs_path(path):
     """
@@ -275,12 +331,12 @@ def is_gcs_path(path):
 
 def list_gcs_filenames(bucket_name, prefix, extension=""):
     """
-    Lists all files in a GCS bucket with the given extension.
+    Lists filenames at a GCS prefix with the given extension.
 
     Parameters
     ----------
     bucket_name : str
-        Name of bucket to be searched.
+        Name of bucket containing prefix.
     prefix : str
         Path to location within bucket to be searched.
     extension : str, optional
@@ -589,38 +645,6 @@ def load_valid_labels(path):
     for label_str in read_txt(path).splitlines():
         valid_labels.add(int(label_str.split(".")[0]))
     return valid_labels
-
-
-def parse_cloud_path(path):
-    """
-    Parses a cloud storage path into its bucket name and key/prefix. Supports
-    paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
-
-    Parameters
-    ----------
-    path : str
-        Path to be parsed.
-
-    Returns
-    -------
-    bucket_name : str
-        Name of the bucket.
-    prefix : str
-        Cloud prefix.
-    """
-    # Remove s3:// if present
-    if is_s3_path(path):
-        path = path[len("s3://"):]
-
-    # Remove gs:// if present
-    if is_gcs_path(path):
-        path = path[len("gs://"):]
-
-    # Extract bucket and prefix
-    parts = path.split("/", 1)
-    bucket_name = parts[0]
-    prefix = parts[1] if len(parts) > 1 else ""
-    return bucket_name, prefix
 
 
 def sample_once(my_container):
