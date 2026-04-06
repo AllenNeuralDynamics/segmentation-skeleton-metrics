@@ -74,7 +74,7 @@ Here is a simple example of evaluating a predicted segmentation.
 
 ```python
 from segmentation_skeleton_metrics.evaluate import evaluate
-from segmentation_skeleton_metrics.utils.img_util import TiffReader
+from segmentation_skeleton_metrics.utils.img_util import TiffImage
 
 
 # Initializations
@@ -84,7 +84,7 @@ fragments_pointer = "path-to-predicted-skeletons"
 groundtruth_pointer = "path-to-groundtruth-skeletons"
 
 # Run
-segmentation = TiffReader(segmentation_path)
+segmentation = TiffImage(segmentation_path)
 evaluate(
    groundtruth_pointer,
    segmentation,
