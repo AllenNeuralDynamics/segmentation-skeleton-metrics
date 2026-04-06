@@ -137,7 +137,7 @@ class Reader:
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
         """
-        content = util.read_txt(path)
+        content = util.read_txt(path).splitlines()
         filename = os.path.basename(path)
         if self.confirm_read(filename):
             return self.parse(content, filename)
@@ -293,38 +293,12 @@ class Reader:
 
         # Call reader
         if swc_paths:
-            read_fn = self.read_s3_swc if use_s3 else self.read_gcs_swc
-            return self.read_swcs(swc_paths, read_fn)
+            return self.read_swcs(swc_paths, self.read_swc)
         elif zip_paths:
             read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
             return self.read_zips(zip_paths, read_fn)
 
         raise Exception(f"SWC Pointer is invalid {path}")
-
-    def read_gcs_swc(self, path):
-        """
-        Reads a single SWC file stored in a GCS bucket.
-
-        Parameters
-        ----------
-        path : List[str]
-            Path to SWC file to be read.
-
-        Returns
-        -------
-        swc_dicts : Deque[dict]
-            Dictionaries whose keys and values are the attribute names and
-            values from an SWC file.
-        """
-        # Initialize cloud reader
-        bucket_name, subpath = util.parse_cloud_path(path)
-        bucket = storage.Client().bucket(bucket_name)
-        blob = bucket.blob(subpath)
-
-        # Parse swc contents
-        content = blob.download_as_text().splitlines()
-        filename = os.path.basename(subpath)
-        return self.parse(content, filename)
 
     def read_gcs_zip(self, path):
         """
