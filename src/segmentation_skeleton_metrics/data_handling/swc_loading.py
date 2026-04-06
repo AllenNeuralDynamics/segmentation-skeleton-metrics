@@ -305,7 +305,7 @@ class Reader:
 
     def read_gcs_swc(self, path):
         """
-        Reads SWC files stored in ZIP archives stored in a GCS or S3 bucket.
+        Reads a single SWC file stored in a GCS bucket.
 
         Parameters
         ----------
