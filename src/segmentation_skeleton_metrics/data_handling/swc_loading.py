@@ -167,7 +167,6 @@ class Reader:
             for path in swc_paths:
                 if self.confirm_read(os.path.basename(path)):
                     threads.add(executor.submit(read_fn, path))
-                break
 
             # Store results
             swc_dicts = deque()
@@ -254,7 +253,7 @@ class Reader:
 
         Parameters
         ----------
-        zip_file : ZipFile
+        zipfile : ZipFile
             ZIP archive containing SWC files.
         path : str
             Path to SWC file.
@@ -352,15 +351,15 @@ class Reader:
         # Parse Zip
         swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
-        with ZipFile(BytesIO(zip_content), "r") as zip_file:
+        with ZipFile(BytesIO(zip_content), "r") as zipfile:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
                 threads = list()
-                for filename in zip_file.namelist():
+                for filename in zipfile.namelist():
                     if self.confirm_read(filename):
                         threads.append(
                             executor.submit(
-                                self.read_zipped_swc, zip_file, filename
+                                self.read_zipped_swc, zipfile, filename
                             )
                         )
 
