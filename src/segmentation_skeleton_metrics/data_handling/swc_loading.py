@@ -230,11 +230,11 @@ class Reader:
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = list()
+            threads = set()
             zf = ZipFile(zip_path, "r")
             for name in [f for f in zf.namelist() if f.endswith(".swc")]:
                 if self.confirm_read(name):
-                    threads.append(
+                    threads.add(
                         executor.submit(self.read_zipped_swc, zf, name)
                     )
 
@@ -350,16 +350,14 @@ class Reader:
         # Parse Zip
         swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
-        with ZipFile(BytesIO(zip_content), "r") as zipfile:
+        with ZipFile(BytesIO(zip_content), "r") as zf:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
-                threads = list()
-                for filename in zipfile.namelist():
-                    if self.confirm_read(filename):
-                        threads.append(
-                            executor.submit(
-                                self.read_zipped_swc, zipfile, filename
-                            )
+                threads = set()
+                for name in zf.namelist():
+                    if self.confirm_read(name):
+                        threads.add(
+                            executor.submit(self.read_zipped_swc, zf, name)
                         )
 
                 # Process results
@@ -425,8 +423,7 @@ class Reader:
             Indication of whether to read SWC file.
         """
         if self.selected_ids:
-            segment_id = util.get_segment_id(filename)
-            return True if segment_id in self.selected_ids else False
+            return util.get_segment_id(filename) in self.selected_ids
         else:
             return True
 
@@ -481,7 +478,7 @@ class Reader:
         # Initializations
         swc_name, _ = os.path.splitext(filename)
         content, offset = self.process_content(content)
-        if len(content) > 30:
+        if len(content) > 20:
             swc_dict = {
                 "id": np.zeros((len(content)), dtype=int),
                 "pid": np.zeros((len(content)), dtype=int),
