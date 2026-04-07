@@ -137,7 +137,7 @@ class Reader:
             Dictionary whose keys and values are the attribute names and
             values from an SWC file.
         """
-        content = util.read_txt(path)
+        content = util.read_txt(path).splitlines()
         filename = os.path.basename(path)
         if self.confirm_read(filename):
             return self.parse(content, filename)
@@ -312,8 +312,8 @@ class Reader:
 
         Returns
         -------
-        dict
-            Dictionary whose keys and values are the attribute names and
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
         # Initialize cloud reader
