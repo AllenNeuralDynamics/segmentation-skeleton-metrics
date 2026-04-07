@@ -230,11 +230,11 @@ class Reader:
         """
         with ThreadPoolExecutor() as executor:
             # Assign threads
-            threads = list()
+            threads = set()
             zf = ZipFile(zip_path, "r")
             for name in [f for f in zf.namelist() if f.endswith(".swc")]:
                 if self.confirm_read(name):
-                    threads.append(
+                    threads.add(
                         executor.submit(self.read_zipped_swc, zf, name)
                     )
 
@@ -293,12 +293,38 @@ class Reader:
 
         # Call reader
         if swc_paths:
-            return self.read_swcs(swc_paths, self.read_swc)
+            read_fn = self.read_s3_swc if use_s3 else self.read_gcs_swc
+            return self.read_swcs(swc_paths, read_fn)
         elif zip_paths:
             read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
             return self.read_zips(zip_paths, read_fn)
 
         raise Exception(f"SWC Pointer is invalid {path}")
+
+    def read_gcs_swc(self, path):
+        """
+        Reads a single SWC file stored in a GCS bucket.
+
+        Parameters
+        ----------
+        path : List[str]
+            Path to SWC file to be read.
+
+        Returns
+        -------
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
+        # Initialize cloud reader
+        bucket_name, subpath = util.parse_cloud_path(path)
+        bucket = storage.Client().bucket(bucket_name)
+        blob = bucket.blob(subpath)
+
+        # Parse swc contents
+        content = blob.download_as_text().splitlines()
+        filename = os.path.basename(subpath)
+        return self.parse(content, filename)
 
     def read_gcs_zip(self, path):
         """
@@ -324,16 +350,14 @@ class Reader:
         # Parse Zip
         swc_dicts = deque()
         zip_content = bucket.blob(path).download_as_bytes()
-        with ZipFile(BytesIO(zip_content), "r") as zipfile:
+        with ZipFile(BytesIO(zip_content), "r") as zf:
             with ThreadPoolExecutor() as executor:
                 # Assign threads
-                threads = list()
-                for filename in zipfile.namelist():
-                    if self.confirm_read(filename):
-                        threads.append(
-                            executor.submit(
-                                self.read_zipped_swc, zipfile, filename
-                            )
+                threads = set()
+                for name in zf.namelist():
+                    if self.confirm_read(name):
+                        threads.add(
+                            executor.submit(self.read_zipped_swc, zf, name)
                         )
 
                 # Process results
@@ -399,8 +423,7 @@ class Reader:
             Indication of whether to read SWC file.
         """
         if self.selected_ids:
-            segment_id = util.get_segment_id(filename)
-            return True if segment_id in self.selected_ids else False
+            return util.get_segment_id(filename) in self.selected_ids
         else:
             return True
 
@@ -455,7 +478,7 @@ class Reader:
         # Initializations
         swc_name, _ = os.path.splitext(filename)
         content, offset = self.process_content(content)
-        if len(content) > 30:
+        if len(content) > 20:
             swc_dict = {
                 "id": np.zeros((len(content)), dtype=int),
                 "pid": np.zeros((len(content)), dtype=int),
