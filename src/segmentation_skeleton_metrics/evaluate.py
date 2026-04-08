@@ -199,7 +199,7 @@ class Evaluator:
         if self.verbose:
             print("\n(3) Compute Metrics")
 
-        # Compute core metrics
+        # Core metrics
         results = self.init_results(gt_graphs)
         for name, metric in self.metrics.items():
             if name == "# Merges" and fragment_graphs:
@@ -207,20 +207,19 @@ class Evaluator:
             elif name != "# Merges":
                 results.update(metric(gt_graphs))
 
-        # Compute derived metrics
+        # Derived metrics
         for name, metric in self.derived_metrics.items():
             if name == "Merge Rate" and fragment_graphs:
                 results[name] = metric(gt_graphs, results)
             elif name != "Merge Rate":
                 results[name] = metric(gt_graphs, results)
 
-        # Compute special metrics
+        # Special metrics
+        merge_sites = self.metrics["# Merges"].merge_sites
         metric = AddedCableLengthMetric(verbose=self.verbose)
-        metric(
-            gt_graphs, fragment_graphs, self.metrics["# Merges"].merge_sites
-        )
+        metric(gt_graphs, fragment_graphs, merge_sites)
 
-        # Save report
+        # Save results
         path = f"{self.output_dir}/{self.prefix}results.csv"
         results.to_csv(path, index=True)
         self.report_summary(results)
@@ -246,8 +245,7 @@ class Evaluator:
             + list(self.metrics.keys())
             + list(self.derived_metrics.keys())
         )
-        index = list(gt_graphs.keys())
-        index.sort()
+        index = sorted(list(gt_graphs.keys()))
         results = pd.DataFrame(np.nan, index=index, columns=cols)
 
         # Populate SWC Run Length column

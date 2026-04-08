@@ -301,7 +301,6 @@ class GraphLoader:
                 parent = id_lookup[swc_dict["pid"][i]]
                 graph.add_edge(i, parent)
                 graph.run_length += graph.dist(i, parent)
-        graph.prune_branches()
 
         # Apply voxel coordinate conversion (if applicable)
         if self.use_anisotropy:
@@ -477,8 +476,6 @@ class LabelHandler:
         Maps a raw label (segment ID) to its class ID.
     inverse_mapping : Dict[int, Set[int]]
         Maps a class ID back to the set of raw labels it contains.
-    processed_labels : Set[int]
-        Labels that have been processed during initialization.
     valid_labels : Set[int]
         Labels that are allowed to be assigned (after filtering).
     """
@@ -500,7 +497,6 @@ class LabelHandler:
         """
         self.mapping = dict()  # Maps label to equivalent class id
         self.inverse_mapping = dict()  # Maps class id to list of labels
-        self.processed_labels = set()
         self.valid_labels = valid_labels
         if connections_path:
             self.init_mappings(connections_path)
@@ -552,9 +548,9 @@ class LabelHandler:
         # Main
         for line in util.read_txt(connections_path).splitlines():
             ids = line.split(",")
-            id_1 = util.get_segment_id(ids[0])
-            id_2 = util.get_segment_id(ids[1])
-            labels_graph.add_edge(id_1, id_2)
+            id1 = util.get_segment_id(ids[0])
+            id2 = util.get_segment_id(ids[1])
+            labels_graph.add_edge(id1, id2)
         return labels_graph
 
     # --- Core Routines ---
@@ -603,7 +599,7 @@ class LabelHandler:
         bool
             True if mappings are active, False otherwise.
         """
-        return True if len(self.mapping) > 0 else False
+        return len(self.mapping) > 0
 
     # --- Helpers ---
     def node_labels(self, graph):

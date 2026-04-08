@@ -116,6 +116,18 @@ class SkeletonGraph(nx.Graph):
         """
         self.add_nodes_from(np.arange(num_nodes))
 
+    def add_graph(self, graph, set_kdtree=True):
+        # Add nodes and edges
+        offset = len(self.node_voxel)
+        self.add_edges_from((u + offset, v + offset) for u, v in graph.edges)
+
+        # Add voxel coordinates
+        self.node_voxel = np.concatenate(
+            (self.node_voxel, graph.node_voxel), axis=0
+        )
+        if set_kdtree:
+            self.set_kdtree()
+
     # --- Getters ---
     def dist(self, i, j):
         """
@@ -205,12 +217,6 @@ class SkeletonGraph(nx.Graph):
         """
         return 3
 
-    def prune_branches(self):
-        """
-        Placeholder method to be implemented by subclasses.
-        """
-        pass
-
     def run_length_from(self):
         """
         Placeholder method to be implemented by subclasses.
@@ -288,15 +294,13 @@ class SkeletonGraph(nx.Graph):
         text_buffer.write(self.color()) if use_color else None
         text_buffer.write("\n# id, type, z, y, x, r, pid")
 
-        # Write entries
+        # Special case: root
         cnt = 1
         node_to_idx = defaultdict(lambda: -1)
-        for i, j in nx.dfs_edges(self, source=root):
-            # Special Case: Root
-            if len(node_to_idx) == 0:
-                write_entry(i, -1)
+        write_entry(root, -1)
 
-            # General Case: Non-Root
+        # General case: non-root
+        for i, j in nx.dfs_edges(self, source=root):
             cnt += 1
             write_entry(j, i)
         return text_buffer.getvalue()
@@ -579,33 +583,6 @@ class FragmentGraph(SkeletonGraph):
         # Instance attributes
         self.label = label
         self.segment_id = segment_id
-
-    def prune_branches(self, depth=24):
-        """
-        Prunes branches with length less than "depth" microns.
-
-        Parameters
-        ----------
-        graph : networkx.Graph
-            Graph to be searched.
-        depth : float
-            Length of branches that are pruned.
-        """
-        for leaf in self.leafs():
-            branch = [leaf]
-            length = 0
-            for i, j in nx.dfs_edges(self, source=leaf):
-                # Visit edge
-                length += self.physical_dist(i, j)
-                if length > depth:
-                    break
-
-                # Check whether to continue search
-                if self.degree(j) == 2:
-                    branch.append(j)
-                elif self.degree(j) > 2:
-                    self.remove_nodes_from(branch)
-                    break
 
     def run_length_from(self, root):
         """
