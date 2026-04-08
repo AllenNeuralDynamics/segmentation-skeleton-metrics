@@ -10,7 +10,6 @@ Code for helper routines.
 
 from botocore import UNSIGNED
 from botocore.client import Config
-from collections import deque
 from random import sample
 from google.cloud import storage
 from io import BytesIO, StringIO
