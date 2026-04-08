@@ -19,7 +19,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from segmentation_skeleton_metrics.utils import graph_util as gutil
+from segmentation_skeleton_metrics.utils import util
 
 
 class SkeletonMetric(ABC):
@@ -488,7 +488,7 @@ class MergeCountMetric(SkeletonMetric):
             return
 
         # Move site to nearby branching point if possible
-        fragment_node = gutil.search_branching_node(
+        fragment_node = util.search_branching_node(
             fragment_graph, gt_graph.kdtree, fragment_node
         )
 
@@ -681,7 +681,7 @@ class SplitRateMetric(SkeletonMetric):
         new_results = dict()
         for name, graph in self.get_iterator(gt_graphs.items()):
             if results["# Splits"][name] > 0:
-                rl = gutil.compute_segmented_run_length(graph, results, name)
+                rl = util.compute_segmented_run_length(graph, results, name)
                 new_results[name] = round(rl / results["# Splits"][name], 2)
             else:
                 new_results[name] = np.nan
@@ -728,7 +728,7 @@ class MergeRateMetric(SkeletonMetric):
         new_results = dict()
         for name, graph in self.get_iterator(gt_graphs.items()):
             if results["# Merges"][name] > 0:
-                rl = gutil.compute_segmented_run_length(graph, results, name)
+                rl = util.compute_segmented_run_length(graph, results, name)
                 new_results[name] = round(rl / results["# Merges"][name], 2)
             else:
                 new_results[name] = np.nan
