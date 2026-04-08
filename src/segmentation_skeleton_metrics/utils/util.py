@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Wed Dec 21 19:00:00 2022
 
@@ -11,7 +10,6 @@ Code for helper routines.
 
 from botocore import UNSIGNED
 from botocore.client import Config
-from collections import deque
 from random import sample
 from google.cloud import storage
 from io import BytesIO, StringIO
@@ -208,48 +206,6 @@ def update_txt(path, text, verbose=True):
     # Update txt file
     with open(path, "a") as file:
         file.write(text + "\n")
-
-
-# --- Graph Utils ---
-def search_branching_node(graph, kdtree, root, radius=40):
-    """
-    Searches for a branching node within distance "radius" from the given
-    root node.
-
-    Parameters
-    ----------
-    graph : networkx.Graph
-        Graph to be searched.
-    kdtree : scipy.spatial.KDTree
-        KDTree containing physical coordinates from a ground truth tracing.
-    root : int
-        Root of search.
-    radius : float, optional
-        Distance to search from root. Default is 40.
-
-    Returns
-    -------
-    root : int
-        Root node or closest branching node within distance "radius".
-    """
-    queue = deque([(root, 0)])
-    visited = {root}
-    while queue:
-        # Visit node
-        i, d_i = queue.popleft()
-        xyz_i = graph.node_xyz(i)
-        if graph.degree[i] > 2:
-            dist, _ = kdtree.query(xyz_i)
-            if dist < 16:
-                return i
-
-        # Update queue
-        for j in graph.neighbors(i):
-            d_j = d_i + graph.physical_dist(i, j)
-            if j not in visited and d_j < radius:
-                queue.append((j, d_j))
-                visited.add(j)
-    return root
 
 
 # --- Cloud Utils ---
@@ -504,26 +460,6 @@ def read_txt_from_s3(path):
     return obj["Body"].read().decode("utf-8")
 
 
-def read_csv_from_s3(path):
-    """
-    Reads a CSV file stored in an S3 bucket.
-
-    Parameters
-    ----------
-    path : str
-        Path to CSV file to be read.
-
-    Returns
-    -------
-    str
-        Contents of CSV file.
-    """
-    bucket, key = parse_cloud_path(path)
-    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    obj = s3.get_object(Bucket=bucket, Key=key)
-    return pd.read_csv(obj["Body"])
-
-
 # --- Miscellaneous ---
 def compute_weighted_avg(df, column_name):
     """
@@ -559,27 +495,6 @@ def compute_weighted_avg(df, column_name):
         return (values * weights).sum() / weights.sum()
 
 
-def compute_segmented_run_length(graph, results, name):
-    """
-    Computes the run length of a graph that was segmented.
-
-    Parameters
-    ----------
-    graph : LabeledGraph
-        Graph to be evaluated.
-    results : pandas.DataFrame
-        Data frame containing skeleton metrics
-
-    Returns
-    -------
-    float
-        Run length of a graph that was segmented.
-    """
-    omit_run_length = graph.run_length * results["% Omit Edges"][name] / 100
-    split_run_length = graph.run_length * results["% Split Edges"][name] / 100
-    return graph.run_length - omit_run_length - split_run_length
-
-
 def get_segment_id(filename):
     """
     Gets the segment ID correspionding to the given filename, assuming that
@@ -600,25 +515,6 @@ def get_segment_id(filename):
     except ValueError:
         segment_id = filename
     return segment_id
-
-
-def load_merged_labels(path):
-    """
-    Loads segment IDs that are known to contain a merge mistake from the
-    given txt file.
-
-    Parameters
-    ----------
-    path : str
-        Path to txt file containing segment IDs.
-
-    Returns
-    -------
-    List[int]
-        Segment IDs that are known to contain a merge mistake.
-    """
-    df = pd.read_csv(path)
-    return list(df["Segment_ID"])
 
 
 def load_valid_labels(path):
