@@ -35,8 +35,8 @@ class DataLoader:
 
     def __init__(
         self,
-        label_handler,
         anisotropy=(1.0, 1.0, 1.0),
+        label_handler=None,
         use_anisotropy=False,
         verbose=True,
     ):
@@ -45,12 +45,12 @@ class DataLoader:
 
         Parameters
         ----------
-        label_handler : LabelHander
-            Handles mapping between raw segmentation labels and consolidated
-            class IDs.
         anisotropy : Tuple[int], optional
             Image to physical coordinates scaling factors to account for the
             anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
+        label_handler : LabelHander
+            Handles mapping between raw segmentation labels and consolidated
+            class IDs.
         use_anisotropy : bool, optional
             Indication of whether coordinates in SWC files should be converted
             from physical to image coordinates using the given anisotropy.
@@ -60,12 +60,12 @@ class DataLoader:
         """
         # Instance attributes
         self.anisotropy = anisotropy
-        self.label_handler = label_handler
+        self.label_handler = label_handler or LabelHandler()
         self.use_anisotropy = use_anisotropy
         self.verbose = verbose
 
     # --- Core Routines ---
-    def load_groundtruth(self, swc_pointer, label_mask):
+    def load_groundtruth(self, swc_pointer, segmentation):
         """
         Loads ground truth graphs.
 
@@ -73,7 +73,7 @@ class DataLoader:
         ----------
         swc_pointer : str
             Pointer to ground truth SWC files.
-        label_mask : Image
+        segmentation : Image
             Predicted segmentation.
 
         Returns
@@ -88,28 +88,28 @@ class DataLoader:
             anisotropy=self.anisotropy,
             is_groundtruth=True,
             label_handler=self.label_handler,
-            label_mask=label_mask,
+            segmentation=segmentation,
             use_anisotropy=self.use_anisotropy,
             verbose=self.verbose,
         )
         return graph_loader(swc_pointer)
 
-    def load_fragments(self, swc_pointer, selected_ids=None):
+    def load_fragments(self, swc_pointer, swc_names=set()):
         """
         Loads fragment graphs (predicted skeletons).
 
         Parameters
         ----------
         swc_pointer : str
-            Path or pointer to predicted SWC files.
-        selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read.
-            Default is None.
+            Path to predicted SWC files.
+        swc_names : Set[str], optional
+            Only SWC files with names in this set are loaded if provided.
+            Otherwise, all SWC files are loaded. Default is None.
 
         Returns
         -------
-        Dict[str, SkeletonGraph] or None
-            Fragment graphs or None.
+        Dict[str, SkeletonGraph]
+            Fragment graphs.
         """
         if self.verbose:
             print("\n(2) Load Fragments")
@@ -123,7 +123,7 @@ class DataLoader:
             anisotropy=self.anisotropy,
             is_groundtruth=False,
             label_handler=self.label_handler,
-            selected_ids=selected_ids,
+            swc_names=swc_names,
             use_anisotropy=self.use_anisotropy,
             verbose=self.verbose,
         )
@@ -141,7 +141,7 @@ class DataLoader:
 
         Returns
         -------
-        node_labels : Set[int]
+        node_labels : Set[str]
             Unique node labels across all graphs.
         """
         node_labels = set()
@@ -161,8 +161,8 @@ class GraphLoader:
         fix_label_misalignments=True,
         is_groundtruth=False,
         label_handler=None,
-        label_mask=None,
-        selected_ids=None,
+        segmentation=None,
+        swc_names=set(),
         use_anisotropy=False,
         verbose=True,
     ):
@@ -180,11 +180,11 @@ class GraphLoader:
         is_groundtruth : bool, optional
             Indication of whether this graph corresponds to a ground truth
             tracing. Default is False.
-        label_mask : Image, optional
+        segmentation : Image, optional
             Predicted segmentation mask.
-        selected_ids : Set[int], optional
-            Only SWC files with a name contained in this set are read. Default
-            is None.
+        swc_names : Set[str], optional
+            Only SWC files with names in this set are loaded if provided.
+            Otherwise, all SWC files are loaded. Default is an empty set.
         use_anisotropy : bool, optional
             Indication of whether coordinates in SWC files should be converted
             from physical to image coordinates using the given anisotropy.
@@ -197,19 +197,19 @@ class GraphLoader:
         self.fix_label_misalignments = fix_label_misalignments
         self.is_groundtruth = is_groundtruth
         self.label_handler = label_handler
-        self.label_mask = label_mask
+        self.segmentation = segmentation
         self.use_anisotropy = use_anisotropy
         self.verbose = verbose
 
         # Reader
         self.swc_reader = swc_loading.Reader(
-            selected_ids=selected_ids, verbose=verbose
+            swc_names=swc_names, verbose=verbose
         )
 
     def __call__(self, swc_pointer):
         """
         Builds a graphs by reading SWC files to extract content to load into a
-        SkeletonGraph object. Nodes are labeled if a label_mask is provided.
+        SkeletonGraph object. Nodes are labeled if a segmentation is provided.
 
         Parameters
         ----------
@@ -223,7 +223,7 @@ class GraphLoader:
             of SWC files) and values are the corresponding SkeletonGraph.
         """
         graphs = self._build_graphs_from_swcs(swc_pointer)
-        if self.label_mask:
+        if self.segmentation:
             for name in self.iterator(graphs, desc="Label Graphs"):
                 self._label_graph(graphs[name])
                 if self.fix_label_misalignments:
@@ -238,8 +238,8 @@ class GraphLoader:
 
         Parameters
         ----------
-        swc_pointer : Any
-            Object that points to SWC files to be read.
+        swc_pointer : str
+            Path to SWC files to be read.
 
         Returns
         -------
@@ -331,7 +331,7 @@ class GraphLoader:
             )
         else:
             segment_id = util.get_segment_id(swc_dict["swc_name"])
-            label = self.label_handler.get(segment_id)
+            label = self.get_label(segment_id)
             graph = FragmentGraph(
                 anisotropy=self.anisotropy,
                 name=swc_dict["swc_name"],
@@ -414,14 +414,20 @@ class GraphLoader:
             Dictionary that maps node IDs to their respective labels.
         """
         bbox = graph.get_bbox(nodes)
-        label_patch = self.label_mask.read_with_bbox(bbox)
+        patch = self.segmentation.read_with_bbox(bbox)
         node_to_label = dict()
         for i in nodes:
             voxel = tuple(graph.node_voxel[i] - bbox["min"])
-            node_to_label[i] = self.label_handler.get(label_patch[voxel])
+            node_to_label[i] = self.get_label(patch[voxel])
         return node_to_label
 
     # --- Helpers ---
+    def get_label(self, segment_id):
+        if self.label_handler:
+            return self.label_handler.get(segment_id)
+        else:
+            return segment_id
+
     def iterator(self, iterator, desc=""):
         """
         Gets an iterator that optionally displays a progress bar.
@@ -476,82 +482,68 @@ class LabelHandler:
         Maps a raw label (segment ID) to its class ID.
     inverse_mapping : Dict[int, Set[int]]
         Maps a class ID back to the set of raw labels it contains.
-    valid_labels : Set[int]
+    labels : Set[int]
         Labels that are allowed to be assigned (after filtering).
     """
 
-    def __init__(self, connections_path=None, valid_labels=set()):
+    def __init__(self, labels=set(), label_pairs=set()):
         """
         Instantiates a LabelHandler object and optionally builds label
         mappings.
 
         Parameters
         ----------
-        connections_path : str, optional
-            Path to file containing pairs of segment IDs that were merged.
-            Default is None.
-        valid_labels : Set[int], optional
-            Subset of labels that are considered to be valid. This argument
-            accounts for segments removed due to filtering. Default is an
+        labels : Set[hashable], optional
+            Labels considered to be valid. This argument accounts for segments
+            removed due to filtering. Default is an empty set.
+        label_pairs : List[hashable], optional
+            Pairs of labels merged during split correction. Default is an
             empty set.
         """
+        self.labels = labels
         self.mapping = dict()  # Maps label to equivalent class id
         self.inverse_mapping = dict()  # Maps class id to list of labels
-        self.valid_labels = valid_labels
-        if connections_path:
-            self.init_mappings(connections_path)
+        self.init_mappings(label_pairs)
 
     # --- Constructor Helpers ---
-    def init_mappings(self, connections_path):
+    def init_mappings(self, label_pairs):
         """
         Initializes dictionaries that map between segment IDs and equivalent
         class IDS.
 
         Parameters
         ----------
-        connections_path : str
-            Path to file containing pairs of segment IDs that were merged.
+        label_pairs : List[hashable]
+            Pairs of labels merged during split correction.
         """
         self.mapping = {0: 0}
         self.inverse_mapping = {0: [0]}
-        labels_graph = self.build_labels_graph(connections_path)
-        for i, labels in enumerate(nx.connected_components(labels_graph)):
-            class_id = i + 1
+        for i, labels in enumerate(self.label_equiv_classes(label_pairs)):
+            class_id = i + 1 if label_pairs else labels[0]
             self.inverse_mapping[class_id] = set()
             for label in labels:
                 self.mapping[label] = class_id
                 self.inverse_mapping[class_id].add(label)
 
-    def build_labels_graph(self, connections_path):
+    def label_equiv_classes(self, label_pairs):
         """
-        Builds a graph of labels from valid labels and merge connections.
-        Nodes correspond to "self.valid_labels", and edges are added between
-        labels that were merged according to the file.
+        Computes equiavelence classes of labels by building a graph from them
+        and computing the connected components.
 
         Parameters
         ----------
-        connections_path : str
-            Path to a text file containing merge connections. Each line should
-            specify a pair of segment IDs separated by a comma.
+        label_pairs : List[hashable]
+            Pairs of labels merged during split correction.
 
         Returns
         -------
-        labels_graph : networkx.Graph
-            Graph with nodes that represent labels and edges are based on the
-            connections read from the "connections_path".
+        Iterator[List[hashable]] : networkx.Graph
+            Equivalence classes of labels.
         """
-        # Initializations
-        assert self.valid_labels is not None, "Must provide valid labels!"
-        labels_graph = nx.Graph()
-        labels_graph.add_nodes_from(self.valid_labels)
-
-        # Main
-        for line in util.read_txt(connections_path).splitlines():
-            ids = line.split(",")
-            id1 = util.get_segment_id(ids[0])
-            id2 = util.get_segment_id(ids[1])
-            labels_graph.add_edge(id1, id2)
-        return labels_graph
+        graph = nx.Graph()
+        graph.add_nodes_from(self.labels)
+        graph.add_edges_from(label_pairs)
+        return map(list, nx.connected_components(graph))
 
     # --- Core Routines ---
     def get(self, label):
@@ -560,30 +552,15 @@ class LabelHandler:
 
         Parameters
         ----------
-        label : int
-            Raw label (segment ID) to be mapped.
+        label : hashable
+            Raw label (i.e. segment ID) to be mapped.
 
         Returns
         -------
         int
             Class ID corresponding to the label.
         """
-        if self.use_mapping():
-            return self.mapping.get(label, 0)
-        elif self.valid_labels:
-            return 0 if label not in self.valid_labels else label
-        return label
-
-    def use_mapping(self):
-        """
-        Checks whether mappings have been initialized.
-
-        Returns
-        -------
-        bool
-            True if mappings are active, False otherwise.
-        """
-        return len(self.mapping) > 0
+        return self.mapping.get(label, 0) if self.labels else label
 
     # --- Helpers ---
     def node_labels(self, graph):
@@ -597,10 +574,10 @@ class LabelHandler:
 
         Returns
         -------
-        labels : Set[int]
+        labels : Set[hashable]
             Labels corresponding to nodes in the graph identified by "key".
         """
         labels = graph.node_labels()
-        if self.use_mapping():
+        if self.labels:
             labels = set().union(*(self.inverse_mapping[u] for u in labels))
         return labels

@@ -30,7 +30,6 @@ from segmentation_skeleton_metrics.skeleton_metrics import (
 )
 from segmentation_skeleton_metrics.data_handling.graph_loading import (
     DataLoader,
-    LabelHandler,
 )
 from segmentation_skeleton_metrics.utils import util
 
@@ -40,13 +39,13 @@ def evaluate(
     segmentation,
     output_dir,
     anisotropy=(1.0, 1.0, 1.0),
-    connections_path=None,
     fragments_path=None,
+    fragment_swc_names=set(),
+    label_handler=None,
     results_prefix="",
     save_merges=False,
     save_fragments=False,
     use_anisotropy=False,
-    valid_labels=None,
     verbose=True,
 ):
     """
@@ -63,13 +62,16 @@ def evaluate(
     anisotropy : Tuple[float], optional
         Image to physical coordinates scaling factors to account for the
         anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
-    connections_path : str, optional
-        Path to a txt file containing pairs of segment IDs that represents
-        fragments that were merged. Default is None.
     fragments_path : str, optional
         Path to SWC files corresponding to "segmentation", see swc_util.Reader
         for documentation. Notes: (1) "anisotropy" is applied to these SWC
         files and (2) required for counting merges. Default is None.
+    fragment_swc_names : Set[hashable], optional
+        Only fragment SWC files with names in this set are loaded if provided.
+        Otherwise, all SWC files are loaded. Default is an empty set.
+    label_handler : LabelHandler, optional
+        Handles mapping between segmentation labels and consolidated class
+        IDs. Default is None.
     results_prefix : str, optional
         Prefix appended to result filenames. Default is an empty string.
     save_merges : bool, optional
@@ -81,23 +83,20 @@ def evaluate(
     use_anisotropy : bool, optional
         Indication of whether to apply the anisotropy to the coordinates from
         the fragment SWC files. Default is False.
-    valid_labels : Set[int], optional
-        Labels that are allowed to be assigned. Default is None.
     verbose : bool, optional
         Indication of whether to display progress bars and printout results.
         Default is True.
     """
     # Load data
-    label_handler = LabelHandler(connections_path, valid_labels)
     dataloader = DataLoader(
-        label_handler,
         anisotropy=anisotropy,
+        label_handler=label_handler,
         use_anisotropy=use_anisotropy,
         verbose=verbose,
     )
     gt_graphs = dataloader.load_groundtruth(gt_path, segmentation)
     fragment_graphs = dataloader.load_fragments(
-        fragments_path, selected_ids=dataloader.get_all_node_labels(gt_graphs)
+        fragments_path, swc_names=fragment_swc_names
     )
 
     # Run evaluation
@@ -159,7 +158,7 @@ class Evaluator:
         """
         # Instance attributes
         self.output_dir = output_dir
-        self.prefix = results_prefix + "_"
+        self.prefix = (results_prefix + "_") if results_prefix else ""
         self.verbose = verbose
 
         # Set core metrics

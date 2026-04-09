@@ -10,6 +10,7 @@ Code for helper routines.
 
 from botocore import UNSIGNED
 from botocore.client import Config
+from collections import deque
 from random import sample
 from google.cloud import storage
 from io import BytesIO, StringIO
@@ -290,7 +291,7 @@ def parse_cloud_path(path):
         Cloud prefix.
     """
     # Split path
-    path = path[len("s3://") :] if is_s3_path else path[len("gs://") :]
+    path = path[len("s3://"):] if is_s3_path else path[len("gs://"):]
     parts = path.split("/", 1)
 
     # Extract bucket and prefix
@@ -578,31 +579,6 @@ def get_segment_id(filename):
     except ValueError:
         segment_id = filename
     return segment_id
-
-
-def load_valid_labels(path):
-    """
-    Loads segment IDs that can be assigned to nodes, accounts for segments
-    that may have been removed due to some type of filtering. The default is
-    None.
-
-    Parameters
-    ----------
-    path : str
-        Path to txt file containing segment IDs.
-
-    Returns
-    -------
-    Set[int]
-        Segment IDs that can be assigned to nodes.
-    """
-    valid_labels = set()
-    for label_str in read_txt(path).splitlines():
-        try:
-            valid_labels.add(int(label_str.split(".")[0]))
-        except ValueError:
-            valid_labels.add(label_str)
-    return valid_labels
 
 
 def sample_once(my_container):
