@@ -574,22 +574,6 @@ class LabelHandler:
             return 0 if label not in self.valid_labels else label
         return label
 
-    def get_class(self, label):
-        """
-        Gets all raw labels associated with a class ID.
-
-        Parameters
-        ----------
-        label : int
-            Class ID or raw label.
-
-        Returns
-        -------
-        List[int]
-            Labels corresponding to the class.
-        """
-        return self.inverse_mapping[label] if self.use_mapping() else [label]
-
     def use_mapping(self):
         """
         Checks whether mappings have been initialized.
