@@ -571,14 +571,10 @@ def get_segment_id(filename):
 
     Returns
     -------
-    int
+    str
         Segment ID.
     """
-    try:
-        segment_id = int(filename.split(".")[0])
-    except ValueError:
-        segment_id = filename
-    return segment_id
+    return filename.split(".")[0]
 
 
 def sample_once(my_container):

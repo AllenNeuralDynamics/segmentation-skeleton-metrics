@@ -338,7 +338,7 @@ class LabeledGraph(SkeletonGraph):
         """
         error_msg = "Graph must have nodes to initialize node labels!"
         assert self.number_of_nodes() > 0, error_msg
-        self.node_label = np.zeros((self.number_of_nodes()), dtype=int)
+        self.node_label = np.empty((self.number_of_nodes()), dtype=object)
 
     # --- Core Routines ---
     def node_labels(self):
@@ -347,11 +347,11 @@ class LabeledGraph(SkeletonGraph):
 
         Returns
         -------
-        node_labels : Set[int]
+        node_labels : Set[str]
             Unique non-zero label values assigned to nodes in the graph.
         """
         node_labels = set(np.unique(self.node_label))
-        node_labels.discard(0)
+        node_labels.discard("0")
         return node_labels
 
     def nodes_with_label(self, label):
@@ -360,7 +360,7 @@ class LabeledGraph(SkeletonGraph):
 
         Parameters
         ----------
-        label : int
+        label : str
             Label value to search for in the "node_label" attribute.
 
         Returns
@@ -390,7 +390,7 @@ class LabeledGraph(SkeletonGraph):
 
         Parameters
         ----------
-        label : int
+        label : str
             Label to be deleted from graph.
         """
         nodes = self.nodes_with_label(label)
@@ -430,7 +430,7 @@ class LabeledGraph(SkeletonGraph):
                     visited.add(k)
         return run_length
 
-    def update_node_labels(self, nodes, label):
+    def update_node_labels(self, nodes, new_label):
         """
         Updates the label of the given nodes with a specified label.
 
@@ -438,11 +438,11 @@ class LabeledGraph(SkeletonGraph):
         ----------
         nodes : List[int]
             Nodes to be updated.
-        label : int
+        new_label : str
             New label of nodes.
         """
         for i in nodes:
-            self.node_label[i] = label
+            self.node_label[i] = new_label
 
     def fix_label_misalignments(self):
         """
@@ -455,7 +455,7 @@ class LabeledGraph(SkeletonGraph):
                 continue
 
             # Visit edge
-            if int(self.node_label[j]) == 0:
+            if str(self.node_label[j]) == "0":
                 self.check_misalignment(visited, i, j)
             visited.add(frozenset({i, j}))
 
@@ -477,16 +477,16 @@ class LabeledGraph(SkeletonGraph):
         label_collisions = set()
         queue = deque([root])
         visited = set()
-        while len(queue) > 0:
+        while queue:
             # Visit node
             j = queue.popleft()
-            label_j = int(self.node_label[j])
-            if label_j != 0:
+            label_j = str(self.node_label[j])
+            if label_j != "0":
                 label_collisions.add(label_j)
             visited.add(j)
 
             # Update queue
-            if label_j == 0:
+            if label_j == "0":
                 for k in self.neighbors(j):
                     if k not in visited:
                         if frozenset({j, k}) not in visited_edges or k == nb:
@@ -573,7 +573,7 @@ class FragmentGraph(SkeletonGraph):
         label : int, optional
             Graph-level label that corresponds to a node-level label given to
             a ground truth graph. Default is None.
-        segment_id : int, optional
+        segment_id : str, optional
             Segment ID of the segment the given skeleton was obtained from.
             Default is None.
         """

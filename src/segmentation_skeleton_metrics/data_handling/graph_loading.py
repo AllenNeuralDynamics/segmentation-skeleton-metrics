@@ -9,6 +9,7 @@ management.
 
 """
 
+from collections import defaultdict
 from concurrent.futures import (
     as_completed,
     ProcessPoolExecutor,
@@ -196,7 +197,7 @@ class GraphLoader:
         self.anisotropy = np.array(anisotropy)
         self.fix_label_misalignments = fix_label_misalignments
         self.is_groundtruth = is_groundtruth
-        self.label_handler = label_handler
+        self.label_handler = label_handler or LabelHandler()
         self.segmentation = segmentation
         self.use_anisotropy = use_anisotropy
         self.verbose = verbose
@@ -331,7 +332,7 @@ class GraphLoader:
             )
         else:
             segment_id = util.get_segment_id(swc_dict["swc_name"])
-            label = self.get_label(segment_id)
+            label = self.get_label(swc_dict["swc_name"])
             graph = FragmentGraph(
                 anisotropy=self.anisotropy,
                 name=swc_dict["swc_name"],
@@ -394,7 +395,7 @@ class GraphLoader:
             for thread in as_completed(threads):
                 node_to_label = thread.result()
                 for i, label in node_to_label.items():
-                    graph.node_label[i] = label
+                    graph.node_label[i] = str(label)
 
     def get_patch_labels(self, graph, nodes):
         """
@@ -403,14 +404,14 @@ class GraphLoader:
 
         Parameters
         ----------
-        graph : str
-            Unique identifier of graph to be labeled.
+        graph : LabelGraph
+            Graph to be labeled.
         nodes : List[int]
             Node IDs for which the labels are to be retrieved.
 
         Returns
         -------
-        node_to_label : Dict[int, int]
+        node_to_label : Dict[int, str]
             Dictionary that maps node IDs to their respective labels.
         """
         bbox = graph.get_bbox(nodes)
@@ -423,10 +424,20 @@ class GraphLoader:
 
     # --- Helpers ---
     def get_label(self, segment_id):
-        if self.label_handler:
-            return self.label_handler.get(segment_id)
-        else:
-            return segment_id
+        """
+        Gets the label corresponding to the given segment ID.
+
+        Parameters
+        ----------
+        segment_id : int
+            Segment ID to be queried.
+
+        Returns
+        -------
+        str
+            Label corresponding to the given segment ID.
+        """
+        return self.label_handler.get(segment_id)
 
     def iterator(self, iterator, desc=""):
         """
@@ -478,15 +489,17 @@ class LabelHandler:
 
     Attributes
     ----------
-    mapping : Dict[int, int]
+    mapping : Dict[str, str]
         Maps a raw label (segment ID) to its class ID.
-    inverse_mapping : Dict[int, Set[int]]
+    inverse_mapping : Dict[str, Set[str]]
         Maps a class ID back to the set of raw labels it contains.
-    labels : Set[int]
+    labels : Set[str]
         Labels that are allowed to be assigned (after filtering).
     """
 
-    def __init__(self, labels=set(), label_pairs=set()):
+    def __init__(
+        self, labels=set(), label_pairs=set(), use_segment_mapping=False
+    ):
         """
         Instantiates a LabelHandler object and optionally builds label
         mappings.
@@ -499,31 +512,53 @@ class LabelHandler:
         label_pairs : List[hashable], optional
             Pairs of labels merged during split correction. Default is an
             empty set.
+        use_segment_mapping : bool, optional
+            Indication of whether to build mapping between segment IDs and
+            labels. Default is False.
         """
+        # Instance attributes
         self.labels = labels
         self.mapping = dict()  # Maps label to equivalent class id
         self.inverse_mapping = dict()  # Maps class id to list of labels
-        self.init_mappings(label_pairs)
+
+        # Set label mapping
+        if use_segment_mapping:
+            self.set_segment_mappings()
+        else:
+            self.set_mappings(label_pairs)
 
     # --- Constructor Helpers ---
-    def init_mappings(self, label_pairs):
+    def set_mappings(self, label_pairs):
         """
-        Initializes dictionaries that map between segment IDs and equivalent
-        class IDS.
+        Stores dictionaries that map between segment IDs and equivalence class
+        IDS.
 
         Parameters
         ----------
         label_pairs : List[hashable]
             Pairs of labels merged during split correction.
         """
-        self.mapping = {0: 0}
-        self.inverse_mapping = {0: [0]}
+        self.mapping = {"0": "0"}
+        self.inverse_mapping = {"0": {"0"}}
         for i, labels in enumerate(self.label_equiv_classes(label_pairs)):
-            class_id = i + 1 if label_pairs else labels[0]
+            class_id = str(i + 1) if label_pairs else labels[0]
             self.inverse_mapping[class_id] = set()
             for label in labels:
                 self.mapping[label] = class_id
                 self.inverse_mapping[class_id].add(label)
+
+    def set_segment_mappings(self):
+        """
+        Stores dictionaries that map between segment IDs and labels.
+        """
+        assert self.labels
+        self.mapping = {"0": "0"}
+        self.inverse_mapping = defaultdict(set)
+        self.inverse_mapping["0"] = {"0"}
+        for label in map(str, self.labels):
+            segment_id = util.get_segment_id(label)
+            self.mapping[label] = segment_id
+            self.inverse_mapping[segment_id].add(label)
 
     def label_equiv_classes(self, label_pairs):
         """
@@ -560,7 +595,7 @@ class LabelHandler:
         int
             Class ID corresponding to the label.
         """
-        return self.mapping.get(label, 0) if self.labels else label
+        return self.mapping.get(label, "0") if self.labels else str(label)
 
     # --- Helpers ---
     def node_labels(self, graph):

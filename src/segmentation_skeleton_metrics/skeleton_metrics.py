@@ -210,7 +210,7 @@ class OmitEdgePercentMetric(SkeletonMetric):
         """
         num_omit_edges = 0
         for i, j in nx.dfs_edges(graph):
-            if graph.node_label[i] == 0 and graph.node_label[j] == 0:
+            if graph.node_label[i] == "0" and graph.node_label[j] == "0":
                 num_omit_edges += 1
         return num_omit_edges
 
