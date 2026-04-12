@@ -210,7 +210,7 @@ class OmitEdgePercentMetric(SkeletonMetric):
         """
         num_omit_edges = 0
         for i, j in nx.dfs_edges(graph):
-            if graph.node_label[i] == 0 and graph.node_label[j] == 0:
+            if graph.node_label[i] == "0" and graph.node_label[j] == "0":
                 num_omit_edges += 1
         return num_omit_edges
 
@@ -496,12 +496,13 @@ class MergeCountMetric(SkeletonMetric):
         voxel = fragment_graph.node_voxel[fragment_node]
         xyz = fragment_graph.node_xyz(fragment_node)
 
-        self.fragments_with_merge.add(fragment_graph.name)
+        self.fragments_with_merge.add(fragment_graph.label)  # UPD
         self.merge_sites.append(
             {
                 "Fragment_Name": fragment_graph.name,
                 "Segment_ID": fragment_graph.segment_id,
                 "GroundTruth_ID": gt_graph.name,
+                "Label": fragment_graph.label,
                 "Voxel": tuple(map(int, voxel)),
                 "World": tuple([float(round(t, 2)) for t in xyz]),
                 "Added Cable Length (μm)": 0.0,
@@ -875,9 +876,10 @@ class AddedCableLengthMetric(SkeletonMetric):
         pair_to_length = dict()
         for i in self.get_iterator(merge_sites.index):
             # Extract site info
-            fragment_name = str(merge_sites["Fragment_Name"][i])
+            #fragment_name = str(merge_sites["Fragment_Name"][i])  #UPD
+            label = merge_sites["Label"][i]  #UPD
             gt_id = merge_sites["GroundTruth_ID"][i]
-            pair_id = (fragment_name, gt_id)
+            pair_id = (label, gt_id)
 
             # Check wheter to visit
             if pair_id in pair_to_length:
@@ -885,7 +887,7 @@ class AddedCableLengthMetric(SkeletonMetric):
             else:
                 # Get graphs
                 gt_graph = gt_graphs[gt_id]
-                fragment_graph = deepcopy(fragment_graphs[fragment_name])
+                fragment_graph = deepcopy(fragment_graphs[label])
 
                 # Compute metric
                 pair_to_length[pair_id] = self.compute_added_length(
