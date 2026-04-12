@@ -623,4 +623,4 @@ class FragmentGraph(SkeletonGraph):
         label_handler : LabelHandler
             Object used to map a segment ID to a label.
         """
-        self.label = label_handler.get(self.segment_id)
+        self.label = label_handler.get(self.label)

@@ -293,6 +293,7 @@ class GraphLoader:
         """
         # Initialize graph
         graph = self._init_graph(swc_dict)
+        key = graph.name if self.is_groundtruth else graph.label
 
         # Build graph structure
         id_lookup = dict()
@@ -307,7 +308,7 @@ class GraphLoader:
         if self.use_anisotropy:
             graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]
-        return {graph.name: graph}
+        return {key: graph}
 
     def _init_graph(self, swc_dict):
         """
