@@ -45,19 +45,19 @@ class Reader:
     archive, and (3) local directory of ZIP archives.
     """
 
-    def __init__(self, selected_ids=None, verbose=True):
+    def __init__(self, swc_names=set(), verbose=True):
         """
         Initializes a Reader object that reads SWC files.
 
         Parameters
         ----------
-        selected_ids : Set[int], optional
-            Only SWC files with an swc_id contained in this set are read.
-            Default is None.
+        swc_names : Set[str], optional
+            Only SWC files with names in this set are loaded if provided.
+            Otherwise, all SWC files are loaded. Default is an empty set.
         verbose : bool, optional
             Indication of whether to display a progress bar. Default is True.
         """
-        self.selected_ids = selected_ids or set()
+        self.swc_names = swc_names
         self.verbose = verbose
 
     # --- Read Data ---
@@ -407,25 +407,23 @@ class Reader:
                         swc_dicts.append(result)
         return swc_dicts
 
-    def confirm_read(self, filename):
+    def confirm_read(self, path):
         """
-        Checks whether the swc_id corresponding to the given filename is
-        contained in the attribute "selected_ids".
+        Checks if the given filename should be loaded if the attribute
+        "swc_names" is non-empty.
 
         Parameters
         ----------
-        filename : str
-            Name of SWC file to be checked.
+        path : str
+            Path of SWC file to be checked.
 
         Returns
         -------
         bool
             Indication of whether to read SWC file.
         """
-        if self.selected_ids:
-            return util.get_segment_id(filename) in self.selected_ids
-        else:
-            return True
+        name = os.path.splitext(os.path.basename(path))[0]
+        return name in self.swc_names if self.swc_names else True
 
     # -- Process Text ---
     def iterator(self, iterator):
