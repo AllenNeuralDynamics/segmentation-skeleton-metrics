@@ -167,7 +167,7 @@ class Reader:
             for path in swc_paths:
                 if self.confirm_read(os.path.basename(path)):
                     threads.add(executor.submit(read_fn, path))
-                    break
+
             # Store results
             swc_dicts = deque()
             pbar = self.manual_progress_bar(len(threads))
