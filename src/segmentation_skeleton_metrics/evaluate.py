@@ -361,7 +361,7 @@ class Evaluator:
         Parameters
         ----------
         zip_writer : zipfile.ZipFile
-            Open ZIP file handle used to write merge site data.
+            Open ZIP file handle used to write merge sites.
         """
         merge_sites = self.metrics["# Merges"].merge_sites
         for i in range(len(merge_sites)):
@@ -381,7 +381,7 @@ class Evaluator:
         gt_graphs : Dict[str, LabeledGraph]
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentsGraph]
-            Graphs built from skeletons obtained from a predicted segmentation.
+            Graphs built from skeletons obtained from a segmentation.
         zip_writer : zipfile.ZipFile
             Open ZIP file handle used to write SWC data.
         """
