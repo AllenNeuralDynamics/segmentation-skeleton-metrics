@@ -282,7 +282,7 @@ class SkeletonGraph(nx.Graph):
             parent : int
                 Node ID of the parent.
             """
-            x, y, z = self.node_xyz(i)
+            x, y, z = self.node_xyz(node)
             r = self.radius()
             node_id = cnt
             parent_id = node_to_idx[parent]

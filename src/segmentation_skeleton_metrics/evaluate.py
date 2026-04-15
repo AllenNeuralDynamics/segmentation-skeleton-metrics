@@ -106,7 +106,7 @@ def evaluate(
 
     # Optional saves
     if save_merges:
-        evaluator.save_merge_results(gt_graphs, fragment_graphs, output_dir)
+        evaluator.save_merge_results(gt_graphs, fragment_graphs)
 
     if save_fragments and fragment_graphs:
         evaluator.save_fragments(gt_graphs, fragment_graphs)
@@ -327,7 +327,7 @@ class Evaluator:
             if graph.label in intersecting_labels:
                 graph.to_zipped_swc(zip_writer)
 
-    def save_merge_results(self, gt_graphs, fragment_graphs, output_dir):
+    def save_merge_results(self, gt_graphs, fragment_graphs):
         """
         Saves all detected merge results, including skeletons, merge sites,
         and metadata.
@@ -338,12 +338,10 @@ class Evaluator:
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentsGraph]
             Graphs built from skeletons obtained from a segmentation.
-        output_dir : str
-            Directory that results are written to.
         """
         # Initialize a writer
         filename = f"{self.prefix}fragments_with_merges.zip"
-        zip_path = os.path.join(output_dir, filename)
+        zip_path = os.path.join(self.output_dir, filename)
         util.rm_file(zip_path)
         zip_writer = ZipFile(zip_path, "a")
 
@@ -390,8 +388,8 @@ class Evaluator:
         # Save ground truth skeletons
         keys = self.metrics["# Merges"].merge_sites["GroundTruth_ID"]
         for key in keys.unique():
-            gt_graphs[key].to_zipped_swc(zip_writer)
+            gt_graphs[key].to_zipped_swcs(zip_writer)
 
         # Save fragments
         for key in self.metrics["# Merges"].fragments_with_merge:
-            fragment_graphs[key].to_zipped_swc(zip_writer)
+            fragment_graphs[key].to_zipped_swcs(zip_writer)
