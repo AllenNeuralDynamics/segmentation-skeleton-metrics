@@ -876,8 +876,7 @@ class AddedCableLengthMetric(SkeletonMetric):
         pair_to_length = dict()
         for i in self.get_iterator(merge_sites.index):
             # Extract site info
-            #fragment_name = str(merge_sites["Fragment_Name"][i])  #UPD
-            label = merge_sites["Label"][i]  #UPD
+            label = merge_sites["Label"][i]
             gt_id = merge_sites["GroundTruth_ID"][i]
             pair_id = (label, gt_id)
 
