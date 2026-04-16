@@ -496,7 +496,8 @@ class MergeCountMetric(SkeletonMetric):
         voxel = fragment_graph.node_voxel[fragment_node]
         xyz = fragment_graph.node_xyz(fragment_node)
 
-        self.fragments_with_merge.add(fragment_graph.label)  # UPD
+        gt_graph.labels_with_merge.add(fragment_graph.label)
+        self.fragments_with_merge.add(fragment_graph.label)
         self.merge_sites.append(
             {
                 "Fragment_Name": fragment_graph.name,
@@ -540,7 +541,7 @@ class MergeCountMetric(SkeletonMetric):
     # --- Helpers ---
     def add_merge_site_names(self):
         """
-        Assigns unique name to each detected merge site.
+        Assigns unique name to detected merge sites.
         """
         row_names = list()
         for i, _ in enumerate(self.merge_sites.index, 1):
@@ -671,7 +672,7 @@ class SplitRateMetric(SkeletonMetric):
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
         results : pandas.DataFrame
-            Data frame containing the skeleton metric results computed so far.
+            DataFrame containing the skeleton metric results computed so far.
 
         Returns
         -------
@@ -765,7 +766,7 @@ class EdgeAccuracyMetric(SkeletonMetric):
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
         results : pandas.DataFrame
-            Data frame containing the skeleton metric results computed so far.
+            DataFrame containing the skeleton metric results computed so far.
 
         Returns
         -------
@@ -814,7 +815,7 @@ class NormalizedERLMetric(SkeletonMetric):
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
         results : pandas.DataFrame
-            Data frame containing the skeleton metric results computed so far.
+            DataFrame containing the skeleton metric results computed so far.
 
         Returns
         -------
