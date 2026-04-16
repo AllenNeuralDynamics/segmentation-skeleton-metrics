@@ -293,8 +293,7 @@ class Reader:
 
         # Call reader
         if swc_paths:
-            read_fn = self.read_s3_swc if use_s3 else self.read_gcs_swc
-            return self.read_swcs(swc_paths, read_fn)
+            return self.read_swcs(swc_paths, self.read_swc)
         elif zip_paths:
             read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
             return self.read_zips(zip_paths, read_fn)
