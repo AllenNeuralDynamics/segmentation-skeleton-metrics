@@ -302,7 +302,7 @@ class Evaluator:
             zip_writer = ZipFile(zip_path, "a")
 
             # Save skeletons
-            graph.to_zipped_swc(zip_writer)
+            graph.to_zipped_swcs(zip_writer)
             self.save_intersecting_fragments(
                 graph, fragment_graphs, zip_writer
             )
@@ -322,10 +322,10 @@ class Evaluator:
         zip_writer : zipfile.ZipFile
             Open ZIP file handle used to write fragments.
         """
-        intersecting_labels = gt_graph.get_node_labels()
+        intersecting_labels = gt_graph.node_labels()
         for key, graph in fragment_graphs.items():
             if graph.label in intersecting_labels:
-                graph.to_zipped_swc(zip_writer)
+                graph.to_zipped_swcs(zip_writer)
 
     def save_merge_results(self, gt_graphs, fragment_graphs):
         """
