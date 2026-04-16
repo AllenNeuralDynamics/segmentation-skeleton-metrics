@@ -70,6 +70,7 @@ class SkeletonGraph(nx.Graph):
         # Instance attributes
         self.anisotropy = np.array(anisotropy)
         self.filename = None
+        self.highlighted_nodes = set()
         self.kdtree = None
         self.name = name
         self.node_voxel = None
@@ -283,7 +284,7 @@ class SkeletonGraph(nx.Graph):
                 Node ID of the parent.
             """
             x, y, z = self.node_xyz(node)
-            r = self.radius()
+            r = 7 if node in self.highlighted_nodes else self.radius()
             node_id = cnt
             parent_id = node_to_idx[parent]
             node_to_idx[node] = node_id
@@ -583,6 +584,10 @@ class FragmentGraph(SkeletonGraph):
         # Instance attributes
         self.label = label
         self.segment_id = segment_id
+
+    def add_highlighted_edge(self, i, j):
+        self.highlighted_nodes = self.highlighted_nodes.union({i, j})
+        self.add_edge(i, j)
 
     def run_length_from(self, root):
         """
