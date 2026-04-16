@@ -868,7 +868,7 @@ class AddedCableLengthMetric(SkeletonMetric):
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
-        # Check if merge sites is non-empty
+        # Check if merge sites is empty
         if len(merge_sites) == 0:
             return None
 
