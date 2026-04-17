@@ -515,7 +515,7 @@ def read_txt_from_s3(path):
     str
         Contents of txt file.
     """
-    bucket_name, path = (path)
+    bucket_name, path = parse_cloud_path(path)
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     obj = s3.get_object(Bucket=bucket_name, Key=path)
     return obj["Body"].read().decode("utf-8")
