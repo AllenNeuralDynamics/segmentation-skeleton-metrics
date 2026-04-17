@@ -401,14 +401,12 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-def read_txt_from_gcs(bucket_name, path):
+def read_txt_from_gcs(path):
     """
     Reads a txt file stored in a GCS bucket.
 
     Parameters
     ----------
-    bucket_name : str
-        Name of bucket to be read from.
     path : str
         Path to txt file to be read.
 
@@ -417,10 +415,9 @@ def read_txt_from_gcs(bucket_name, path):
     str
         Contents of txt file.
     """
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(path)
-    return blob.download_as_text()
+    bucket_name, subpath = parse_cloud_path(path)
+    bucket = storage.Client().bucket(bucket_name)
+    return bucket.blob(subpath).download_as_text()
 
 
 def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
@@ -518,7 +515,7 @@ def read_txt_from_s3(path):
     str
         Contents of txt file.
     """
-    bucket_name, path = parse_cloud_path(path)
+    bucket_name, path = (path)
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
     obj = s3.get_object(Bucket=bucket_name, Key=path)
     return obj["Body"].read().decode("utf-8")
