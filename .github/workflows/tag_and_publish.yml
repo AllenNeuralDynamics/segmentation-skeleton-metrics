@@ -5,9 +5,9 @@ on:
       - main
 jobs:
   tag:
-    uses: AllenNeuralDynamics/aind-github-actions/.github/workflows/tag.yml@main
+    uses: AllenNeuralDynamics/.github/.github/workflows/release-bump-version.yml@main
     secrets:
-      SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN }}
+      repo-token: ${{ secrets.SERVICE_TOKEN }}
   publish:
     needs: tag
     runs-on: ubuntu-latest
