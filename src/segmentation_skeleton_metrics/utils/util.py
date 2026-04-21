@@ -529,7 +529,7 @@ def compute_weighted_avg(df, column_name):
     Parameters
     ----------
     df : pandas.DataFrame
-        Input DataFrame containing the target column and 'SWC Run Length'
+        Input DataFrame containing the target column 'SWC Run Length'
         column used as weights.
     column_name : str
         Name of the column for which to compute the weighted average.
