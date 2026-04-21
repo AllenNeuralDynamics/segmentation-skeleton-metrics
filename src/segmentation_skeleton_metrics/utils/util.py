@@ -401,7 +401,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
     return subdirs
 
 
-def read_txt_from_gcs(bucket_name, path):
+def read_txt_from_gcs(path):
     """
     Reads a txt file stored in a GCS bucket.
 
@@ -417,10 +417,9 @@ def read_txt_from_gcs(bucket_name, path):
     str
         Contents of txt file.
     """
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(path)
-    return blob.download_as_text()
+    bucket_name, subpath = parse_cloud_path(path)
+    bucket = storage.Client().bucket(bucket_name)
+    return bucket.blob(subpath).download_as_text()
 
 
 def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
@@ -610,7 +609,7 @@ def to_zipped_point(zip_writer, filename, xyz):
     """
     with StringIO() as text_buffer:
         # Preamble
-        text_buffer.write("# COLOR 1.0 0.0 0.0")
+        text_buffer.write("# COLOR 1.0 1.0 0.0")
         text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
         # Write entry
