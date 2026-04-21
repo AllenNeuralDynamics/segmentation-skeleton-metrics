@@ -23,35 +23,35 @@ import shutil
 
 
 # -- OS Utils ---
-def mkdir(path, delete=False):
+def mkdir(dir_path, delete=False):
     """
     Creates a directory at the given path.
 
     Parameters
     ----------
-    path : str
+    dir_path : str
         Path of directory to be created.
     delete : bool, optional
-        Indication of whether to delete directory at path if it already
-        exists. Default is False.
+        Indication of whether to delete the directory if it already exists
+        Default is False.
     """
     if delete:
-        rmdir(path)
+        rmdir(dir_path)
 
-    os.makedirs(path, exist_ok=True)
+    os.makedirs(dir_path, exist_ok=True)
 
 
-def rmdir(path):
+def rmdir(dir_path):
     """
     Removes the given directory and all of its subdirectories.
 
     Parameters
     ----------
-    path : str
+    dir_path : str
         Path to directory to be removed if it exists.
     """
-    if os.path.exists(path):
-        shutil.rmtree(path)
+    if os.path.exists(dir_path):
+        shutil.rmtree(dir_path)
 
 
 def rm_file(path):
@@ -67,14 +67,14 @@ def rm_file(path):
         os.remove(path)
 
 
-def list_dir(directory, extension=""):
+def list_dir(dir_path, extension=""):
     """
     Lists filenames in the given directory. If "extension" is provided,
     filenames ending with the given extension are returned.
 
     Parameters
     ----------
-    directory : str
+    dir_path : str
         Path to directory to be searched.
     extension : str, optional
        Extension of filenames to be returned. Default is an empty string.
@@ -84,7 +84,7 @@ def list_dir(directory, extension=""):
     List[str]
         Filenames in the given directory.
     """
-    return [f for f in os.listdir(directory) if f.endswith(extension)]
+    return [f for f in os.listdir(dir_path) if f.endswith(extension)]
 
 
 def list_files_in_zip(zip_content):
@@ -275,7 +275,7 @@ def search_branching_node(graph, kdtree, root, radius=40):
 # --- Cloud Utils ---
 def parse_cloud_path(path):
     """
-    Parses a cloud storage path into its bucket name and key/prefix. Supports
+    Parses a cloud storage path into its bucket name and prefix. Supports
     paths of the form: "{scheme}://bucket_name/prefix" or without a scheme.
 
     Parameters
@@ -357,7 +357,7 @@ def list_gcs_paths(bucket_name, prefix, extension=""):
     Returns
     -------
     List[str]
-        Paths stored in the GCS prefix with the given extension.
+        Paths under the GCS prefix with the given extension.
     """
     bucket = storage.Client().bucket(bucket_name)
     paths = list()
@@ -381,7 +381,7 @@ def list_gcs_subdirectories(bucket_name, prefix):
     Returns
     -------
     subdirs : List[str]
-         List of direct subdirectories.
+         Direct subdirectories.
     """
     # Load blobs
     storage_client = storage.Client()
@@ -422,7 +422,7 @@ def read_txt_from_gcs(path):
     return bucket.blob(subpath).download_as_text()
 
 
-def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
+def upload_directory_to_gcs(bucket_name, src_dir, dst_dir):
     """
     Uploads the contents of a local directory to a GCS bucket.
 
@@ -430,24 +430,23 @@ def upload_directory_to_gcs(bucket_name, source_dir, destination_dir):
     ----------
     bucket_name : str
         Name of bucket to be read from.
-    source_dir : str
+    src_dir : str
         Path to the local directory whose contents should be uploaded.
-    destination_dir : str
+    dst_dir : str
         Prefix path in the GCS bucket under which the files will be stored.
     """
     client = storage.Client()
     bucket = client.bucket(bucket_name)
-    for root, _, files in os.walk(source_dir):
+    for root, _, files in os.walk(src_dir):
         for filename in files:
             local_path = os.path.join(root, filename)
 
             # Compute the relative path and GCS destination path
-            path = os.path.relpath(local_path, start=source_dir)
-            blob_path = os.path.join(destination_dir, path).replace("\\", "/")
+            path = os.path.relpath(local_path, start=src_dir)
+            blob_path = os.path.join(dst_dir, path).replace("\\", "/")
 
             # Upload the file
-            blob = bucket.blob(blob_path)
-            blob.upload_from_filename(local_path)
+            bucket.blob(blob_path).upload_from_filename(local_path)
 
 
 # --- S3 Utils ---
@@ -478,15 +477,14 @@ def list_s3_paths(bucket_name, prefix, extension=""):
     bucket_name : str
         Name of the S3 bucket.
     prefix : str
-        The S3 "directory" prefix to search under.
+        Prefix to search under.
     extension : str, optional
-        File extension to filter by. Default is an empty string, which returns
-        all files.
+        File extension to filter by. Default is an empty string.
 
     Returns
     -------
     paths : List[str]
-        List of S3 object keys that match the prefix and extension filter.
+        S3 object keys that match the prefix and extension filter.
     """
     # Create an anonymous client for public buckets
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
@@ -517,9 +515,9 @@ def read_txt_from_s3(path):
     str
         Contents of txt file.
     """
-    bucket_name, path = parse_cloud_path(path)
+    bucket_name, subpath = parse_cloud_path(path)
     s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-    obj = s3.get_object(Bucket=bucket_name, Key=path)
+    obj = s3.get_object(Bucket=bucket_name, Key=subpath)
     return obj["Body"].read().decode("utf-8")
 
 
@@ -531,7 +529,7 @@ def compute_weighted_avg(df, column_name):
     Parameters
     ----------
     df : pandas.DataFrame
-        Input DataFrame containing the target column and a 'SWC Run Length'
+        Input DataFrame containing the target column and 'SWC Run Length'
         column used as weights.
     column_name : str
         Name of the column for which to compute the weighted average.
@@ -587,21 +585,21 @@ def sample_once(my_container):
 
     Returns
     -------
-    Hashable
+    hashable
         Random element from the given container.
     """
     return sample(my_container, 1)[0]
 
 
-def to_zipped_point(zip_writer, filename, xyz):
+def to_zipped_point(zip_file, filename, xyz):
     """
     Writes a point to an SWC file format, which is then stored in a ZIP
     archive.
 
     Parameters
     ----------
-    zip_writer : zipfile.ZipFile
-        A ZipFile object that will store the generated SWC file.
+    zip_file : zipfile.ZipFile
+        ZipFile object that writes the SWC file.
     filename : str
         Filename of SWC file.
     xyz : ArrayLike
@@ -609,7 +607,7 @@ def to_zipped_point(zip_writer, filename, xyz):
     """
     with StringIO() as text_buffer:
         # Preamble
-        text_buffer.write("# COLOR 1.0 1.0 0.0")
+        text_buffer.write("# COLOR 1.0 0.0 0.0")
         text_buffer.write("\n" + "# id, type, z, y, x, r, pid")
 
         # Write entry
@@ -617,4 +615,4 @@ def to_zipped_point(zip_writer, filename, xyz):
         text_buffer.write("\n" + f"1 2 {x} {y} {z} 10 -1")
 
         # Finish
-        zip_writer.writestr(filename, text_buffer.getvalue())
+        zip_file.writestr(filename, text_buffer.getvalue())
