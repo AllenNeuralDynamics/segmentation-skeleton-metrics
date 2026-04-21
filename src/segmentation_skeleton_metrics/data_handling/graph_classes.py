@@ -51,7 +51,7 @@ class SkeletonGraph(nx.Graph):
         "# COLOR 0.6 0.0 0.6",  # plum
     ]
 
-    def __init__(self, anisotropy=(1.0, 1.0, 1.0), name=None):
+    def __init__(self, anisotropy=(1.0, 1.0, 1.0), name=None, swc_color=""):
         """
         Initializes a SkeletonGraph, including setting the anisotropy and
         initializing the run length attributes.
@@ -63,6 +63,8 @@ class SkeletonGraph(nx.Graph):
             anisotropy of the microscope. Default is (1.0, 1.0, 1.0).
         name : str, optional
             Name of the SWC file that graph is built from.
+        swc_color : str, optional
+            Color used in SWC file of the graph. Default is an empty string.
         """
         # Call parent class
         super().__init__()
@@ -75,6 +77,7 @@ class SkeletonGraph(nx.Graph):
         self.name = name
         self.node_voxel = None
         self.run_length = 0
+        self.swc_color = swc_color
 
     def set_kdtree(self):
         """
@@ -205,7 +208,7 @@ class SkeletonGraph(nx.Graph):
         str
             String representing the color in the format "# COLOR R G B".
         """
-        return util.sample_once(SkeletonGraph.colors)
+        return self.swc_color or util.sample_once(SkeletonGraph.colors)
 
     def radius(self):
         """
@@ -534,7 +537,7 @@ class LabeledGraph(SkeletonGraph):
         str
             String representing the color in the format "# COLOR R G B".
         """
-        return "# COLOR 1.0 1.0 1.0"
+        return self.swc_color or "# COLOR 1.0 1.0 1.0"
 
     def radius(self):
         """
@@ -559,6 +562,7 @@ class FragmentGraph(SkeletonGraph):
         name=None,
         label=None,
         segment_id=None,
+        swc_color=""
     ):
         """
         Instantiates a FragmentGraph object.
@@ -577,9 +581,13 @@ class FragmentGraph(SkeletonGraph):
         segment_id : str, optional
             Segment ID of the segment the given skeleton was obtained from.
             Default is None.
+        swc_color : str, optional
+            Color used in SWC file of the graph. Default is an empty string.
         """
         # Call parent class
-        super().__init__(anisotropy=anisotropy, name=name)
+        super().__init__(
+            anisotropy=anisotropy, name=name, swc_color=swc_color
+        )
 
         # Instance attributes
         self.label = label
@@ -618,6 +626,17 @@ class FragmentGraph(SkeletonGraph):
                     queue.append((j, k))
                     visited.add(k)
         return run_length
+
+    def set_color(self, swc_color):
+        """
+        Sets the graph's color color which is written to an SWC file.
+
+        Parameters
+        ----------
+        swc_color : str, optional
+            Color used in SWC file of the graph. Default is an empty string.
+        """
+        self.swc_color = swc_color
 
     def update_label(self, label_handler):
         """
