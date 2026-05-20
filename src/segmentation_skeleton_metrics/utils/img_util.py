@@ -130,7 +130,7 @@ class TensorStoreImage(Image):
             return "zarr"
         elif ".n5" in img_path:
             return "n5"
-        else is_precomputed(img_path):
+        else:
             return "neuroglancer_precomputed"
 
     def _load_image(self):
