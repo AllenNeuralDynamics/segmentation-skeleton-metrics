@@ -142,7 +142,7 @@ class Evaluator:
         - "Merge Rate": MergeRateMetric
     """
 
-    def __init__(self, output_dir, results_prefix, verbose=True):
+    def __init__(self, output_dir, results_prefix="", verbose=True):
         """
         Instantiates an Evaluator object.
 
@@ -150,8 +150,8 @@ class Evaluator:
         ----------
         output_dir : str
             Directory where evaluation results will be saved.
-        results_prefix : str
-            Prefix appended to result filenames.
+        results_prefix : str, optional
+            Prefix appended to result filenames. Default is an empty string.
         verbose : bool, optional
             Indication of whether to display progress bars and printout
             results. Default is True.
