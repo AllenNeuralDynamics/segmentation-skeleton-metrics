@@ -89,7 +89,7 @@ def list_dir(dir_path, extension=""):
 
 def list_files_in_zip(zip_content):
     """
-    Lists all files in a zip file stored in a GCS bucket.
+    Lists all files in a ZIP archive stored in a GCS bucket.
 
     Parameters
     ----------
@@ -157,8 +157,8 @@ def read_txt(path):
 
     Returns
     -------
-    List[str]
-        Lines from the txt file.
+    str
+        Text from the txt file.
     """
     if is_s3_path(path):
         return read_txt_from_s3(path)
