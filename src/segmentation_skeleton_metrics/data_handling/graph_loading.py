@@ -632,7 +632,7 @@ class LazyMapping(dict):
         label : hashable
             Label to be converted into a segment ID.
         default : None, optional
-            Placeholder for built-in routine.
+            Placeholder for built-in routine. Default is None.
 
         Returns
         -------
