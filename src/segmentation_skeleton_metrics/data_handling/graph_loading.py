@@ -523,13 +523,13 @@ class LabelHandler:
         self.inverse_mapping = dict()  # Maps class id to list of labels
 
         # Set label mapping
-        if use_segment_mapping:
-            self.set_segment_mappings()
+        if label_pairs:
+            self.set_equivalence_mapping(label_pairs)
         else:
-            self.set_mappings(label_pairs)
+            self.set_segment_mapping()
 
     # --- Constructor Helpers ---
-    def set_mappings(self, label_pairs):
+    def set_equivalence_mapping(self, label_pairs):
         """
         Stores dictionaries that map between segment IDs and equivalence class
         IDS.
@@ -548,18 +548,21 @@ class LabelHandler:
                 self.mapping[label] = class_id
                 self.inverse_mapping[class_id].add(label)
 
-    def set_segment_mappings(self):
+    def set_segment_mapping(self):
         """
         Stores dictionaries that map between segment IDs and labels.
         """
-        assert self.labels
-        self.mapping = {"0": "0"}
-        self.inverse_mapping = defaultdict(set)
-        self.inverse_mapping["0"] = {"0"}
-        for label in map(str, self.labels):
-            segment_id = util.get_segment_id(label)
-            self.mapping[label] = segment_id
-            self.inverse_mapping[segment_id].add(label)
+        if self.labels:
+            self.mapping = {"0": "0"}
+            self.inverse_mapping = defaultdict(set)
+            self.inverse_mapping["0"] = {"0"}
+            for label in map(str, self.labels):
+                segment_id = util.get_segment_id(label)
+                self.mapping[label] = segment_id
+                self.inverse_mapping[segment_id].add(label)
+        else:
+            self.mapping = LazyMapping()
+            self.inverse_mapping = InverseLazyMapping()
 
     def label_equiv_classes(self, label_pairs):
         """
@@ -593,7 +596,7 @@ class LabelHandler:
 
         Returns
         -------
-        int
+        str
             Class ID corresponding to the label.
         """
         return self.mapping.get(label, "0") if self.labels else str(label)
@@ -617,3 +620,49 @@ class LabelHandler:
         if self.labels:
             labels = set().union(*(self.inverse_mapping[u] for u in labels))
         return labels
+
+
+# --- Helpers ---
+class LazyMapping(dict):
+    """
+    Dictionary-like mapping that lazily converts labels to segment IDs.
+    """
+
+    def __missing__(self, label):
+        """
+        Gets the segment ID corresponding to the given label.
+
+        Parameters
+        ----------
+        label : hashable
+            Label to be converted into a segment ID.
+
+        Returns
+        -------
+        str
+            Segment ID corresponding to the given label.
+        """
+        return util.get_segment_id(str(label))
+
+
+class InverseLazyMapping(dict):
+    """
+    Dictionary-like inverse mapping from segment IDs to label sets.
+    """
+
+    def __missing__(self, label):
+        """
+        Gets the segment ID corresponding to the given label.
+
+        Parameters
+        ----------
+        label : hashable
+            Label to be returned as singleton set.
+
+        Returns
+        -------
+        Set[str]
+            Singleton containing the segment ID corresponding to the given
+            label.
+        """
+        return {"0"} if label == "0" else {label}
