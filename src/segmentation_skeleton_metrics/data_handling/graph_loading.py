@@ -498,9 +498,7 @@ class LabelHandler:
         Labels that are allowed to be assigned (after filtering).
     """
 
-    def __init__(
-        self, labels=set(), label_pairs=set(), use_segment_mapping=False
-    ):
+    def __init__(self, labels=set(), label_pairs=set()):
         """
         Instantiates a LabelHandler object and optionally builds label
         mappings.
@@ -513,9 +511,6 @@ class LabelHandler:
         label_pairs : List[hashable], optional
             Pairs of labels merged during split correction. Default is an
             empty set.
-        use_segment_mapping : bool, optional
-            Indication of whether to build mapping between segment IDs and
-            labels. Default is False.
         """
         # Instance attributes
         self.labels = labels
@@ -599,7 +594,7 @@ class LabelHandler:
         str
             Class ID corresponding to the label.
         """
-        return self.mapping.get(label, "0") if self.labels else str(label)
+        return self.mapping.get(label, "0")
 
     # --- Helpers ---
     def node_labels(self, graph):
@@ -628,7 +623,7 @@ class LazyMapping(dict):
     Dictionary-like mapping that lazily converts labels to segment IDs.
     """
 
-    def __missing__(self, label):
+    def get(self, label, default=None):
         """
         Gets the segment ID corresponding to the given label.
 
@@ -636,6 +631,8 @@ class LazyMapping(dict):
         ----------
         label : hashable
             Label to be converted into a segment ID.
+        default : None, optional
+            Placeholder for built-in routine. Default is None.
 
         Returns
         -------
