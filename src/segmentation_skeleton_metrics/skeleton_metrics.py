@@ -562,7 +562,7 @@ class MergeCountMetric(SkeletonMetric):
             rm_idxs = set()
             for i, site in enumerate(self.merge_sites):
                 if i not in rm_idxs:
-                    idxs = kdtree.query_ball_point(site["World"], 40)
+                    idxs = kdtree.query_ball_point(site["World"], 30)
                     idxs.remove(i)
                     rm_idxs |= set(idxs)
 
