@@ -342,7 +342,7 @@ class MergeCountMetric(SkeletonMetric):
     A skeleton metric subclass that counts the number merges.
     """
 
-    merge_dist_threshold = 50
+    dist_away_threshold = 50
 
     def __init__(self, verbose=True):
         """
@@ -428,7 +428,7 @@ class MergeCountMetric(SkeletonMetric):
             dist, _ = gt_graph.kdtree.query(xyz)
 
             # Check if distance to ground truth flags a merge mistake
-            if dist > MergeCountMetric.merge_dist_threshold:
+            if dist > MergeCountMetric.dist_away_threshold:
                 self.find_merge_site(gt_graph, fragment_graph, leaf, visited)
 
     def find_merge_site(self, gt_graph, fragment_graph, source, visited):
@@ -916,7 +916,7 @@ class AddedCableLengthMetric(SkeletonMetric):
         # Remove nodes close to ground truth
         xyz_arr = fragment_graph.node_voxel * fragment_graph.anisotropy
         dists, _ = gt_graph.kdtree.query(xyz_arr)
-        max_dist = MergeCountMetric.merge_dist_threshold
+        max_dist = MergeCountMetric.dist_away_threshold
         fragment_graph.remove_nodes_from(np.where(dists < max_dist)[0])
 
         # Compute cable length
