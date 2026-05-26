@@ -26,7 +26,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
 )
-from google.auth.exceptions import RefreshError
+from google.auth.exceptions import RefreshError, TransportError
 from google.cloud import storage
 from io import BytesIO
 from tqdm import tqdm
@@ -196,7 +196,7 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        pbar = tqdm(total=len(zip_paths), desc="Read SWCs")
+        pbar = self.manual_progress_bar(len(zip_paths))
         with ProcessPoolExecutor() as executor:
             # Assign processes
             futures = {executor.submit(read_fn, path) for path in zip_paths}
@@ -206,7 +206,7 @@ class Reader:
             for process in as_completed(futures):
                 try:
                     swc_dicts.extend(process.result())
-                except RefreshError:
+                except (RefreshError, TransportError):
                     pass
 
                 if self.verbose:
@@ -341,14 +341,17 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # Initialize cloud reader
-        client = storage.Client()
+        # Download ZIP
         bucket_name, path = util.parse_cloud_path(path)
-        bucket = client.bucket(bucket_name)
+        bucket = storage.Client().bucket(bucket_name)
+        try:
+            zip_content = bucket.blob(path).download_as_bytes()
+        except TransportError:
+            print(f"Failed to read {zip_path}!")
+            return deque()
 
-        # Parse Zip
+        # Parse ZIP contents
         swc_dicts = deque()
-        zip_content = bucket.blob(path).download_as_bytes()
         with ZipFile(BytesIO(zip_content), "r") as zf:
             with ThreadPoolExecutor() as executor:
                 # Assign threads

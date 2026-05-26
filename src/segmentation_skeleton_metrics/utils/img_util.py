@@ -319,8 +319,9 @@ def is_precomputed(img_path):
     """
     try:
         # Build kvstore spec
-        bucket_name, path = util.parse_cloud_path(img_path)
-        kv = {"driver": "gcs", "bucket": bucket_name, "path": path}
+        driver = get_storage_driver(img_path)
+        bucket_name, inner_path = util.parse_cloud_path(img_path)
+        kv = {"driver": driver, "bucket": bucket_name, "path": inner_path}
 
         # Open the info file
         store = ts.KvStore.open(kv).result()
