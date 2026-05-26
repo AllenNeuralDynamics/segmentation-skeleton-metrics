@@ -105,14 +105,14 @@ def list_files_in_zip(zip_content):
         return zip_file.namelist()
 
 
-def list_paths(directory, extension=None):
+def list_paths(dir_path, extension=None):
     """
     Lists paths of files in the given directory. If "extension" is provided,
     filenames ending with the given extension are returned.
 
     Parameters
     ----------
-    directory : str
+    dir_path : str
         Path to directory to be searched.
     extension : str, optional
         Extension of filenames to be returned. Default is None.
@@ -123,8 +123,8 @@ def list_paths(directory, extension=None):
         Paths of files in the given directory.
     """
     paths = list()
-    for f in list_dir(directory, extension=extension):
-        paths.append(os.path.join(directory, f))
+    for f in list_dir(dir_path, extension=extension):
+        paths.append(os.path.join(dir_path, f))
     return paths
 
 
