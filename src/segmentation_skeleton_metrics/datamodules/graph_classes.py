@@ -121,6 +121,16 @@ class SkeletonGraph(nx.Graph):
         self.add_nodes_from(np.arange(num_nodes))
 
     def add_graph(self, graph, set_kdtree=True):
+        """
+        Adds nodes and edges of another graph to this graph.
+
+        Parameters
+        ----------
+        graph : SkeletonGraph
+            Graph to add.
+        set_kdtree : bool, optional
+            If True, rebuilds KD-Tree after updating graph. Default is True.
+        """
         # Add nodes and edges
         offset = len(self.node_voxel)
         self.add_edges_from((u + offset, v + offset) for u, v in graph.edges)
@@ -592,6 +602,16 @@ class FragmentGraph(SkeletonGraph):
         self.segment_id = segment_id
 
     def add_highlighted_edge(self, i, j):
+        """
+        Adds an edge between two nodes and mark both endpoints as highlighted.
+
+        Parameters
+        ----------
+        i : int
+            First node.
+        j : int
+            Second node.
+        """
         self.highlighted_nodes = self.highlighted_nodes.union({i, j})
         self.add_edge(i, j)
 

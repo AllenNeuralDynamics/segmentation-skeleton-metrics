@@ -20,8 +20,8 @@ from tqdm import tqdm
 import networkx as nx
 import numpy as np
 
-from segmentation_skeleton_metrics.data_handling import swc_loading
-from segmentation_skeleton_metrics.data_handling.graph_classes import (
+from segmentation_skeleton_metrics.datamodules import swc_loading
+from segmentation_skeleton_metrics.datamodules.graph_classes import (
     FragmentGraph,
     LabeledGraph,
 )
