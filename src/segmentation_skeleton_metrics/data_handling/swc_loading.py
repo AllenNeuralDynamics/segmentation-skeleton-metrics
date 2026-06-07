@@ -165,7 +165,6 @@ class Reader:
             for path in swc_paths:
                 if self.confirm_read(os.path.basename(path)):
                     threads.add(executor.submit(self.read_swc, path))
-                    break  # TEMP
 
             # Store results
             swc_dicts = deque()

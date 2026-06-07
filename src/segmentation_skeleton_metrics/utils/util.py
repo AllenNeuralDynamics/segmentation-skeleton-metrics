@@ -291,7 +291,7 @@ def parse_cloud_path(path):
         Cloud prefix.
     """
     # Split path
-    path = path[len("s3://") :] if is_s3_path else path[len("gs://") :]
+    path = path[len("s3://"):] if is_s3_path else path[len("gs://"):]
     parts = path.split("/", 1)
 
     # Extract bucket and prefix
