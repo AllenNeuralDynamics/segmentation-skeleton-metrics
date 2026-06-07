@@ -382,12 +382,26 @@ class Reader:
         Returns
         -------
         bool
-            Indication of whether to read SWC file.
+            True if SWC file should be read.
         """
         name = os.path.splitext(os.path.basename(path))[0]
         return name in self.swc_names if self.swc_names else True
 
     def _parse_zip_bytes(self, zip_content):
+        """
+        Parse all SWC files contained in a ZIP archive.
+
+        Parameters
+        ----------
+        zip_content : bytes
+            Contents of a ZIP archive stored in memory.
+
+        Returns
+        -------
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from an SWC file.
+        """
         with ZipFile(BytesIO(zip_content), "r") as zf:
             names = [f for f in zf.namelist() if f.endswith(".swc")]
             with ThreadPoolExecutor() as executor:

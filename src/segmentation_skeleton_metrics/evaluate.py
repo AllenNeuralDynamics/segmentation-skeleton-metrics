@@ -28,10 +28,9 @@ from segmentation_skeleton_metrics.skeleton_metrics import (
     ERLMetric,
     NormalizedERLMetric,
 )
-from segmentation_skeleton_metrics.data_handling.graph_loading import (
-    DataLoader,
-)
+from segmentation_skeleton_metrics.datamodules.graph_loading import DataLoader
 from segmentation_skeleton_metrics.utils import util
+from segmentation_skeleton_metrics import visualization as viz
 
 
 def evaluate(
@@ -44,6 +43,7 @@ def evaluate(
     label_handler=None,
     results_prefix="",
     save_merges=False,
+    save_mips=True,
     save_fragments=False,
     use_anisotropy=False,
     verbose=True,
@@ -77,6 +77,9 @@ def evaluate(
     save_merges : bool, optional
         Indication of whether to save merge sites and fragments with a merge
         mistake. Default is False.
+    save_mips : bool, optional
+        Indication of whether to save MIPs of ground truth skeletons along
+        with their intersecting fragments. Default is True.
     save_fragments : bool, optional
         Indication of whether to save fragments that intersect with each
         ground truth skeleton. Default is False.
@@ -110,6 +113,9 @@ def evaluate(
 
     if save_fragments and fragment_graphs:
         evaluator.save_fragments(gt_graphs, fragment_graphs)
+
+    if save_mips and fragment_graphs:
+        evaluator.save_mips(gt_graphs, fragment_graphs)
 
 
 # --- Evaluator ---
@@ -291,39 +297,17 @@ class Evaluator:
         fragment_graphs : Dict[str, FragmentsGraph]
             Graphs built from skeletons obtained from a segmentation.
         """
-        # Initializations
         output_dir = os.path.join(self.output_dir, f"{self.prefix}fragments")
         util.mkdir(output_dir, delete=True)
-
-        # Main
-        for key, graph in gt_graphs.items():
+        for key, gt_graph in gt_graphs.items():
             # Create zip writer
-            zip_path = os.path.join(output_dir, f"{graph.name}.zip")
+            zip_path = os.path.join(output_dir, f"{gt_graph.name}.zip")
             zf = ZipFile(zip_path, "a")
 
             # Save skeletons
-            graph.to_zipped_swcs(zf)
-            self.save_intersecting_fragments(graph, fragment_graphs, zf)
-
-    @staticmethod
-    def save_intersecting_fragments(gt_graph, fragment_graphs, zf):
-        """
-        Saves SWC files for all fragment graphs whose label intersects with
-        the given ground-truth graph.
-
-        Parameters
-        ----------
-        gt_graph : LabeledGraph
-            Graphs built from ground truth SWC files.
-        fragment_graphs : Dict[str, FragmentGraph]
-            Graphs built from skeletons obtained from a segmentation.
-        zf : zipfile.ZipFile
-            Open ZIP file handle used to write fragments.
-        """
-        intersecting_labels = gt_graph.node_labels()
-        for key, graph in fragment_graphs.items():
-            if graph.label in intersecting_labels:
-                graph.to_zipped_swcs(zf)
+            gt_graph.to_zipped_swcs(zf)
+            for frg in get_intersecting_fragments(gt_graph, fragment_graphs):
+                frg.to_zipped_swcs(zf)
 
     def save_merge_results(self, gt_graphs, fragment_graphs):
         """
@@ -369,6 +353,28 @@ class Evaluator:
             xyz = merge_sites["World"].iloc[i]
             util.to_zipped_point(zf, filename, xyz)
 
+    def save_mips(self, gt_graphs, fragment_graphs):
+        """
+        Saves MIPs of ground truth graphs and their intersecting fragments.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentsGraph]
+            Graphs built from skeletons obtained from a segmentation.
+        """
+        output_dir = os.path.join(self.output_dir, f"{self.prefix}mips")
+        util.mkdir(output_dir, delete=True)
+        for key, gt_graph in gt_graphs.items():
+            # Save GT mips
+            viz.save_mips([gt_graph], output_dir, gt_graph.name)
+
+            # Save fragment mips
+            filename = f"{gt_graph.name}-fragments"
+            fragments = get_intersecting_fragments(gt_graph, fragment_graphs)
+            viz.save_mips(fragments, output_dir, filename)
+
     def save_skeletons_with_merge(self, gt_graphs, fragment_graphs, zf):
         """
         Saves ground truth and fragment skeletons containing merge sites into
@@ -396,3 +402,29 @@ class Evaluator:
             else:
                 label = name2label[key]
                 fragment_graphs[label].to_zipped_swcs(zf)
+
+
+# --- Helpers ---
+def get_intersecting_fragments(gt_graph, fragment_graphs):
+    """
+    Gets fragment graphs whose labels are present in a ground-truth graph.
+
+    Parameters
+    ----------
+    gt_graph : LabeledGraph
+        Graph built from ground truth SWC files.
+    fragment_graphs : Dict[str, FragmentsGraph]
+        Graphs built from skeletons obtained from a segmentation.
+
+    Returns
+    -------
+    List[FragmentsGraph]
+        Fragment graphs whose "label" is found among the node labels from the
+        ground truth graph.
+    """
+    intersecting_fragments = list()
+    labels = gt_graph.node_labels()
+    for key, graph in fragment_graphs.items():
+        if graph.label in labels:
+            intersecting_fragments.append(graph)
+    return intersecting_fragments
