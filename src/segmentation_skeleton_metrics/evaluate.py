@@ -299,16 +299,14 @@ class Evaluator:
         for key, graph in gt_graphs.items():
             # Create zip writer
             zip_path = os.path.join(output_dir, f"{graph.name}.zip")
-            zip_writer = ZipFile(zip_path, "a")
+            zf = ZipFile(zip_path, "a")
 
             # Save skeletons
-            graph.to_zipped_swcs(zip_writer)
-            self.save_intersecting_fragments(
-                graph, fragment_graphs, zip_writer
-            )
+            graph.to_zipped_swcs(zf)
+            self.save_intersecting_fragments(graph, fragment_graphs, zf)
 
     @staticmethod
-    def save_intersecting_fragments(gt_graph, fragment_graphs, zip_writer):
+    def save_intersecting_fragments(gt_graph, fragment_graphs, zf):
         """
         Saves SWC files for all fragment graphs whose label intersects with
         the given ground-truth graph.
@@ -319,13 +317,13 @@ class Evaluator:
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentGraph]
             Graphs built from skeletons obtained from a segmentation.
-        zip_writer : zipfile.ZipFile
+        zf : zipfile.ZipFile
             Open ZIP file handle used to write fragments.
         """
         intersecting_labels = gt_graph.node_labels()
         for key, graph in fragment_graphs.items():
             if graph.label in intersecting_labels:
-                graph.to_zipped_swcs(zip_writer)
+                graph.to_zipped_swcs(zf)
 
     def save_merge_results(self, gt_graphs, fragment_graphs):
         """
@@ -339,39 +337,39 @@ class Evaluator:
         fragment_graphs : Dict[str, FragmentsGraph]
             Graphs built from skeletons obtained from a segmentation.
         """
-        # Initialize a writer
-        filename = f"{self.prefix}fragments_with_merges.zip"
-        zip_path = os.path.join(self.output_dir, filename)
-        util.rm_file(zip_path)
-        zip_writer = ZipFile(zip_path, "a")
+        if len(self.metrics["# Merges"].merge_sites) > 0:
+            # Initialize a writer
+            filename = f"{self.prefix}fragments_with_merges.zip"
+            zip_path = os.path.join(self.output_dir, filename)
+            util.rm_file(zip_path)
+            zf = ZipFile(zip_path, "a")
 
-        # Save SWC files
-        self.save_merge_sites(zip_writer)
-        self.save_skeletons_with_merge(gt_graphs, fragment_graphs, zip_writer)
-        zip_writer.close()
+            # Save SWC files
+            self.save_merge_sites(zf)
+            self.save_skeletons_with_merge(gt_graphs, fragment_graphs, zf)
+            zf.close()
 
-        # Save CSV report
-        path = os.path.join(self.output_dir, f"{self.prefix}merge_sites.csv")
-        self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
+            # Save CSV report
+            filename = f"{self.prefix}merge_sites.csv"
+            path = os.path.join(self.output_dir, filename)
+            self.metrics["# Merges"].merge_sites.to_csv(path, index=True)
 
-    def save_merge_sites(self, zip_writer):
+    def save_merge_sites(self, zf):
         """
         Saves merge site coordinates into a ZIP archive.
 
         Parameters
         ----------
-        zip_writer : zipfile.ZipFile
+        zf : zipfile.ZipFile
             Open ZIP file handle used to write merge sites.
         """
         merge_sites = self.metrics["# Merges"].merge_sites
         for i in range(len(merge_sites)):
             filename = merge_sites.index[i]
             xyz = merge_sites["World"].iloc[i]
-            util.to_zipped_point(zip_writer, filename, xyz)
+            util.to_zipped_point(zf, filename, xyz)
 
-    def save_skeletons_with_merge(
-        self, gt_graphs, fragment_graphs, zip_writer
-    ):
+    def save_skeletons_with_merge(self, gt_graphs, fragment_graphs, zf):
         """
         Saves ground truth and fragment skeletons containing merge sites into
         a ZIP archive.
@@ -382,14 +380,19 @@ class Evaluator:
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentsGraph]
             Graphs built from skeletons obtained from a segmentation.
-        zip_writer : zipfile.ZipFile
+        zf : zipfile.ZipFile
             Open ZIP file handle used to write SWC data.
         """
         # Save ground truth skeletons
         keys = self.metrics["# Merges"].merge_sites["GroundTruth_ID"]
         for key in keys.unique():
-            gt_graphs[key].to_zipped_swcs(zip_writer)
+            gt_graphs[key].to_zipped_swcs(zf)
 
         # Save fragments
+        name2label = {g.name: g.label for g in fragment_graphs.values()}
         for key in self.metrics["# Merges"].fragments_with_merge:
-            fragment_graphs[key].to_zipped_swcs(zip_writer)
+            if key in fragment_graphs:
+                fragment_graphs[key].to_zipped_swcs(zf)
+            else:
+                label = name2label[key]
+                fragment_graphs[label].to_zipped_swcs(zf)

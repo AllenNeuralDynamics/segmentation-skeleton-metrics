@@ -497,7 +497,7 @@ class MergeCountMetric(SkeletonMetric):
         xyz = fragment_graph.node_xyz(fragment_node)
 
         gt_graph.labels_with_merge.add(fragment_graph.label)
-        self.fragments_with_merge.add(fragment_graph.label)
+        self.fragments_with_merge.add(fragment_graph.name)
         self.merge_sites.append(
             {
                 "Fragment_Name": fragment_graph.name,
@@ -877,17 +877,21 @@ class AddedCableLengthMetric(SkeletonMetric):
         pair_to_length = dict()
         for i in self.get_iterator(merge_sites.index):
             # Extract site info
-            label = merge_sites["Label"][i]
             gt_id = merge_sites["GroundTruth_ID"][i]
+            label = merge_sites["Label"][i]
+            name = merge_sites["Fragment_Name"][i]
             pair_id = (label, gt_id)
 
-            # Check wheter to visit
+            # Check whether to visit
             if pair_id in pair_to_length:
                 merge_sites.loc[i, self.name] = pair_to_length[pair_id]
             else:
                 # Get graphs
                 gt_graph = gt_graphs[gt_id]
-                fragment_graph = deepcopy(fragment_graphs[label])
+                if label in fragment_graphs:
+                    fragment_graph = deepcopy(fragment_graphs[label])
+                elif name in fragment_graphs:
+                    fragment_graph = deepcopy(fragment_graphs[name])
 
                 # Compute metric
                 pair_to_length[pair_id] = self.compute_added_length(

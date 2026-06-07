@@ -10,7 +10,7 @@ Implementation of a custom subclass of NetworkX.Graph called SkeletonGraph.
 
 from collections import defaultdict, deque
 from io import StringIO
-from scipy.spatial import distance, KDTree
+from scipy.spatial import KDTree
 
 import networkx as nx
 import numpy as np
@@ -150,7 +150,7 @@ class SkeletonGraph(nx.Graph):
         float
             Distance between voxel coordinates of the given nodes.
         """
-        return distance.euclidean(self.node_voxel[i], self.node_voxel[j])
+        return np.linalg.norm(self.node_voxel[i] - self.node_voxel[j])
 
     def physical_dist(self, i, j):
         """
@@ -170,7 +170,7 @@ class SkeletonGraph(nx.Graph):
             Euclidean distance between physical coordinates of the given
             nodes.
         """
-        return distance.euclidean(self.node_xyz(i), self.node_xyz(j))
+        return np.linalg.norm(self.node_xyz(i) - self.node_xyz(j))
 
     def leafs(self):
         """
@@ -562,7 +562,7 @@ class FragmentGraph(SkeletonGraph):
         name=None,
         label=None,
         segment_id=None,
-        swc_color=""
+        swc_color="",
     ):
         """
         Instantiates a FragmentGraph object.
@@ -585,9 +585,7 @@ class FragmentGraph(SkeletonGraph):
             Color used in SWC file of the graph. Default is an empty string.
         """
         # Call parent class
-        super().__init__(
-            anisotropy=anisotropy, name=name, swc_color=swc_color
-        )
+        super().__init__(anisotropy=anisotropy, name=name, swc_color=swc_color)
 
         # Instance attributes
         self.label = label
