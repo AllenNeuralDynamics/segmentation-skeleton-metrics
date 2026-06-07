@@ -24,7 +24,7 @@ def save_mips(graph_list, output_dir, filename, dilation=16):
     Parameters
     ----------
     graph_list : List[SkeletonGraph]
-        Collection of graphs to rasterize.
+       Graphs to rasterize.
     output_dir : str
         Directory in which to save the output image.
     filename : str
