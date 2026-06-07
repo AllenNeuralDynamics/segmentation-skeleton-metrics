@@ -309,6 +309,26 @@ class Evaluator:
             for frg in get_intersecting_fragments(gt_graph, fragment_graphs):
                 frg.to_zipped_swcs(zf)
 
+    @staticmethod
+    def save_intersecting_fragments(gt_graph, fragment_graphs, zf):
+        """
+        Saves SWC files for all fragment graphs whose label intersects with
+        the given ground-truth graph.
+
+        Parameters
+        ----------
+        gt_graph : LabeledGraph
+            Graphs built from ground truth SWC files.
+        fragment_graphs : Dict[str, FragmentGraph]
+            Graphs built from skeletons obtained from a segmentation.
+        zf : zipfile.ZipFile
+            Open ZIP file handle used to write fragments.
+        """
+        intersecting_labels = gt_graph.node_labels()
+        for key, graph in fragment_graphs.items():
+            if graph.label in intersecting_labels:
+                graph.to_zipped_swcs(zf)
+
     def save_merge_results(self, gt_graphs, fragment_graphs):
         """
         Saves all detected merge results, including skeletons, merge sites,
