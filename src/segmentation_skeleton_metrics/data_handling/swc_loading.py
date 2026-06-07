@@ -100,7 +100,7 @@ class Reader:
             # Local SWC files
             paths = util.read_paths(swc_pointer, extension=".swc")
             if len(paths) > 0:
-                return self.read_swcs(paths, self.read_swc)
+                return self.read_swcs(paths)
 
             raise Exception("Directory is Invalid!")
 
@@ -144,14 +144,12 @@ class Reader:
         else:
             return None
 
-    def read_swcs(self, swc_paths, read_fn):
+    def read_swcs(self, swc_paths):
         """
         Reads SWC files stored in a GCS or S3 bucket.
 
         Parameters
         ----------
-        bucket_name : str
-            Name of bucket containing SWC files.
         swc_paths : List[str]
             List of paths to SWC files to be read.
 
@@ -166,7 +164,7 @@ class Reader:
             threads = set()
             for path in swc_paths:
                 if self.confirm_read(os.path.basename(path)):
-                    threads.add(executor.submit(read_fn, path))
+                    threads.add(executor.submit(self.read_swc, path))
 
             # Store results
             swc_dicts = deque()
@@ -283,22 +281,22 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # Extact info
+        # Extract info
         assert util.is_s3_path(path) or util.is_gcs_path(path)
         use_s3 = util.is_s3_path(path)
 
-        # List filenames
+        # List paths
         swc_paths = util.list_cloud_paths(path, ".swc")
         zip_paths = util.list_cloud_paths(path, ".zip")
 
         # Call reader
         if swc_paths:
-            return self.read_swcs(swc_paths, self.read_swc)
+            return self.read_swcs(swc_paths)
         elif zip_paths:
             read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
             return self.read_zips(zip_paths, read_fn)
-
-        raise Exception(f"SWC Pointer is invalid {path}")
+        else:
+            return list()
 
     def read_gcs_swc(self, path):
         """
@@ -341,33 +339,14 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # Download ZIP
-        bucket_name, path = util.parse_cloud_path(path)
+        bucket_name, key = util.parse_cloud_path(path)
         bucket = storage.Client().bucket(bucket_name)
         try:
-            zip_content = bucket.blob(path).download_as_bytes()
+            zip_content = bucket.blob(key).download_as_bytes()
         except TransportError:
-            print(f"Failed to read {zip_path}!")
+            print(f"Failed to read {path}!")
             return deque()
-
-        # Parse ZIP contents
-        swc_dicts = deque()
-        with ZipFile(BytesIO(zip_content), "r") as zf:
-            with ThreadPoolExecutor() as executor:
-                # Assign threads
-                threads = set()
-                for name in zf.namelist():
-                    if self.confirm_read(name):
-                        threads.add(
-                            executor.submit(self.read_zipped_swc, zf, name)
-                        )
-
-                # Process results
-                for thread in as_completed(threads):
-                    result = thread.result()
-                    if result:
-                        swc_dicts.append(result)
-        return swc_dicts
+        return self._parse_zip_bytes(zip_content)
 
     def read_s3_zip(self, path):
         """
@@ -385,29 +364,10 @@ class Reader:
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
         """
-        # Initialize cloud reader
         bucket, key = util.parse_cloud_path(path)
         s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
         zip_content = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-
-        # Parse ZIP
-        with ZipFile(BytesIO(zip_content), "r") as zf:
-            with ThreadPoolExecutor() as executor:
-                # Assign threads
-                threads = set()
-                for name in zf.namelist():
-                    if self.confirm_read(name):
-                        threads.add(
-                            executor.submit(self.read_zipped_swc, zf, name)
-                        )
-
-                # Store results
-                swc_dicts = deque()
-                for thread in as_completed(threads):
-                    result = thread.result()
-                    if result:
-                        swc_dicts.append(result)
-        return swc_dicts
+        return self._parse_zip_bytes(zip_content)
 
     def confirm_read(self, path):
         """
@@ -427,23 +387,19 @@ class Reader:
         name = os.path.splitext(os.path.basename(path))[0]
         return name in self.swc_names if self.swc_names else True
 
+    def _parse_zip_bytes(self, zip_content):
+        with ZipFile(BytesIO(zip_content), "r") as zf:
+            names = [f for f in zf.namelist() if f.endswith(".swc")]
+            with ThreadPoolExecutor() as executor:
+                threads = {
+                    executor.submit(self.read_zipped_swc, zf, name)
+                    for name in names
+                }
+                return deque(
+                    t.result() for t in as_completed(threads) if t.result()
+                )
+
     # -- Process Text ---
-    def iterator(self, iterator):
-        """
-        Gets an iterator that optionally displays a progress bar.
-
-        Parameters
-        ----------
-        iterator : iterable
-            Object to be iterated over.
-
-        Returns
-        -------
-        tqdm.tqdm
-            Iterator that is optionally wrapped in a progress bar.
-        """
-        return tqdm(iterator, desc="Read SWCs") if self.verbose else iterator
-
     def manual_progress_bar(self, total):
         """
         Gets progress bar that needs to be updated manually.
@@ -521,14 +477,15 @@ class Reader:
                 offset = self.read_coordinate(parts[2:5])
             if not line.startswith("#") and len(line.strip()) > 0:
                 return content[i:], offset
+        return [], offset
 
-    def read_coordinate(self, xyz_str, offset=(0, 0, 0)):
+    def read_coordinate(self, coord_str, offset=(0, 0, 0)):
         """
         Reads a coordinate from a string and converts it to voxel coordinates.
 
         Parameters
         ----------
-        xyz_str : str
+        coord_str : str
             Coordinate stored as a string.
         offset : Tuple[int]
             Offset of coordinates in SWC file. Default is (0, 0, 0).
@@ -538,4 +495,4 @@ class Reader:
         Tuple[int]
             xyz coordinates of an entry from an SWC file.
         """
-        return [float(xyz_str[i]) + offset[i] for i in range(3)]
+        return [float(coord_str[i]) + offset[i] for i in range(3)]

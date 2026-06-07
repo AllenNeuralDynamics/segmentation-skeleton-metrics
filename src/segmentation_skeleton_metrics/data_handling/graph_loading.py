@@ -291,24 +291,30 @@ class GraphLoader:
         Dict[str, SkeletonGraph]
             Graph built from an SWC file.
         """
-        # Initialize graph
+        # Initializations
         graph = self._init_graph(swc_dict)
-        key = graph.name if self.is_groundtruth else graph.label
+        ids = swc_dict["id"]
+        pids = swc_dict["pid"]
+        voxels = swc_dict["voxel"]
 
-        # Build graph structure
-        id_lookup = dict()
-        for i, id_i in enumerate(swc_dict["id"]):
-            id_lookup[id_i] = i
-            if swc_dict["pid"][i] != -1:
-                parent = id_lookup[swc_dict["pid"][i]]
-                graph.add_edge(i, parent)
-                graph.run_length += graph.dist(i, parent)
+        # Build id->index lookup
+        id_lookup = {id_i: i for i, id_i in enumerate(ids)}
 
-        # Apply voxel coordinate conversion (if applicable)
+        # Vectorized edge building
+        children = np.where(pids != -1)[0]
+        parents = np.array([id_lookup[pids[i]] for i in children], dtype=int)
+        edges = list(zip(children.tolist(), parents.tolist()))
+        graph.add_edges_from(edges)
+
+        # Vectorized run length
+        graph.run_length = np.linalg.norm(
+            voxels[children] - voxels[parents], axis=1
+        ).sum()
+
         if self.use_anisotropy:
             graph.node_voxel = (graph.node_voxel / self.anisotropy).astype(int)
             graph.node_voxel[:, [0, 2]] = graph.node_voxel[:, [2, 0]]
-        return {key: graph}
+        return {graph.name: graph}
 
     def _init_graph(self, swc_dict):
         """
