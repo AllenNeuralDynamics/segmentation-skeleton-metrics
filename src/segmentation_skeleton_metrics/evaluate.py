@@ -387,7 +387,7 @@ class Evaluator:
         """
         output_dir = os.path.join(self.output_dir, f"{self.prefix}mips")
         util.mkdir(output_dir, delete=True)
-        for key, gt_graph in tqdm(desc="Save MIPs", gt_graphs.items()):
+        for key, gt_graph in tqdm(gt_graphs.items(), desc="Save MIPs"):
             # Save GT mips
             viz.save_mips([gt_graph], output_dir, gt_graph.name)
 
