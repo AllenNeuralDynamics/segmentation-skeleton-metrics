@@ -9,7 +9,6 @@ subclasses.
 
 """
 
-from tqdm import tqdm
 from zipfile import ZipFile
 
 import numpy as np
@@ -387,7 +386,7 @@ class Evaluator:
         """
         output_dir = os.path.join(self.output_dir, f"{self.prefix}mips")
         util.mkdir(output_dir, delete=True)
-        for key, gt_graph in tqdm(gt_graphs.items(), desc="Save MIPs"):
+        for key, gt_graph in gt_graphs.items():
             # Save GT mips
             viz.save_mips([gt_graph], output_dir, gt_graph.name)
 
