@@ -42,15 +42,16 @@ def _rasterize_graphs(graph_list, dilation):
     struct2d = np.ones((dilation,) * 2, dtype=bool)
     min_voxel, shape = _get_combined_bbox(graph_list)
 
-    mip_xy = np.ones((shape[1], shape[2], 3), dtype=float)
-    mip_xz = np.ones((shape[0], shape[2], 3), dtype=float)
-    mip_yz = np.ones((shape[0], shape[1], 3), dtype=float)
-
+    mip_xy = np.full((shape[1], shape[2], 3), 255, dtype=np.uint8)
+    mip_xz = np.full((shape[0], shape[2], 3), 255, dtype=np.uint8)
+    mip_yz = np.full((shape[0], shape[1], 3), 255, dtype=np.uint8)
     cc_idx = 0
     for graph in graph_list:
         shifted_voxels = graph.node_voxel - min_voxel
         for cc_nodes in nx.connected_components(graph):
             color = np.array(colors[cc_idx % len(colors)])
+            if color.dtype != np.uint8:
+                color = (color * 255).astype(np.uint8)
             cc_voxels = shifted_voxels[list(cc_nodes)]
             z, y, x = cc_voxels[:, 0], cc_voxels[:, 1], cc_voxels[:, 2]
             _paint_projections(
