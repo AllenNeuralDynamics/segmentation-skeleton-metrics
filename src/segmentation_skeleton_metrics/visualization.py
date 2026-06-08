@@ -32,7 +32,6 @@ def save_mips(graph_list, output_dir, filename, dilation=16):
     dilation : int, optional
         Dilation radius applied during graph rasterization. Default is 16.
     """
-    _, shape = _get_combined_bbox(graph_list)
     mip_xy, mip_xz, mip_yz = _rasterize_graphs(graph_list, dilation)
     _plot_and_save_mips(mip_xy, mip_xz, mip_yz, output_dir, filename)
 
@@ -102,9 +101,13 @@ def _make_dilated_local(a, b, mip_shape, struct2d, pad):
 
 
 def _get_combined_bbox(graph_list):
-    all_voxels = np.vstack([graph.node_voxel for graph in graph_list])
-    min_voxel = all_voxels.min(axis=0)
-    shape = tuple((all_voxels.max(axis=0) - min_voxel) + 1)
+    min_voxel = np.full(3, np.inf)
+    max_voxel = np.full(3, -np.inf)
+    for graph in graph_list:
+        np.minimum(min_voxel, graph.node_voxel.min(axis=0), out=min_voxel)
+        np.maximum(max_voxel, graph.node_voxel.max(axis=0), out=max_voxel)
+    min_voxel = min_voxel.astype(int)
+    shape = tuple((max_voxel - min_voxel).astype(int) + 1)
     return min_voxel, shape
 
 
