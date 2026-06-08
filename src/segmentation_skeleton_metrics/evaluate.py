@@ -395,6 +395,7 @@ class Evaluator:
             filename = f"{gt_graph.name}-fragments"
             fragments = get_intersecting_fragments(gt_graph, fragment_graphs)
             viz.save_mips(fragments, output_dir, filename)
+            del fragments
 
     def save_skeletons_with_merge(self, gt_graphs, fragment_graphs, zf):
         """
