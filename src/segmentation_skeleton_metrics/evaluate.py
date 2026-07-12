@@ -286,9 +286,9 @@ class Evaluator:
             util.update_txt(path, f"  # Merges: {n_merges}", self.verbose)
 
     # --- Writers ---
-    def save_fragments(self, gt_graphs, fragment_graphs):
+    def save_fragments(self, gt_graphs, fragment_graphs, include_gt=True):
         """
-        Saves ground-truth graphs and their intersecting fragment graphs to
+        Saves intersecting fragments corresponding to each ground truth graph to
         zipped SWC files.
 
         Parameters
@@ -297,6 +297,8 @@ class Evaluator:
             Graphs built from ground truth SWC files.
         fragment_graphs : Dict[str, FragmentsGraph]
             Graphs built from skeletons obtained from a segmentation.
+        include_gt : bool, optional
+            True if ground-truth graphs should also be saved in ZIP.
         """
         output_dir = os.path.join(self.output_dir, f"{self.prefix}fragments")
         util.mkdir(output_dir, delete=True)
@@ -305,8 +307,11 @@ class Evaluator:
             zip_path = os.path.join(output_dir, f"{gt_graph.name}.zip")
             zf = ZipFile(zip_path, "a")
 
-            # Save skeletons
-            gt_graph.to_zipped_swcs(zf)
+            # Save GT (if applicable)
+            if include_gt:
+                gt_graph.to_zipped_swcs(zf)
+    
+            # Save fragments
             for frg in get_intersecting_fragments(gt_graph, fragment_graphs):
                 frg.to_zipped_swcs(zf)
 
