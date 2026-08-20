@@ -10,7 +10,6 @@ Code for visualizing ground truth graphs and their intersecting fragments.
 
 from scipy.ndimage import binary_dilation
 
-import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import os
@@ -128,7 +127,12 @@ def _plot_and_save_mips(mip_xy, mip_xz, mip_yz, output_dir, filename):
     filename : str
         Base filename used for the figure title and output file.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    fig = Figure(figsize=(15, 5))
+    FigureCanvasAgg(fig)
+    axes = fig.subplots(1, 3)
     axes[0].imshow(mip_xy)
     axes[0].set_title("XY")
     axes[1].imshow(mip_xz)
@@ -139,11 +143,10 @@ def _plot_and_save_mips(mip_xy, mip_xz, mip_yz, output_dir, filename):
         ax.axis("off")
 
     fig.suptitle(filename)
-    plt.tight_layout()
+    fig.tight_layout()
 
     path = os.path.join(output_dir, f"{filename}_mips.png")
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
 
 
 def _get_colors():

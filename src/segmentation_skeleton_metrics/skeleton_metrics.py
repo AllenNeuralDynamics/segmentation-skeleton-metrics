@@ -11,7 +11,7 @@ predicted neuron segmentation to a set of ground truth graphs.
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from collections import deque
+from collections import defaultdict, deque
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -277,22 +277,20 @@ class MergedEdgePercentMetric(SkeletonMetric):
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be searched for intersecting labels.
         """
-        visited = set()
-        for name1, graph1 in self.get_iterator(gt_graphs.items()):
-            # Search other graphs for label intersections
-            for name2, graph2 in gt_graphs.items():
-                names = frozenset((name1, name2))
-                if name1 != name2 and names not in visited:
-                    visited.add(names)
-                    labels1 = set(graph1.node_labels())
-                    labels2 = set(graph2.node_labels())
-                    for label in labels1.intersection(labels2):
-                        # Check if intersection is meaningful
-                        num_nodes1 = len(graph1.nodes_with_label(label))
-                        num_nodes2 = len(graph2.nodes_with_label(label))
-                        if num_nodes1 > 50 and num_nodes2 > 50:
-                            graph1.labels_with_merge.add(label)
-                            graph2.labels_with_merge.add(label)
+        # Build inverted index: label -> graphs containing it
+        label_to_graphs = defaultdict(list)
+        for name, graph in self.get_iterator(gt_graphs.items()):
+            for label in graph.node_labels():
+                label_to_graphs[label].append(graph)
+
+        # Flag label as merge in every graph that has sufficient coverage
+        for label, graphs in label_to_graphs.items():
+            if len(graphs) < 2:
+                continue
+            large = [g for g in graphs if len(g.nodes_with_label(label)) > 50]
+            if len(large) >= 2:
+                for g in large:
+                    g.labels_with_merge.add(label)
 
 
 class SplitCountMetric(SkeletonMetric):
@@ -380,6 +378,11 @@ class MergeCountMetric(SkeletonMetric):
             DataFrame where the indices are the dictionary keys and values are
             stored under a column called "self.name".
         """
+        # Build label -> fragment lookup once
+        label_to_fragments = defaultdict(list)
+        for fragment_graph in fragment_graphs.values():
+            label_to_fragments[fragment_graph.label].append(fragment_graph)
+
         # Main
         self.merge_sites = list()
         for gt_graph in self.get_iterator(gt_graphs.values()):
@@ -387,9 +390,8 @@ class MergeCountMetric(SkeletonMetric):
             gt_graph.set_kdtree()
 
             # Search intersecting fragments
-            labels = gt_graph.node_labels()
-            for fragment_graph in fragment_graphs.values():
-                if fragment_graph.label in labels:
+            for label in gt_graph.node_labels():
+                for fragment_graph in label_to_fragments.get(label, []):
                     self.search_for_merges(gt_graph, fragment_graph)
 
         # Postprocess merge sites

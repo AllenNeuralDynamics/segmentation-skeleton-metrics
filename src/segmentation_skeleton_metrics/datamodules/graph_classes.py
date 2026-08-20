@@ -35,7 +35,7 @@ class SkeletonGraph(nx.Graph):
     filename : str
         Filename of SWC file that graph is built from.
     run_length : float
-        Physical path length of the graph.
+        Physical cable length of the graph.
     voxels : numpy.ndarray
         A 3D array that contains a voxel coordinate for each node.
     """
@@ -394,8 +394,8 @@ class LabeledGraph(SkeletonGraph):
         label_handler : LabelHander
             Object that retrieves sets node labels.
         """
-        for i in self.nodes:
-            self.node_label[i] = label_handler.get(self.node_label[i])
+        vget = np.vectorize(label_handler.get)
+        self.node_label = vget(self.node_label)
         self.fix_label_misalignments()
 
     def remove_nodes_with_label(self, label):
@@ -531,12 +531,8 @@ class LabeledGraph(SkeletonGraph):
             - "min": minimum voxel coordinates along each axis.
             - "max": maximum voxel coordinates along each axis.
         """
-        bbox_min = np.inf * np.ones(3)
-        bbox_max = np.zeros(3)
-        for i in nodes:
-            bbox_min = np.minimum(bbox_min, self.node_voxel[i])
-            bbox_max = np.maximum(bbox_max, self.node_voxel[i] + 1)
-        return {"min": bbox_min.astype(int), "max": bbox_max.astype(int)}
+        voxels = self.node_voxel[list(nodes)]
+        return {"min": voxels.min(axis=0), "max": voxels.max(axis=0) + 1}
 
     def color(self):
         """
