@@ -35,7 +35,7 @@ class SkeletonGraph(nx.Graph):
     filename : str
         Filename of SWC file that graph is built from.
     run_length : float
-        Physical path length of the graph.
+        Physical cable length of the graph.
     voxels : numpy.ndarray
         A 3D array that contains a voxel coordinate for each node.
     """
