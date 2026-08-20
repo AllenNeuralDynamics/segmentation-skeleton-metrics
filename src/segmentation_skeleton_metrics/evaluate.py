@@ -9,6 +9,7 @@ subclasses.
 
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from zipfile import ZipFile
 
@@ -392,15 +393,19 @@ class Evaluator:
         """
         output_dir = os.path.join(self.output_dir, f"{self.prefix}mips")
         util.mkdir(output_dir, delete=True)
-        for key, gt_graph in tqdm(gt_graphs.items(), desc="Save MIPs"):
-            # Save GT mips
-            viz.save_mips([gt_graph], output_dir, gt_graph.name)
 
-            # Save fragment mips
-            filename = f"{gt_graph.name}-fragments"
+        def _save_one(gt_graph):
+            viz.save_mips([gt_graph], output_dir, gt_graph.name)
             fragments = get_intersecting_fragments(gt_graph, fragment_graphs)
-            viz.save_mips(fragments, output_dir, filename)
-            del fragments
+            viz.save_mips(fragments, output_dir, f"{gt_graph.name}-fragments")
+
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(_save_one, gt_graph): key
+                for key, gt_graph in gt_graphs.items()
+            }
+            for f in tqdm(as_completed(futures), total=len(futures), desc="Save MIPs"):
+                f.result()
 
     def save_skeletons_with_merge(self, gt_graphs, fragment_graphs, zf):
         """
