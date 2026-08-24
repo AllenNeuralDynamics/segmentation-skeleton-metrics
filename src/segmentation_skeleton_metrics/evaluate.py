@@ -244,7 +244,7 @@ class Evaluator:
         Returns
         -------
         results : pandas.DataFrame
-            Data frame that results from skeleton metrics will be stored in.
+            Data frame for storing skeleton metric results.
         """
         # Create dataframe
         cols = (
