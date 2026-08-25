@@ -419,21 +419,39 @@ class MergeCountMetric(SkeletonMetric):
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
         """
+        # Build a KD-tree from only the gt_graph nodes that carry this
+        # fragment's class label. Using the full gt_graph KD-tree would cause
+        # false positives when split correction maps several fragments to the
+        # same class: leaves of an innocent fragment (one that does not
+        # actually overlap this gt_graph) would still appear far from the full
+        # skeleton, and adjacency between ground-truth neurons would let the
+        # BFS find a close node and falsely record a merge.
+        labeled_nodes = gt_graph.nodes_with_label(fragment_graph.label)
+        if len(labeled_nodes) == 0:
+            return
+        labeled_xyz = gt_graph.node_voxel[labeled_nodes][:, [2, 1, 0]] * gt_graph.anisotropy
+        labeled_kdtree = KDTree(labeled_xyz)
+
         visited = set()
         for leaf in fragment_graph.leafs():
             # Check whether to visit
             if leaf in visited or visited.add(leaf):
                 continue
 
-            # Find closet node in ground truth
+            # Find closest labeled node in ground truth
             xyz = fragment_graph.node_xyz(leaf)
-            dist, _ = gt_graph.kdtree.query(xyz)
+            dist, _ = labeled_kdtree.query(xyz)
 
-            # Check if distance to ground truth flags a merge mistake
+            # Check if distance to labeled ground truth flags a merge mistake
             if dist > MergeCountMetric.dist_away_threshold:
-                self.find_merge_site(gt_graph, fragment_graph, leaf, visited)
+                self.find_merge_site(
+                    gt_graph, fragment_graph, leaf, visited,
+                    labeled_nodes, labeled_kdtree
+                )
 
-    def find_merge_site(self, gt_graph, fragment_graph, source, visited):
+    def find_merge_site(
+        self, gt_graph, fragment_graph, source, visited, labeled_nodes, labeled_kdtree
+    ):
         """
         Traverses fragment graph from a source node to locate and verify
         potential merge sites relative to the ground truth graph.
@@ -450,6 +468,10 @@ class MergeCountMetric(SkeletonMetric):
         visited : Set[int]
             Node IDs from "fragment_graphs" that have already been visited,
             used to avoid redundant exploration.
+        labeled_nodes : numpy.ndarray
+            Node IDs in gt_graph whose label matches fragment_graph.label.
+        labeled_kdtree : scipy.spatial.KDTree
+            KD-tree built from the physical coordinates of labeled_nodes.
         """
         queue = deque([source])
         visited.add(source)
@@ -457,9 +479,12 @@ class MergeCountMetric(SkeletonMetric):
             # Visit node
             i = queue.pop()
             xyz_i = fragment_graph.node_xyz(i)
-            dist_i, gt_node = gt_graph.kdtree.query(xyz_i)
+            dist_i, labeled_idx = labeled_kdtree.query(xyz_i)
             if dist_i < 6:
-                self.verify_site(gt_graph, fragment_graph, gt_node, i)
+                gt_node = labeled_nodes[labeled_idx]
+                self.verify_site(
+                    gt_graph, fragment_graph, gt_node, i, labeled_kdtree
+                )
                 break
 
             # Update queue
@@ -468,7 +493,9 @@ class MergeCountMetric(SkeletonMetric):
                     queue.append(j)
                     visited.add(j)
 
-    def verify_site(self, gt_graph, fragment_graph, gt_node, fragment_node):
+    def verify_site(
+        self, gt_graph, fragment_graph, gt_node, fragment_node, labeled_kdtree
+    ):
         """
         Verifies whether a given site in a fragment graph corresponds to a
         merge mistake relative to the ground truth graph. If so, the site is
@@ -484,9 +511,12 @@ class MergeCountMetric(SkeletonMetric):
             Node ID in the ground truth graph corresponding to the site.
         fragment_node : int
             Node ID in the fragment graph corresponding to the candidate site.
+        labeled_kdtree : scipy.spatial.KDTree
+            KD-tree built from gt_graph nodes whose label matches
+            fragment_graph.label.
         """
         # Check if pass through site without merge mistake
-        if self.is_nonmerge_pass_thru(gt_graph, fragment_graph, gt_node):
+        if self.is_nonmerge_pass_thru(fragment_graph, labeled_kdtree):
             return
 
         # Move site to nearby branching point if possible
@@ -512,33 +542,30 @@ class MergeCountMetric(SkeletonMetric):
             }
         )
 
-    def is_nonmerge_pass_thru(self, gt_graph, fragment_graph, gt_node):
+    def is_nonmerge_pass_thru(self, fragment_graph, labeled_kdtree):
         """
-        Determines whether a ground truth node belongs to a small connected
-        component of the same label in the ground truth graph, indicating a
-        likely non-merge pass-through.
+        Determines whether the fragment has only a small spatial overlap with
+        the labeled region of the ground truth graph, indicating a likely
+        non-merge pass-through.
 
         Parameters
         ----------
-        gt_graph : LabeledGraph
-            Graph to be evaluated.
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
-        gt_node : int
-            Node ID in the ground truth graph to evaluate.
+        labeled_kdtree : scipy.spatial.KDTree
+            KD-tree built from gt_graph nodes whose label matches
+            fragment_graph.label.
 
         Returns
         -------
         bool
-            True is the node is a likely non-merge detection; otherwise, the
-            site is considered to be a merge mistake.
+            True if the fragment has fewer than 50 nodes within
+            dist_away_threshold of the labeled gt_graph region, indicating a
+            likely pass-through rather than a genuine merge mistake.
         """
-        nodes = gt_graph.nodes_with_label(fragment_graph.label)
-        subgraph = gt_graph.subgraph(nodes)
-        for nodes_cc in nx.connected_components(subgraph):
-            if gt_node in nodes_cc:
-                return len(nodes_cc) < 50
-        return True
+        xyz_arr = fragment_graph.node_voxel[:, [2, 1, 0]] * fragment_graph.anisotropy
+        dists, _ = labeled_kdtree.query(xyz_arr)
+        return np.sum(dists < MergeCountMetric.dist_away_threshold) < 50
 
     # --- Helpers ---
     def add_merge_site_names(self):
