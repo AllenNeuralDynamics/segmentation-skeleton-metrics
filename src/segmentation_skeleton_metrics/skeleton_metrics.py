@@ -10,8 +10,7 @@ predicted neuron segmentation to a set of ground truth graphs.
 """
 
 from abc import ABC, abstractmethod
-from copy import deepcopy
-from collections import defaultdict, deque
+from collections import defaultdict
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
@@ -340,7 +339,20 @@ class MergeCountMetric(SkeletonMetric):
     A skeleton metric subclass that counts the number merges.
     """
 
-    dist_away_threshold = 50
+    # Distance (μm) beyond which a node is considered off the ground truth
+    far_dist_threshold = 100
+
+    # Distance (μm) within which a node is considered on the ground truth
+    near_dist_threshold = 10
+
+    # Cable length (μm) a fragment must follow the ground truth to intersect
+    min_intersection_length = 50
+
+    # Radius (μm) used to prune near-gt nodes when measuring added cable
+    overlap_dist_threshold = 50
+
+    # Distance (μm) within which two sites on one fragment are the same site
+    repeat_site_dist = 30
 
     def __init__(self, verbose=True):
         """
@@ -422,84 +434,95 @@ class MergeCountMetric(SkeletonMetric):
         # Build a KD-tree from only the gt_graph nodes that carry this
         # fragment's class label. Using the full gt_graph KD-tree would cause
         # false positives when split correction maps several fragments to the
-        # same class: leaves of an innocent fragment (one that does not
-        # actually overlap this gt_graph) would still appear far from the full
-        # skeleton, and adjacency between ground-truth neurons would let the
-        # BFS find a close node and falsely record a merge.
+        # same class: an innocent fragment that does not actually overlap this
+        # gt_graph would still appear close to the full skeleton, because
+        # ground-truth neurons run adjacent to one another.
         labeled_nodes = gt_graph.nodes_with_label(fragment_graph.label)
         if len(labeled_nodes) == 0:
             return
-        labeled_xyz = gt_graph.node_voxel[labeled_nodes][:, [2, 1, 0]] * gt_graph.anisotropy
-        labeled_kdtree = KDTree(labeled_xyz)
+        labeled_kdtree = KDTree(gt_graph.node_xyz_arr(labeled_nodes))
 
-        visited = set()
-        for leaf in fragment_graph.leafs():
-            # Check whether to visit
-            if leaf in visited or visited.add(leaf):
-                continue
+        # Distance from every fragment node to the labeled ground truth
+        dists, _ = labeled_kdtree.query(fragment_graph.node_xyz_arr())
 
-            # Find closest labeled node in ground truth
-            xyz = fragment_graph.node_xyz(leaf)
-            dist, _ = labeled_kdtree.query(xyz)
-
-            # Check if distance to labeled ground truth flags a merge mistake
-            if dist > MergeCountMetric.dist_away_threshold:
-                self.find_merge_site(
-                    gt_graph, fragment_graph, leaf, visited,
-                    labeled_nodes, labeled_kdtree
+        # Each far component that reaches ground truth marks a merge site
+        for component in self.find_far_components(fragment_graph, dists):
+            site = self.find_merge_site(fragment_graph, component, dists)
+            if site is not None:
+                self.record_merge_site(
+                    gt_graph, fragment_graph, site, component
                 )
 
-    def find_merge_site(
-        self, gt_graph, fragment_graph, source, visited, labeled_nodes, labeled_kdtree
-    ):
+    def find_far_components(self, fragment_graph, dists):
         """
-        Traverses fragment graph from a source node to locate and verify
-        potential merge sites relative to the ground truth graph.
+        Finds connected components of fragment nodes that are far from the
+        labeled ground truth and are anchored by a leaf that lies beyond
+        "far_dist_threshold".
 
         Parameters
         ----------
-        gt_graph : LabeledGraph
-            Graphs to be evaluated.
-        fragment_graphs : FragmentGraph
+        fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
-        source : int
-            Starting node ID in the fragment graph from which to begin
-            traversal.
-        visited : Set[int]
-            Node IDs from "fragment_graphs" that have already been visited,
-            used to avoid redundant exploration.
-        labeled_nodes : numpy.ndarray
-            Node IDs in gt_graph whose label matches fragment_graph.label.
-        labeled_kdtree : scipy.spatial.KDTree
-            KD-tree built from the physical coordinates of labeled_nodes.
+        dists : numpy.ndarray
+            Distance from each fragment node to the labeled ground truth.
+
+        Yields
+        ------
+        Set[int]
+            Node IDs forming a single far component.
         """
-        queue = deque([source])
-        visited.add(source)
-        while queue:
-            # Visit node
-            i = queue.pop()
-            xyz_i = fragment_graph.node_xyz(i)
-            dist_i, labeled_idx = labeled_kdtree.query(xyz_i)
-            if dist_i < 6:
-                gt_node = labeled_nodes[labeled_idx]
-                self.verify_site(
-                    gt_graph, fragment_graph, gt_node, i, labeled_kdtree
-                )
-                break
+        # Partition nodes into near and far
+        near_dist = MergeCountMetric.near_dist_threshold
+        far_dist = MergeCountMetric.far_dist_threshold
+        far_nodes = {i for i in fragment_graph.nodes if dists[i] > near_dist}
 
-            # Update queue
+        # Absorb near runs that only brush past the ground truth
+        near_nodes = set(fragment_graph.nodes) - far_nodes
+        min_length = MergeCountMetric.min_intersection_length
+        for intersection in fragment_graph.connected_components(near_nodes):
+            if fragment_graph.cable_length(intersection) < min_length:
+                far_nodes |= intersection
+
+        # Ignore components not anchored by a far leaf
+        for component in fragment_graph.connected_components(far_nodes):
+            if any(
+                fragment_graph.degree[i] == 1 and dists[i] > far_dist
+                for i in component
+            ):
+                yield component
+
+    def find_merge_site(self, fragment_graph, component, dists):
+        """
+        Finds the node where a far component meets the ground truth.
+
+        Parameters
+        ----------
+        fragment_graph : FragmentGraph
+            Graph corresponding to a segment in the predicted segmentation.
+        component : Set[int]
+            Node IDs forming a far component.
+        dists : numpy.ndarray
+            Distance from each fragment node to the labeled ground truth.
+
+        Returns
+        -------
+        int or None
+            Node ID where the component meets the ground truth, or None if it
+            never reaches the ground truth.
+        """
+        boundary = set()
+        for i in component:
             for j in fragment_graph.neighbors(i):
-                if j not in visited:
-                    queue.append(j)
-                    visited.add(j)
+                if j not in component:
+                    boundary.add(j)
+        return min(boundary, key=lambda j: dists[j]) if boundary else None
 
-    def verify_site(
-        self, gt_graph, fragment_graph, gt_node, fragment_node, labeled_kdtree
+    def record_merge_site(
+        self, gt_graph, fragment_graph, fragment_node, component
     ):
         """
-        Verifies whether a given site in a fragment graph corresponds to a
-        merge mistake relative to the ground truth graph. If so, the site is
-        saved in an internal data structure.
+        Saves a merge site to an internal data structure, after moving it to a
+        nearby branching point when one exists.
 
         Parameters
         ----------
@@ -507,18 +530,12 @@ class MergeCountMetric(SkeletonMetric):
             Graph to be evaluated.
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
-        gt_node : int
-            Node ID in the ground truth graph corresponding to the site.
         fragment_node : int
             Node ID in the fragment graph corresponding to the candidate site.
-        labeled_kdtree : scipy.spatial.KDTree
-            KD-tree built from gt_graph nodes whose label matches
-            fragment_graph.label.
+        component : Set[int]
+            Node IDs of the far component that produced this site. Its cable
+            length is the cable added by this merge.
         """
-        # Check if pass through site without merge mistake
-        if self.is_nonmerge_pass_thru(fragment_graph, labeled_kdtree):
-            return
-
         # Move site to nearby branching point if possible
         fragment_node = gutil.search_branching_node(
             fragment_graph, gt_graph.kdtree, fragment_node
@@ -527,6 +544,7 @@ class MergeCountMetric(SkeletonMetric):
         # Record site as merge mistake
         voxel = fragment_graph.node_voxel[fragment_node]
         xyz = fragment_graph.node_xyz(fragment_node)
+        added_length = fragment_graph.cable_length(component)
 
         gt_graph.labels_with_merge.add(fragment_graph.label)
         self.fragments_with_merge.add(fragment_graph.name)
@@ -538,34 +556,9 @@ class MergeCountMetric(SkeletonMetric):
                 "Label": fragment_graph.label,
                 "Voxel": tuple(map(int, voxel)),
                 "World": tuple([float(round(t, 2)) for t in xyz]),
-                "Added Cable Length (μm)": 0.0,
+                "Added Cable Length (μm)": round(float(added_length), 2),
             }
         )
-
-    def is_nonmerge_pass_thru(self, fragment_graph, labeled_kdtree):
-        """
-        Determines whether the fragment has only a small spatial overlap with
-        the labeled region of the ground truth graph, indicating a likely
-        non-merge pass-through.
-
-        Parameters
-        ----------
-        fragment_graph : FragmentGraph
-            Graph corresponding to a segment in the predicted segmentation.
-        labeled_kdtree : scipy.spatial.KDTree
-            KD-tree built from gt_graph nodes whose label matches
-            fragment_graph.label.
-
-        Returns
-        -------
-        bool
-            True if the fragment has fewer than 50 nodes within
-            dist_away_threshold of the labeled gt_graph region, indicating a
-            likely pass-through rather than a genuine merge mistake.
-        """
-        xyz_arr = fragment_graph.node_voxel[:, [2, 1, 0]] * fragment_graph.anisotropy
-        dists, _ = labeled_kdtree.query(xyz_arr)
-        return np.sum(dists < MergeCountMetric.dist_away_threshold) < 50
 
     # --- Helpers ---
     def add_merge_site_names(self):
@@ -580,26 +573,36 @@ class MergeCountMetric(SkeletonMetric):
 
     def remove_repeat_merge_sites(self):
         """
-        Removes spatially redundant merge sites within a fixed distance
-        threshold.
+        Removes merge sites that are spatially redundant, meaning they arise
+        from the same fragment and ground truth graph and lie within
+        "repeat_site_dist" of each other. Sites from different fragments or
+        different ground truth graphs are distinct mistakes, so they are never
+        combined.
         """
-        if len(self.merge_sites) > 0:
-            # Build kdtree from merge sites
-            kdtree = KDTree([s["World"] for s in self.merge_sites])
-
-            # Search for repeat sites
-            rm_idxs = set()
-            for i, site in enumerate(self.merge_sites):
-                if i not in rm_idxs:
-                    idxs = kdtree.query_ball_point(site["World"], 30)
-                    idxs.remove(i)
-                    rm_idxs |= set(idxs)
-
-            # Remove repeat sites
-            self.merge_sites = pd.DataFrame(self.merge_sites).drop(rm_idxs)
-            self.add_merge_site_names()
-        else:
+        if len(self.merge_sites) == 0:
             self.merge_sites = pd.DataFrame()
+            return
+
+        # Group sites by the fragment and ground truth graph they arise from
+        groups = defaultdict(list)
+        for i, site in enumerate(self.merge_sites):
+            groups[(site["GroundTruth_ID"], site["Label"])].append(i)
+
+        # Search for repeat sites within each group
+        rm_idxs = set()
+        for idxs in groups.values():
+            xyz_arr = [self.merge_sites[i]["World"] for i in idxs]
+            kdtree = KDTree(xyz_arr)
+            for i, xyz in zip(idxs, xyz_arr):
+                if i not in rm_idxs:
+                    nbs = kdtree.query_ball_point(
+                        xyz, MergeCountMetric.repeat_site_dist
+                    )
+                    rm_idxs |= {idxs[n] for n in nbs if idxs[n] != i}
+
+        # Remove repeat sites
+        self.merge_sites = pd.DataFrame(self.merge_sites).drop(rm_idxs)
+        self.add_merge_site_names()
 
 
 class ERLMetric(SkeletonMetric):
@@ -857,103 +860,3 @@ class NormalizedERLMetric(SkeletonMetric):
             normalized_erl = results["ERL"][name] / graph.run_length
             new_results[name] = round(normalized_erl, 4)
         return self.reformat(new_results)
-
-
-class AddedCableLengthMetric(SkeletonMetric):
-    """
-    A skeleton metric subclass that computes added cable length.
-    """
-
-    def __init__(self, verbose=True):
-        """
-        Instantiates an AddedCableLengthMetric object.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            Indication of whether to display a progress bar. Default is True.
-        """
-        # Call parent class
-        super().__init__(verbose=verbose)
-
-        # Instance attributes
-        self.name = "Added Cable Length (μm)"
-
-    def __call__(self, gt_graphs, fragment_graphs, merge_sites):
-        """
-        Computes the normalized ERL of the given graphs.
-
-        Parameters
-        ----------
-        gt_graphs : Dict[str, LabeledGraph]
-            Graphs to be evaluated.
-        fragment_graphs : Dict[str, FragmentGraph]
-            Graphs corresponding to the predicted segmentation.
-        merge_sites : pandas.DataFrame
-            Data frame containing detected merge sites.
-
-        Returns
-        -------
-        results : pandas.DataFrame
-            DataFrame where the indices are the dictionary keys and values are
-            stored under a column called "self.name".
-        """
-        # Check if merge sites is empty
-        if len(merge_sites) == 0:
-            return None
-
-        # Compute metric
-        pair_to_length = dict()
-        for i in self.get_iterator(merge_sites.index):
-            # Extract site info
-            gt_id = merge_sites["GroundTruth_ID"][i]
-            label = merge_sites["Label"][i]
-            name = merge_sites["Fragment_Name"][i]
-            pair_id = (label, gt_id)
-
-            # Check whether to visit
-            if pair_id in pair_to_length:
-                merge_sites.loc[i, self.name] = pair_to_length[pair_id]
-            else:
-                # Get graphs
-                gt_graph = gt_graphs[gt_id]
-                if label in fragment_graphs:
-                    fragment_graph = deepcopy(fragment_graphs[label])
-                elif name in fragment_graphs:
-                    fragment_graph = deepcopy(fragment_graphs[name])
-
-                # Compute metric
-                pair_to_length[pair_id] = self.compute_added_length(
-                    gt_graph, fragment_graph
-                )
-                merge_sites.loc[i, self.name] = pair_to_length[pair_id]
-
-    def compute_added_length(self, gt_graph, fragment_graph):
-        """
-        Computes the total cable length of fragment components that are not
-        sufficiently close to the ground-truth graph.
-
-        Parameters
-        ----------
-        gt_graph : LabeledGraph
-            Graph containing merge mistake.
-        fragment_graph : FragmentGraph
-            Fragment that is merged to the given ground truth graph.
-
-        Returns
-        -------
-        cable_length : float
-            Total cable length of fragment components that remain after pruning
-            nodes near the ground-truth graph.
-        """
-        # Remove nodes close to ground truth
-        xyz_arr = fragment_graph.node_voxel * fragment_graph.anisotropy
-        dists, _ = gt_graph.kdtree.query(xyz_arr)
-        max_dist = MergeCountMetric.dist_away_threshold
-        fragment_graph.remove_nodes_from(np.where(dists < max_dist)[0])
-
-        # Compute cable length
-        cable_length = 0
-        for nodes in map(list, nx.connected_components(fragment_graph)):
-            cable_length += fragment_graph.run_length_from(nodes[0])
-        return round(float(cable_length), 2)

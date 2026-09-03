@@ -83,7 +83,7 @@ class SkeletonGraph(nx.Graph):
         """
         Builds a KD-Tree from the node physical coordinates.
         """
-        self.kdtree = KDTree(self.node_voxel[:, [2, 1, 0]] * self.anisotropy)
+        self.kdtree = KDTree(self.node_xyz_arr())
 
     def set_voxels(self, voxels):
         """
@@ -193,6 +193,56 @@ class SkeletonGraph(nx.Graph):
         """
         return [node for node in self.nodes if self.degree[node] == 1]
 
+    def cable_length(self, nodes):
+        """
+        Computes the cable length spanned by the given nodes.
+
+        Parameters
+        ----------
+        nodes : Set[int]
+            Node IDs to compute the cable length of.
+
+        Returns
+        -------
+        float
+            Cable length in microns.
+        """
+        length = 0
+        for i in nodes:
+            for j in self.neighbors(i):
+                if j in nodes and i < j:
+                    length += self.physical_dist(i, j)
+        return length
+
+    def connected_components(self, nodes):
+        """
+        Finds the connected components of the subgraph induced on "nodes".
+
+        Parameters
+        ----------
+        nodes : Set[int]
+            Node IDs that induce the subgraph.
+
+        Yields
+        ------
+        Set[int]
+            Node IDs forming a single connected component.
+        """
+        visited = set()
+        for root in nodes:
+            if root in visited:
+                continue
+            component, queue = set(), deque([root])
+            visited.add(root)
+            while queue:
+                i = queue.popleft()
+                component.add(i)
+                for j in self.neighbors(i):
+                    if j in nodes and j not in visited:
+                        queue.append(j)
+                        visited.add(j)
+            yield component
+
     def node_xyz(self, i):
         """
         Gets the physical coordinate of the given node.
@@ -208,6 +258,24 @@ class SkeletonGraph(nx.Graph):
             Physical coordinate of the given node.
         """
         return self.node_voxel[i][::-1] * self.anisotropy
+
+    def node_xyz_arr(self, nodes=None):
+        """
+        Gets the physical coordinates of the given nodes.
+
+        Parameters
+        ----------
+        nodes : ArrayLike, optional
+            Node IDs to get coordinates of. Default is None, which uses all
+            nodes in the graph.
+
+        Returns
+        -------
+        numpy.ndarray
+            Physical coordinates, of shape (len(nodes), 3).
+        """
+        voxels = self.node_voxel if nodes is None else self.node_voxel[nodes]
+        return voxels[:, [2, 1, 0]] * self.anisotropy
 
     def color(self):
         """

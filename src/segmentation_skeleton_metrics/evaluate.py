@@ -18,7 +18,6 @@ import os
 import pandas as pd
 
 from segmentation_skeleton_metrics.skeleton_metrics import (
-    AddedCableLengthMetric,
     MergeCountMetric,
     MergeRateMetric,
     MergedEdgePercentMetric,
@@ -220,11 +219,6 @@ class Evaluator:
                 results[name] = metric(gt_graphs, results)
             elif name != "Merge Rate":
                 results[name] = metric(gt_graphs, results)
-
-        # Special metrics
-        merge_sites = self.metrics["# Merges"].merge_sites
-        metric = AddedCableLengthMetric(verbose=self.verbose)
-        metric(gt_graphs, fragment_graphs, merge_sites)
 
         # Save results
         path = f"{self.output_dir}/{self.prefix}results.csv"
