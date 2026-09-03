@@ -431,18 +431,15 @@ class MergeCountMetric(SkeletonMetric):
         fragment_graph : FragmentGraph
             Graph corresponding to a segment in the predicted segmentation.
         """
-        # Build a KD-tree from only the gt_graph nodes that carry this
-        # fragment's class label. Using the full gt_graph KD-tree would cause
-        # false positives when split correction maps several fragments to the
-        # same class: an innocent fragment that does not actually overlap this
-        # gt_graph would still appear close to the full skeleton, because
-        # ground-truth neurons run adjacent to one another.
+        # Build KD-tree from only gt_graph nodes with this fragment's class label.
+        # Using the full graph would cause false positives when multiple fragments map
+        # to the same class, since adjacent ground-truth neurons can be spatially close.
         labeled_nodes = gt_graph.nodes_with_label(fragment_graph.label)
         if len(labeled_nodes) == 0:
             return
-        labeled_kdtree = KDTree(gt_graph.node_xyz_arr(labeled_nodes))
 
         # Distance from every fragment node to the labeled ground truth
+        labeled_kdtree = KDTree(gt_graph.node_xyz_arr(labeled_nodes))
         dists, _ = labeled_kdtree.query(fragment_graph.node_xyz_arr())
 
         # Each far component that reaches ground truth marks a merge site
@@ -475,9 +472,9 @@ class MergeCountMetric(SkeletonMetric):
         near_dist = MergeCountMetric.near_dist_threshold
         far_dist = MergeCountMetric.far_dist_threshold
         far_nodes = {i for i in fragment_graph.nodes if dists[i] > near_dist}
+        near_nodes = set(fragment_graph.nodes) - far_nodes
 
         # Absorb near runs that only brush past the ground truth
-        near_nodes = set(fragment_graph.nodes) - far_nodes
         min_length = MergeCountMetric.min_intersection_length
         for intersection in fragment_graph.connected_components(near_nodes):
             if fragment_graph.cable_length(intersection) < min_length:
