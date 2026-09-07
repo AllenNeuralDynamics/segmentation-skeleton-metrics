@@ -352,7 +352,7 @@ class MergeCountMetric(SkeletonMetric):
     overlap_dist_threshold = 50
 
     # Distance (μm) within which two sites on one fragment are the same site
-    repeat_site_dist = 30
+    repeat_site_dist = 40
 
     def __init__(self, verbose=True):
         """
