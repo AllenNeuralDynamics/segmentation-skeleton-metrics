@@ -571,19 +571,22 @@ class MergeCountMetric(SkeletonMetric):
     def remove_repeat_merge_sites(self):
         """
         Removes merge sites that are spatially redundant, meaning they arise
-        from the same fragment and ground truth graph and lie within
-        "repeat_site_dist" of each other. Sites from different fragments or
-        different ground truth graphs are distinct mistakes, so they are never
-        combined.
+        from the same fragment and lie within "repeat_site_dist" of each other.
+        Sites from different fragments are distinct mistakes and are never
+        combined. Sites from the same fragment detected from different ground
+        truth graph perspectives (which happens when a segment merges two
+        neurons) are deduplicated here to avoid double-counting.
         """
         if len(self.merge_sites) == 0:
             self.merge_sites = pd.DataFrame()
             return
 
-        # Group sites by the fragment and ground truth graph they arise from
+        # Group sites by the fragment they arise from. Using Fragment_Name
+        # (not Label) so that the same merge site detected from two different
+        # ground truth graph perspectives collapses into one entry.
         groups = defaultdict(list)
         for i, site in enumerate(self.merge_sites):
-            groups[(site["GroundTruth_ID"], site["Label"])].append(i)
+            groups[site["Fragment_Name"]].append(i)
 
         # Search for repeat sites within each group
         rm_idxs = set()
