@@ -14,8 +14,10 @@ from collections import defaultdict
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import os
 import pandas as pd
 
 from segmentation_skeleton_metrics.utils import graph_util as gutil
@@ -321,7 +323,7 @@ class SplitCountMetric(SkeletonMetric):
         gt_graphs : Dict[str, LabeledGraph]
             Graphs to be evaluated.
 
-        Results
+        Returns
         -------
         results : pandas.DataFrame
             DataFrame where the indices are the dictionary keys and values are
@@ -332,6 +334,113 @@ class SplitCountMetric(SkeletonMetric):
             num_splits = max(len(graph.node_labels()) - 1, 0)
             results[name] = int(num_splits)
         return self.reformat(results)
+
+
+class OmitLengthsMetric(SkeletonMetric):
+    """
+    A skeleton metric subclass that measures the cable lengths of omit regions
+    (label=0), distinguishing two types:
+
+    - Splits: the omit component has no leaf node in the original skeleton,
+      meaning it bridges two labeled fragments.
+    - Truncations: the omit component contains at least one leaf node of the
+      original skeleton, reflecting cable omitted at neuron endpoints.
+    """
+
+    def __init__(self, verbose=True):
+        """
+        Instantiates an OmitLengthsMetric object.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Indication of whether to display a progress bar. Default is True.
+        """
+        # Call parent class
+        super().__init__(verbose=verbose)
+
+        # Instance attributes
+        self.name = "Omit Lengths"
+        self.split_lengths = []
+        self.truncation_lengths = []
+
+    def __call__(self, gt_graphs):
+        """
+        Classifies every label=0 connected component in each graph as a split
+        or a truncation, and records the cable length of each component.
+
+        Parameters
+        ----------
+        gt_graphs : Dict[str, LabeledGraph]
+            Graphs to be evaluated.
+
+        Returns
+        -------
+        results : pandas.DataFrame
+            Per-graph counts of splits and truncations in separate columns.
+        """
+        self.split_lengths = []
+        self.truncation_lengths = []
+        results = dict()
+
+        for name, graph in self.get_iterator(gt_graphs.items()):
+            zero_nodes = set(np.where(graph.node_label == "0")[0])
+            leaf_nodes = set(graph.leafs())
+
+            split_count = 0
+            truncation_count = 0
+            for component in graph.connected_components(zero_nodes):
+                length = graph.cable_length(component)
+                if component & leaf_nodes:
+                    self.truncation_lengths.append(length)
+                    truncation_count += 1
+                else:
+                    self.split_lengths.append(length)
+                    split_count += 1
+
+            results[name] = {
+                "# Splits": split_count,
+                "# Truncations": truncation_count,
+            }
+
+        return pd.DataFrame.from_dict(results, orient="index")
+
+    def plot_distributions(self, output_dir):
+        """
+        Plots and saves the cable-length distributions for splits and
+        truncations using a log-scale y-axis.
+
+        Parameters
+        ----------
+        output_dir : str
+            Directory where the figure will be saved.
+
+        Returns
+        -------
+        str
+            Path to the saved figure.
+        """
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        fig.suptitle("Omit Cable Length Distributions")
+
+        configs = [
+            (axes[0], self.split_lengths, "Splits", "steelblue"),
+            (axes[1], self.truncation_lengths, "Truncations", "coral"),
+        ]
+        for ax, lengths, title, color in configs:
+            if lengths:
+                ax.hist(
+                    lengths, bins=50, color=color, edgecolor="white", log=True
+                )
+            ax.set_title(title)
+            ax.set_xlabel("Cable Length (μm)")
+            ax.set_ylabel("Count (log scale)")
+
+        plt.tight_layout()
+        path = os.path.join(output_dir, "omit_length_distributions.png")
+        plt.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close()
+        return path
 
 
 class MergeCountMetric(SkeletonMetric):

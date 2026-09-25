@@ -24,6 +24,7 @@ from segmentation_skeleton_metrics.skeleton_metrics import (
     OmitEdgePercentMetric,
     SplitEdgePercentMetric,
     SplitCountMetric,
+    OmitLengthsMetric,
     SplitRateMetric,
     EdgeAccuracyMetric,
     ERLMetric,
@@ -170,7 +171,7 @@ class Evaluator:
 
         # Set core metrics
         self.metrics = {
-            "# Splits": SplitCountMetric(verbose=verbose),
+            "OmitLengths": OmitLengthsMetric(verbose=verbose),
             "# Merges": MergeCountMetric(verbose=verbose),
             "% Split Edges": SplitEdgePercentMetric(verbose=verbose),
             "% Omit Edges": OmitEdgePercentMetric(verbose=verbose),
@@ -210,6 +211,15 @@ class Evaluator:
         for name, metric in self.metrics.items():
             if name == "# Merges" and fragment_graphs:
                 results[name] = metric(gt_graphs, fragment_graphs)
+            elif name == "OmitLengths":
+                omit_df = metric(gt_graphs)
+                results["# Splits"] = omit_df["# Splits"]
+                results["# Truncations"] = omit_df["# Truncations"]
+                omit_path = os.path.join(
+                    self.output_dir, f"{self.prefix}omit_lengths.csv"
+                )
+                omit_df.to_csv(omit_path, index=True)
+                metric.plot_distributions(self.output_dir)
             elif name != "# Merges":
                 results.update(metric(gt_graphs))
 
@@ -240,12 +250,14 @@ class Evaluator:
         results : pandas.DataFrame
             Data frame for storing skeleton metric results.
         """
-        # Create dataframe
-        cols = (
-            ["SWC Run Length"]
-            + list(self.metrics.keys())
-            + list(self.derived_metrics.keys())
-        )
+        # Create dataframe ("OmitLengths" expands to two columns)
+        metric_cols = []
+        for key in self.metrics.keys():
+            if key == "OmitLengths":
+                metric_cols.extend(["# Splits", "# Truncations"])
+            else:
+                metric_cols.append(key)
+        cols = ["SWC Run Length"] + metric_cols + list(self.derived_metrics.keys())
         index = sorted(list(gt_graphs.keys()))
         results = pd.DataFrame(np.nan, index=index, columns=cols)
 
@@ -264,18 +276,30 @@ class Evaluator:
             DataFrame containing evaluation results for individual SWCs.
         """
         # Averaged results
+        skip = {"SWC Run Length", "SWC Name", "# Splits", "# Truncations"}
         filename = f"{self.prefix}results_overview.txt"
         path = os.path.join(self.output_dir, filename)
         util.update_txt(path, "\nAverage Results...", self.verbose)
         for column in results.columns:
-            if column != "SWC Run Length" and column != "SWC Name":
+            if column not in skip:
                 avg = util.compute_weighted_avg(results, column)
                 util.update_txt(path, f"  {column}: {avg:.4f}", self.verbose)
 
         # Total results
-        n_splits = int(results["# Splits"].sum())
+        omit_metric = self.metrics["OmitLengths"]
         util.update_txt(path, "\nTotal Results...", self.verbose)
-        util.update_txt(path, f"  # Splits: {n_splits}", self.verbose)
+        for label, lengths in [
+            ("Split Lengths", omit_metric.split_lengths),
+            ("Truncation Lengths", omit_metric.truncation_lengths),
+        ]:
+            if lengths:
+                mean = np.mean(lengths)
+                std = np.std(lengths)
+                util.update_txt(
+                    path, f"  {label}: {mean:.2f} ± {std:.2f} μm", self.verbose
+                )
+            else:
+                util.update_txt(path, f"  {label}: N/A", self.verbose)
         if "# Merges" in results.columns:
             n_merges = results["# Merges"].sum()
             util.update_txt(path, f"  # Merges: {n_merges}", self.verbose)
