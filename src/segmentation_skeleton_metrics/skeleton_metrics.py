@@ -14,12 +14,12 @@ from collections import defaultdict
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
-import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import os
 import pandas as pd
 
+from segmentation_skeleton_metrics import plot
 from segmentation_skeleton_metrics.utils import graph_util as gutil
 
 
@@ -424,8 +424,8 @@ class OmitLengthsMetric(SkeletonMetric):
 
     def plot_distributions(self, output_dir):
         """
-        Plots and saves the cable-length distributions for splits and
-        truncations using a log-scale y-axis.
+        Plots and saves the cable length distributions for splits and
+        truncations.
 
         Parameters
         ----------
@@ -437,27 +437,9 @@ class OmitLengthsMetric(SkeletonMetric):
         str
             Path to the saved figure.
         """
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        fig.suptitle("Omit Cable Length Distributions")
-
-        configs = [
-            (axes[0], self.split_lengths, "Splits", "steelblue"),
-            (axes[1], self.truncation_lengths, "Truncations", "coral"),
-        ]
-        for ax, lengths, title, color in configs:
-            if lengths:
-                ax.hist(
-                    lengths, bins=50, color=color, edgecolor="white", log=True
-                )
-            ax.set_title(title)
-            ax.set_xlabel("Cable Length (μm)")
-            ax.set_ylabel("Count (log scale)")
-
-        plt.tight_layout()
-        path = os.path.join(output_dir, "omit_length_distributions.png")
-        plt.savefig(path, dpi=150, bbox_inches="tight")
-        plt.close()
-        return path
+        return plot.plot_omit_length_distributions(
+            self.split_lengths, self.truncation_lengths, output_dir
+        )
 
 
 class MergeCountMetric(SkeletonMetric):
