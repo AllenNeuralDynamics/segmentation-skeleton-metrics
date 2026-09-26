@@ -276,33 +276,42 @@ class Evaluator:
             DataFrame containing evaluation results for individual SWCs.
         """
         # Averaged results
-        skip = {"SWC Run Length", "SWC Name", "# Splits", "# Truncations"}
+        skip = {"SWC Run Length", "SWC Name", "# Truncations"}
         filename = f"{self.prefix}results_overview.txt"
         path = os.path.join(self.output_dir, filename)
-        util.update_txt(path, "\nAverage Results...", self.verbose)
-        for column in results.columns:
-            if column not in skip:
-                avg = util.compute_weighted_avg(results, column)
-                util.update_txt(path, f"  {column}: {avg:.4f}", self.verbose)
+        util.update_txt(path, "\nPer-Neuron Average Results...", self.verbose)
+        preferred_order = [
+            "# Splits", "# Merges", "% Split Edges", "% Merged Edges",
+            "Split Rate", "Merge Rate", "ERL", "Normalized ERL",
+        ]
+        ordered_cols = [c for c in preferred_order if c in results.columns]
+        ordered_cols += [c for c in results.columns if c not in skip and c not in ordered_cols]
+        for column in ordered_cols:
+            avg = util.compute_weighted_avg(results, column)
+            util.update_txt(path, f"  {column}: {avg:.4f}", self.verbose)
 
         # Total results
         omit_metric = self.metrics["OmitLengths"]
-        util.update_txt(path, "\nTotal Results...", self.verbose)
-        for label, lengths in [
-            ("Split Lengths", omit_metric.split_lengths),
-            ("Truncation Lengths", omit_metric.truncation_lengths),
-        ]:
-            if lengths:
-                mean = np.mean(lengths)
-                std = np.std(lengths)
-                util.update_txt(
-                    path, f"  {label}: {mean:.2f} ± {std:.2f} μm", self.verbose
-                )
-            else:
-                util.update_txt(path, f"  {label}: N/A", self.verbose)
-        if "# Merges" in results.columns:
-            n_merges = results["# Merges"].sum()
-            util.update_txt(path, f"  # Merges: {n_merges}", self.verbose)
+        util.update_txt(path, "\nAggregate Results...", self.verbose)
+        for col in ["# Splits", "# Merges", "# Truncations"]:
+            if col in results.columns:
+                util.update_txt(path, f"  {col}: {int(results[col].sum())}", self.verbose)
+
+        if omit_metric.split_lengths:
+            mean = np.mean(omit_metric.split_lengths)
+            std = np.std(omit_metric.split_lengths)
+            util.update_txt(path, f"  Split Lengths: {mean:.2f} ± {std:.2f} μm", self.verbose)
+        else:
+            util.update_txt(path, f"  Split Lengths: N/A", self.verbose)
+
+        if omit_metric.truncation_lengths:
+            mean = np.mean(omit_metric.truncation_lengths)
+            std = np.std(omit_metric.truncation_lengths)
+            util.update_txt(
+                path, f"  Truncation Lengths: {mean:.2f} ± {std:.2f} μm (when truncated)", self.verbose
+            )
+        else:
+            util.update_txt(path, f"  Truncation Lengths: N/A", self.verbose)
 
     # --- Writers ---
     def save_fragments(self, gt_graphs, fragment_graphs, include_gt=True):

@@ -381,9 +381,12 @@ class OmitLengthsMetric(SkeletonMetric):
         """
         self.split_lengths = []
         self.truncation_lengths = []
+        self.n_neurons = 0
+        self.n_truncated = 0
         results = dict()
 
         for name, graph in self.get_iterator(gt_graphs.items()):
+            self.n_neurons += 1
             zero_nodes = set(np.where(graph.node_label == "0")[0])
             leaf_nodes = set(graph.leafs())
 
@@ -397,6 +400,20 @@ class OmitLengthsMetric(SkeletonMetric):
                 else:
                     self.split_lengths.append(length)
                     split_count += 1
+
+            # Zero-length splits: adjacent nodes with different non-zero labels
+            for i, j in graph.edges():
+                li, lj = graph.node_label[i], graph.node_label[j]
+                if li != "0" and lj != "0" and li != lj:
+                    self.split_lengths.append(0)
+                    split_count += 1
+
+            # Include 0 for neurons with no splits
+            if split_count == 0:
+                self.split_lengths.append(0)
+
+            if truncation_count > 0:
+                self.n_truncated += 1
 
             results[name] = {
                 "# Splits": split_count,
