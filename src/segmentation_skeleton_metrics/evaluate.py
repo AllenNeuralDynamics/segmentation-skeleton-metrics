@@ -282,8 +282,8 @@ class Evaluator:
         util.update_txt(path, "\nPer-Neuron Average Results...", self.verbose)
         preferred_order = [
             "# Splits", "# Merges", "% Split Edges", "% Merged Edges",
-            "% Omit Edges", "Split Rate", "Merge Rate", "ERL",
-            "Normalized ERL",
+            "% Omit Edges", "Split Rate", "Merge Rate", "Edge Accuracy",
+            "ERL", "Normalized ERL",
         ]
         ordered_cols = [c for c in preferred_order if c in results.columns]
         ordered_cols += [c for c in results.columns if c not in skip and c not in ordered_cols]
