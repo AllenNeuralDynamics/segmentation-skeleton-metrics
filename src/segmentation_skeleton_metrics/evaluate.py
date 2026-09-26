@@ -45,7 +45,7 @@ def evaluate(
     label_handler=None,
     results_prefix="",
     save_merges=False,
-    save_mips=True,
+    save_mips=False,
     save_fragments=False,
     use_anisotropy=False,
     verbose=True,
@@ -81,7 +81,7 @@ def evaluate(
         mistake. Default is False.
     save_mips : bool, optional
         Indication of whether to save MIPs of ground truth skeletons along
-        with their intersecting fragments. Default is True.
+        with their intersecting fragments. Default is False.
     save_fragments : bool, optional
         Indication of whether to save fragments that intersect with each
         ground truth skeleton. Default is False.
@@ -282,7 +282,8 @@ class Evaluator:
         util.update_txt(path, "\nPer-Neuron Average Results...", self.verbose)
         preferred_order = [
             "# Splits", "# Merges", "% Split Edges", "% Merged Edges",
-            "Split Rate", "Merge Rate", "ERL", "Normalized ERL",
+            "% Omit Edges", "Split Rate", "Merge Rate", "Edge Accuracy",
+            "ERL", "Normalized ERL",
         ]
         ordered_cols = [c for c in preferred_order if c in results.columns]
         ordered_cols += [c for c in results.columns if c not in skip and c not in ordered_cols]
