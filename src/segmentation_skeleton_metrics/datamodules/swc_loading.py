@@ -63,6 +63,37 @@ class Reader:
     # --- Read Data ---
     def __call__(self, swc_pointer):
         """
+        Loads SWC files based on the type pointer provided and confirms that
+        at least one was found.
+
+        Reading SWC files is only ever requested because they are needed, so
+        an empty result is treated as an error rather than returned. Callers
+        that tolerate having nothing to read should catch FileNotFoundError.
+
+        Parameters
+        ----------
+        swc_pointer : str
+            Object that points to SWC files to be read, see "read" for the
+            accepted forms.
+
+        Returns
+        -------
+        Deque[dict]
+            Dictionaries whose keys and values are the attribute names and
+            values from the SWC files.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no SWC files were found at "swc_pointer".
+        """
+        swc_dicts = self.read(swc_pointer)
+        if len(swc_dicts) == 0:
+            raise FileNotFoundError(f"No SWC files found at {swc_pointer}")
+        return swc_dicts
+
+    def read(self, swc_pointer):
+        """
         Loads SWC files based on the type pointer provided.
 
         Parameters
@@ -102,8 +133,6 @@ class Reader:
             if len(paths) > 0:
                 return self.read_swcs(paths)
 
-            raise Exception("Directory is Invalid!")
-
         # Path to...
         if isinstance(swc_pointer, str):
             # Cloud GCS/S3 storage
@@ -118,9 +147,7 @@ class Reader:
             if swc_pointer.endswith(".swc"):
                 return self.read_swc(swc_pointer)
 
-            raise Exception("Path is Invalid!")
-
-        raise Exception("SWC Pointer is Invalid!")
+        raise Exception(f"SWC Pointer is Invalid: {swc_pointer}")
 
     def read_swc(self, path):
         """
@@ -280,6 +307,11 @@ class Reader:
         Deque[dict]
             Dictionaries whose keys and values are the attribute names and
             values from an SWC file.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the prefix contains neither SWC nor ZIP files.
         """
         # Extract info
         assert util.is_s3_path(path) or util.is_gcs_path(path)
@@ -296,7 +328,7 @@ class Reader:
             read_fn = self.read_s3_zip if use_s3 else self.read_gcs_zip
             return self.read_zips(zip_paths, read_fn)
         else:
-            return list()
+            raise FileNotFoundError(f"No SWC or ZIP files found at {path}")
 
     def read_gcs_swc(self, path):
         """
