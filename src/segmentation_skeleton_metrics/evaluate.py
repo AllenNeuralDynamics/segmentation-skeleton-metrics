@@ -219,7 +219,14 @@ class Evaluator:
                     self.output_dir, f"{self.prefix}omit_lengths.csv"
                 )
                 omit_df.to_csv(omit_path, index=True)
-                metric.plot_distributions(self.output_dir)
+                metric.save_lengths(
+                    self.output_dir,
+                    f"{self.prefix}omit_length_distributions.csv",
+                )
+                metric.plot_distributions(
+                    self.output_dir,
+                    f"{self.prefix}omit_length_distributions.png",
+                )
             elif name != "# Merges":
                 results.update(metric(gt_graphs))
 
