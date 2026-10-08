@@ -4,8 +4,8 @@ Created on Mon Oct 20 12:00:00 2025
 @author: Anna Grim
 @email: anna.grim@alleninstitute.org
 
-Implementation of class that computes skeleton-based metrics by comparing a
-predicted neuron segmentation to a set of ground truth graphs.
+Code for computing skeleton-based metrics by comparing a predicted neuron
+segmentation to a set of ground truth graphs.
 
 """
 
