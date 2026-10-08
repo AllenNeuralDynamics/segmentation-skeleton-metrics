@@ -462,29 +462,6 @@ class OmitLengthsMetric(SkeletonMetric):
 
         return pd.DataFrame.from_dict(results, orient="index")
 
-    @staticmethod
-    def plot_distributions_from_csv(csv_path, output_dir):
-        """
-        Regenerates the omit length distribution figure from a saved
-        "omit_lengths.csv".
-
-        Parameters
-        ----------
-        csv_path : str
-            Path to the saved omit lengths CSV.
-        output_dir : str
-            Directory where the figure will be saved.
-
-        Returns
-        -------
-        str
-            Path to the saved figure.
-        """
-        df = pd.read_csv(csv_path)
-        splits = df.loc[df["type"] == "split", "length"].tolist()
-        truncs = df.loc[df["type"] == "truncation", "length"].tolist()
-        return plot.plot_omit_length_distributions(splits, truncs, output_dir)
-
     def plot_distributions(self, output_dir):
         """
         Plots and saves the cable length distributions for splits and
