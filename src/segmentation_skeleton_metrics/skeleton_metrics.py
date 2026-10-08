@@ -363,6 +363,7 @@ class OmitLengthsMetric(SkeletonMetric):
         self.name = "Omit Lengths"
         self.split_lengths = []
         self.truncation_lengths = []
+        self.records = []
 
     def __call__(self, gt_graphs):
         """
@@ -381,6 +382,7 @@ class OmitLengthsMetric(SkeletonMetric):
         """
         self.split_lengths = []
         self.truncation_lengths = []
+        self.records = []
         self.n_neurons = 0
         self.n_truncated = 0
         results = dict()
@@ -394,12 +396,25 @@ class OmitLengthsMetric(SkeletonMetric):
             truncation_count = 0
             for component in graph.connected_components(zero_nodes):
                 length = graph.cable_length(component)
-                if component & leaf_nodes:
+                is_truncation = bool(component & leaf_nodes)
+                if is_truncation:
                     self.truncation_lengths.append(length)
                     truncation_count += 1
                 else:
                     self.split_lengths.append(length)
                     split_count += 1
+                x, y, z = graph.node_xyz_arr(list(component)).mean(axis=0)
+                self.records.append(
+                    {
+                        "neuron": name,
+                        "type": "truncation" if is_truncation else "split",
+                        "length": length,
+                        "num_nodes": len(component),
+                        "x": x,
+                        "y": y,
+                        "z": z,
+                    }
+                )
 
             # Zero-length splits: adjacent nodes with different non-zero labels
             for i, j in graph.edges():
@@ -407,10 +422,35 @@ class OmitLengthsMetric(SkeletonMetric):
                 if li != "0" and lj != "0" and li != lj:
                     self.split_lengths.append(0)
                     split_count += 1
+                    x, y, z = (
+                        graph.node_xyz(i) + graph.node_xyz(j)
+                    ) / 2
+                    self.records.append(
+                        {
+                            "neuron": name,
+                            "type": "split",
+                            "length": 0,
+                            "num_nodes": 0,
+                            "x": x,
+                            "y": y,
+                            "z": z,
+                        }
+                    )
 
             # Include 0 for neurons with no splits
             if split_count == 0:
                 self.split_lengths.append(0)
+                self.records.append(
+                    {
+                        "neuron": name,
+                        "type": "split",
+                        "length": 0,
+                        "num_nodes": 0,
+                        "x": np.nan,
+                        "y": np.nan,
+                        "z": np.nan,
+                    }
+                )
 
             if truncation_count > 0:
                 self.n_truncated += 1
