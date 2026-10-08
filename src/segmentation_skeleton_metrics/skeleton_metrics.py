@@ -462,7 +462,36 @@ class OmitLengthsMetric(SkeletonMetric):
 
         return pd.DataFrame.from_dict(results, orient="index")
 
-    def plot_distributions(self, output_dir):
+    def save_lengths(
+        self, output_dir, filename="omit_length_distributions.csv"
+    ):
+        """
+        Saves the cable length of every omit region, with a column giving
+        whether it is a split or a truncation.
+
+        Parameters
+        ----------
+        output_dir : str
+            Directory where the CSV will be saved.
+        filename : str, optional
+            Name of the saved CSV. Default is
+            "omit_length_distributions.csv".
+
+        Returns
+        -------
+        str
+            Path to the saved CSV.
+        """
+        path = os.path.join(output_dir, filename)
+        rows = [("Split", length) for length in self.split_lengths]
+        rows += [("Truncation", length) for length in self.truncation_lengths]
+        df = pd.DataFrame(rows, columns=["Type", "Cable Length (μm)"])
+        df.to_csv(path, index=False)
+        return path
+
+    def plot_distributions(
+        self, output_dir, filename="omit_length_distributions.png"
+    ):
         """
         Plots and saves the cable length distributions for splits and
         truncations.
@@ -471,6 +500,9 @@ class OmitLengthsMetric(SkeletonMetric):
         ----------
         output_dir : str
             Directory where the figure will be saved.
+        filename : str, optional
+            Name of the saved figure. Default is
+            "omit_length_distributions.png".
 
         Returns
         -------
@@ -478,7 +510,10 @@ class OmitLengthsMetric(SkeletonMetric):
             Path to the saved figure.
         """
         return plot.plot_omit_length_distributions(
-            self.split_lengths, self.truncation_lengths, output_dir
+            self.split_lengths,
+            self.truncation_lengths,
+            output_dir,
+            filename=filename,
         )
 
 
